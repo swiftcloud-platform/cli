@@ -5,8 +5,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/swiftcloud-platform/cli/internal/executor"
-	proxmoxssh "github.com/swiftcloud-platform/cli/internal/ssh"
+	"cloud/internal/executor"
+	proxmoxssh "cloud/internal/ssh"
 	"github.com/spf13/cobra"
 )
 

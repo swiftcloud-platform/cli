@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/swiftcloud-platform/cli/cmd"
+	"cloud/cmd"
 )
 
 var (

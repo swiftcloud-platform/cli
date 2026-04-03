@@ -1,4 +1,4 @@
-module github.com/swiftcloud-platform/cli
+module cloud
 
 go 1.25.0
 
