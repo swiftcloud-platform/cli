@@ -324,6 +324,26 @@ func (e *sshExecutor) Run(command string) (string, string, error) {
 	return e.client.Run(command)
 }
 
+// createExecutor creates a CommandExecutor based on the current flags
+func createExecutor() (CommandExecutor, func() error, error) {
+	if localMode {
+		return executor.NewLocalExecutor(), func() error { return nil }, nil
+	}
+
+	sshClient, err := proxmoxssh.NewClient(proxmoxssh.Config{
+		Host:           sshHost,
+		Port:           sshPort,
+		Username:       sshUsername,
+		Password:       sshPassword,
+		PrivateKeyPath: sshPrivateKey,
+		Insecure:       sshInsecure,
+	})
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to connect via SSH: %w", err)
+	}
+	return &sshExecutor{client: sshClient}, sshClient.Close, nil
+}
+
 // generateVMID generates a VM ID that doesn't conflict with existing templates
 // Uses a strategy starting from 9000 range
 func generateVMID() int {

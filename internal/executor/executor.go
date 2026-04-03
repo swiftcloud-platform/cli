@@ -16,12 +16,7 @@ func NewLocalExecutor() *LocalExecutor {
 
 // Run executes a command locally and returns stdout, stderr, and error
 func (e *LocalExecutor) Run(command string) (string, string, error) {
-	parts := strings.Fields(command)
-	if len(parts) == 0 {
-		return "", "", fmt.Errorf("empty command")
-	}
-
-	cmd := exec.Command(parts[0], parts[1:]...)
+	cmd := exec.Command("sh", "-c", command)
 	output, err := cmd.CombinedOutput()
 	outputStr := strings.TrimSpace(string(output))
 

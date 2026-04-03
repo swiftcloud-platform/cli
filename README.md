@@ -35,6 +35,8 @@ cloud --help
 
 ### Managing VM Templates
 
+#### Setup a VM Template
+
 The `manage setup-vm-template` command sets up a VM template on a Proxmox node. It supports two modes:
 
 - **Remote mode (default):** SSHs into the Proxmox host and runs `qm` commands
@@ -83,6 +85,26 @@ cloud manage setup-vm-template \
   --template-id ubuntu-24-04 \
   --template-name 'Ubuntu 24.04 LTS (Noble)' \
   --family-id ubuntu
+```
+
+#### Delete a VM Template
+
+The `manage delete-vm-template` command removes a VM template from a Proxmox node by running `qm destroy`.
+
+**Remote mode:**
+```bash
+cloud manage delete-vm-template \
+  --ssh-host 192.168.1.100 \
+  --ssh-username root \
+  --ssh-password 'yourpassword' \
+  --vm-id 9000
+```
+
+**Local mode:**
+```bash
+cloud manage delete-vm-template \
+  --local \
+  --vm-id 9000
 ```
 
 ## Command Reference
@@ -134,6 +156,24 @@ When **not** using `--local`, these SSH flags are required:
 | `--vm-memory` | Memory in MB for the template VM | `2048` |
 | `--vm-cores` | CPU cores for the template VM | `2` |
 | `--cloud-user` | Default Cloud-Init username | `swift` |
+
+### `cloud manage delete-vm-template`
+
+Deletes a VM template from a Proxmox node by running `qm destroy <vmid>`.
+
+#### Required Flags
+
+| Flag | Description | Example |
+|------|-------------|---------|
+| `--vm-id` | Proxmox VM ID of the template to delete | `9000` |
+
+#### Execution Mode
+
+| Flag | Description |
+|------|-------------|
+| `--local` | Run `qm` commands locally instead of via SSH |
+
+When **not** using `--local`, SSH flags are required (same as `setup-vm-template`).
 
 ## Common Cloud Images
 
