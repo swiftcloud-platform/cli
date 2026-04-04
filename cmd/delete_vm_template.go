@@ -12,7 +12,7 @@ var (
 	deleteVMID int
 )
 
-// deleteVMTemplateCmd represents the delete-vm-template command
+// deleteVMTemplateCmd represents the delete-vm command
 var deleteVMTemplateCmd = &cobra.Command{
 	Use:   "delete-vm-template",
 	Short: "Delete a VM template from a Proxmox node",
@@ -23,14 +23,14 @@ This command can run in two modes:
   - Local (--local): Runs qm destroy directly on the local machine
 
 Example usage (remote):
-  cloud manage delete-vm-template \
+  cloud manage delete-vm \
     --ssh-host 192.168.1.100 \
     --ssh-username root \
     --ssh-password 'yourpassword' \
     --vm-id 9000
 
 Example usage (local):
-  cloud manage delete-vm-template \
+  cloud manage delete-vm \
     --local \
     --vm-id 9000`,
 	RunE: runDeleteVMTemplate,
@@ -51,7 +51,7 @@ func init() {
 	deleteVMTemplateCmd.Flags().BoolVar(&sshInsecure, "ssh-insecure", false, "Skip host key verification")
 
 	// Template flags
-	deleteVMTemplateCmd.Flags().IntVar(&deleteVMID, "vm-id", 0, "Proxmox VM ID of the template to delete")
+	deleteVMTemplateCmd.Flags().IntVar(&deleteVMID, "vm-id", 0, "Proxmox VM ID to delete")
 
 	// Mark required flags
 	deleteVMTemplateCmd.MarkFlagRequired("vm-id")
@@ -74,7 +74,7 @@ func runDeleteVMTemplate(cmd *cobra.Command, args []string) error {
 		mode = "local"
 	}
 
-	fmt.Printf("🗑️  Deleting VM template (ID: %d, mode: %s)...\n", deleteVMID, mode)
+	fmt.Printf("🗑️  Deleting VM (ID: %d, mode: %s)...\n", deleteVMID, mode)
 
 	// Create the appropriate executor
 	var exec CommandExecutor
@@ -104,13 +104,13 @@ func runDeleteVMTemplate(cmd *cobra.Command, args []string) error {
 	defer closer()
 
 	// Run qm destroy
-	fmt.Printf("💥 Destroying VM template %d...\n", deleteVMID)
+	fmt.Printf("💥 Destroying VM %d...\n", deleteVMID)
 	destroyCmd := fmt.Sprintf("qm destroy %d", deleteVMID)
 	stdout, stderr, err := exec.Run(destroyCmd)
 	if err != nil {
-		return fmt.Errorf("failed to delete template: %s\n%s", stderr, stdout)
+		return fmt.Errorf("failed to delete vm: %s\n%s", stderr, stdout)
 	}
 
-	fmt.Println("✅ VM template deleted successfully")
+	fmt.Println("✅ VM deleted successfully")
 	return nil
 }
