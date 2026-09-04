@@ -1,0 +1,71 @@
+# goreleaser v2 — one config produces every platform build and the release.
+# Run by .github/workflows/release.yml on a v* tag. Locally: `goreleaser release --snapshot --clean`.
+version: 2
+
+project_name: cloud
+
+before:
+  hooks:
+    - go mod tidy
+    - go test ./...
+
+builds:
+  - id: cloud
+    main: .
+    binary: cloud
+    env:
+      - CGO_ENABLED=0
+    goos: [linux, darwin, windows]
+    goarch: [amd64, arm64]
+    mod_timestamp: "{{ .CommitTimestamp }}"
+    flags: [-trimpath]
+    ldflags:
+      - -s -w
+      - -X main.version_={{ .Version }}
+      - -X main.commit={{ .ShortCommit }}
+      - -X main.date={{ .CommitDate }}
+
+archives:
+  - id: default
+    formats: [tar.gz]
+    name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+    format_overrides:
+      - goos: windows
+        formats: [zip]
+    files:
+      - README.md
+      - LICENSE*
+
+checksum:
+  name_template: checksums.txt
+  algorithm: sha256
+
+changelog:
+  sort: asc
+  filters:
+    exclude: ["^docs:", "^test:", "^chore:"]
+
+release:
+  github:
+    owner: swiftcloud-platform
+    name: cli
+  draft: false
+  prerelease: auto
+
+# Homebrew tap; the repository swiftcloud-platform/homebrew-tap must exist and
+# HOMEBREW_TAP_GITHUB_TOKEN must be set in the release workflow.
+brews:
+  - name: cloud
+    repository:
+      owner: swiftcloud-platform
+      name: homebrew-tap
+      token: "{{ .Env.HOMEBREW_TAP_GITHUB_TOKEN }}"
+    homepage: https://cloud.co.zm
+    description: SwiftCloud from the command line
+    license: Apache-2.0
+    install: |
+      bin.install "cloud"
+      generate_completions_from_executable(bin/"cloud", "completion")
+    test: |
+      system "#{bin}/cloud", "version"
+    skip_upload: auto

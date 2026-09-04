@@ -1,43 +1,107 @@
+// Package cmd holds the Cobra command tree. Commands stay thin: they parse
+// flags, call into internal packages, and print through internal/output.
 package cmd
 
 import (
+	"errors"
 	"fmt"
+	"os"
 
 	"github.com/spf13/cobra"
+
+	"cloud/internal/config"
+	"cloud/internal/output"
+	"cloud/internal/version"
 )
 
+// Global flags, resolved once in PersistentPreRunE.
 var (
-	version string
-	commit  string
-	date    string
+	flagContext string
+	flagAPIURL  string
+	flagOrg     string
+	flagRegion  string
+	flagOutput  string
+	flagQuiet   bool
 )
 
-// rootCmd represents the base command when called without any subcommands
+// Resolved configuration and printer for the running command.
+var (
+	cfg     *config.Resolved
+	printer *output.Printer
+)
+
 var rootCmd = &cobra.Command{
 	Use:   "cloud",
-	Short: "SwiftCloud CLI - Manage cloud infrastructure",
-	Long: `SwiftCloud CLI is a command-line tool for managing SwiftCloud infrastructure.
-It provides capabilities for setting up VM templates, managing regions,
-and configuring Proxmox nodes.`,
+	Short: "SwiftCloud from the command line",
+	Long: `cloud deploys apps, manages databases and works with object storage on SwiftCloud.
+
+Sign in once with "cloud login"; every other command uses that session.
+Set CLOUD_TOKEN, CLOUD_ORG and CLOUD_REGION in CI instead of a config file.`,
+	SilenceUsage:  true,
+	SilenceErrors: true,
+	PersistentPreRunE: func(cmd *cobra.Command, _ []string) error {
+		format, err := output.ParseFormat(flagOutput)
+		if err != nil {
+			return &UsageError{err}
+		}
+		printer = &output.Printer{W: cmd.OutOrStdout(), Format: format, Quiet: flagQuiet}
+
+		dir, err := config.Dir(os.Getenv)
+		if err != nil {
+			return err
+		}
+		file, err := config.Load(dir + string(os.PathSeparator) + "config.yaml")
+		if err != nil {
+			return err
+		}
+		cfg, err = config.Resolve(file, os.Getenv, config.Overrides{
+			Context: flagContext, APIURL: flagAPIURL, Org: flagOrg, Region: flagRegion,
+		})
+		if err != nil {
+			return &UsageError{err}
+		}
+		return nil
+	},
 }
 
-// SetVersionInfo sets the version information for the CLI
-func SetVersionInfo(v, c, d string) {
-	version = v
-	commit = c
-	date = d
-}
-
-// Execute adds all child commands to the root command and sets flags appropriately.
+// Execute runs the CLI.
 func Execute() error {
-	rootCmd.Version = fmt.Sprintf("%s (commit: %s, built: %s)", version, commit, date)
+	rootCmd.Version = version.Long()
 	return rootCmd.Execute()
 }
 
-func init() {
-	// Here you will define your flags and configuration settings.
-	// Cobra supports persistent flags, which, if defined here,
-	// will be global for your application.
+// UsageError marks a mistake in how the command was invoked, as opposed to a
+// failure while doing the work. Scripts can tell them apart by exit code.
+type UsageError struct{ Err error }
 
-	// rootCmd.PersistentFlags().StringVar(&cfgFile, "config", "", "config file (default is $HOME/.cloud.yaml)")
+func (e *UsageError) Error() string { return e.Err.Error() }
+func (e *UsageError) Unwrap() error { return e.Err }
+
+// Exit codes, stable for scripts.
+const (
+	ExitOK      = 0
+	ExitError   = 1
+	ExitUsage   = 2
+	ExitAuth    = 3 // not signed in, or token expired/revoked
+	ExitDenied  = 4 // signed in, but the role does not allow this
+	ExitMissing = 5 // the resource does not exist (or is another tenant's)
+)
+
+// ExitCode maps an error to the process exit status.
+func ExitCode(err error) int {
+	var u *UsageError
+	if errors.As(err, &u) {
+		return ExitUsage
+	}
+	return ExitError
+}
+
+func init() {
+	pf := rootCmd.PersistentFlags()
+	pf.StringVar(&flagContext, "context", "", "named context from the config file (env CLOUD_CONTEXT)")
+	pf.StringVar(&flagAPIURL, "api-url", "", fmt.Sprintf("API base URL (env CLOUD_API_URL; default %s)", config.DefaultAPIURL))
+	pf.StringVar(&flagOrg, "org", "", "organisation slug (env CLOUD_ORG)")
+	pf.StringVar(&flagRegion, "region", "", "default region for new resources (env CLOUD_REGION)")
+	pf.StringVarP(&flagOutput, "output", "o", "table", "output format: table, json or yaml")
+	pf.BoolVarP(&flagQuiet, "quiet", "q", false, "print only identifiers, one per line")
 }

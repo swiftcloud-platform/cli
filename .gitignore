@@ -1,0 +1,14 @@
+# build output
+/bin/
+/dist/
+coverage.out
+coverage.html
+
+# local config and tokens must never be committed
+.cloud/
+*.token
+
+# editors
+.idea/
+.vscode/
+*.swp

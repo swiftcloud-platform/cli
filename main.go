@@ -1,3 +1,7 @@
+// cloud is the SwiftCloud command-line interface.
+//
+// Version information is injected at build time by goreleaser (or the
+// Makefile) through -ldflags "-X main.version=… -X main.commit=… -X main.date=…".
 package main
 
 import (
@@ -5,18 +9,19 @@ import (
 	"os"
 
 	"cloud/cmd"
+	"cloud/internal/version"
 )
 
 var (
-	version = "dev"
-	commit  = "none"
-	date    = "unknown"
+	version_ = "dev"
+	commit   = "none"
+	date     = "unknown"
 )
 
 func main() {
-	cmd.SetVersionInfo(version, commit, date)
+	version.Set(version_, commit, date)
 	if err := cmd.Execute(); err != nil {
-		fmt.Fprintln(os.Stderr, err)
-		os.Exit(1)
+		fmt.Fprintln(os.Stderr, "error:", err)
+		os.Exit(cmd.ExitCode(err))
 	}
 }
