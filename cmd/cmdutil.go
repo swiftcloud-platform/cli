@@ -146,16 +146,24 @@ func healthProbe(c *api.ClientWithResponses) wait.Health {
 	}
 }
 
-// appTerminal says whether an app status is one worth stopping at.
-func appTerminal(status string) (done bool, failed bool) {
+// terminalStatus says whether a resource status is one worth stopping at.
+//
+// The platform's healthy state is "ready" — that is what the sync processors
+// write for apps and databases alike. "running" is accepted too for any
+// future resource that uses it. An earlier version listed only "running" and
+// would have waited on a perfectly healthy app until the timeout.
+func terminalStatus(status string) (done bool, failed bool) {
 	switch status {
-	case "running", "stopped", "suspended":
+	case "ready", "running", "stopped", "suspended":
 		return true, false
 	case "failed", "error", "delete_failed":
 		return true, true
 	}
 	return false, false
 }
+
+// appTerminal keeps the old name for callers.
+func appTerminal(status string) (done bool, failed bool) { return terminalStatus(status) }
 
 // waitForApp polls GET app until terminal, printing status changes to stderr.
 func waitForApp(cmd *cobra.Command, c *api.ClientWithResponses, org, name string, timeout time.Duration) (*api.App, error) {
