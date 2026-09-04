@@ -17,6 +17,42 @@ import (
 	"github.com/oapi-codegen/runtime"
 )
 
+// Defines values for DatabaseCreateEngine.
+const (
+	DatabaseCreateEngineMariadb    DatabaseCreateEngine = "mariadb"
+	DatabaseCreateEnginePostgresql DatabaseCreateEngine = "postgresql"
+)
+
+// Valid indicates whether the value is a known member of the DatabaseCreateEngine enum.
+func (e DatabaseCreateEngine) Valid() bool {
+	switch e {
+	case DatabaseCreateEngineMariadb:
+		return true
+	case DatabaseCreateEnginePostgresql:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for EngineVersionEngine.
+const (
+	EngineVersionEngineMariadb    EngineVersionEngine = "mariadb"
+	EngineVersionEnginePostgresql EngineVersionEngine = "postgresql"
+)
+
+// Valid indicates whether the value is a known member of the EngineVersionEngine enum.
+func (e EngineVersionEngine) Valid() bool {
+	switch e {
+	case EngineVersionEngineMariadb:
+		return true
+	case EngineVersionEnginePostgresql:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for HealthDatabase.
 const (
 	HealthDatabaseError HealthDatabase = "error"
@@ -219,6 +255,53 @@ type AppUpdate struct {
 	ReplicasMin *int `json:"replicasMin,omitempty"`
 }
 
+// Backup defines model for Backup.
+type Backup struct {
+	CompletedAt time.Time `json:"completedAt"`
+	CreatedAt   time.Time `json:"createdAt"`
+	Id          string    `json:"id"`
+	Name        string    `json:"name"`
+	Size        string    `json:"size"`
+
+	// Status pending | running | completed | failed, as reported by the backup system
+	Status string `json:"status"`
+}
+
+// BackupList defines model for BackupList.
+type BackupList struct {
+	Items []Backup `json:"items"`
+}
+
+// BackupsEnable defines model for BackupsEnable.
+type BackupsEnable struct {
+	// Retention Retention window (barman syntax, e.g. 3d). A window, not a count: with a daily schedule 3d keeps two or three base backups.
+	Retention *string `json:"retention,omitempty"`
+}
+
+// BackupsEnabled defines model for BackupsEnabled.
+type BackupsEnabled struct {
+	Enabled   bool   `json:"enabled"`
+	Retention string `json:"retention"`
+}
+
+// Credentials defines model for Credentials.
+type Credentials struct {
+	// ConnectionString Key/value form (psql / libpq)
+	ConnectionString string `json:"connectionString"`
+
+	// ConnectionStringUri URI form: postgresql:// or mysql://
+	ConnectionStringUri      string `json:"connectionStringUri"`
+	Database                 string `json:"database"`
+	Host                     string `json:"host"`
+	InternalConnectionString string `json:"internalConnectionString"`
+
+	// InternalHost Reachable only from apps in the same region
+	InternalHost string `json:"internalHost"`
+	Password     string `json:"password"`
+	Port         int    `json:"port"`
+	Username     string `json:"username"`
+}
+
 // CustomDomain defines model for CustomDomain.
 type CustomDomain struct {
 	CreatedAt time.Time `json:"createdAt"`
@@ -241,6 +324,68 @@ type CustomDomainList struct {
 	Items []CustomDomain `json:"items"`
 }
 
+// Database defines model for Database.
+type Database struct {
+	CreatedAt    time.Time `json:"createdAt"`
+	Description  string    `json:"description"`
+	Engine       string    `json:"engine"`
+	ErrorMessage string    `json:"errorMessage"`
+
+	// Host Public connection host, once provisioned
+	Host string `json:"host"`
+	Id   string `json:"id"`
+
+	// Name Unique within the organisation. Lowercase letters, digits and hyphens.
+	Name           string `json:"name"`
+	OrganizationId string `json:"organizationId"`
+	Port           int    `json:"port"`
+
+	// Region Region name
+	Region   string `json:"region"`
+	RegionId string `json:"regionId"`
+	Size     string `json:"size"`
+
+	// Status provisioning | starting | running | stopping | stopped | failed | deleting. Advanced by the platform worker; poll until terminal.
+	Status    string    `json:"status"`
+	UpdatedAt time.Time `json:"updatedAt"`
+	Version   string    `json:"version"`
+}
+
+// DatabaseCreate defines model for DatabaseCreate.
+type DatabaseCreate struct {
+	Description *string              `json:"description,omitempty"`
+	Engine      DatabaseCreateEngine `json:"engine"`
+
+	// Name Unique within the organisation. Lowercase letters, digits and hyphens.
+	Name string `json:"name"`
+
+	// Region Region id or name
+	Region string `json:"region"`
+
+	// Size Pricing tier name (see /pricing). Defaults to the smallest.
+	Size *string `json:"size,omitempty"`
+
+	// Version An available version for the engine (see GET /database-engines). Defaults to the engine default.
+	Version *string `json:"version,omitempty"`
+}
+
+// DatabaseCreateEngine defines model for DatabaseCreate.Engine.
+type DatabaseCreateEngine string
+
+// DatabaseList defines model for DatabaseList.
+type DatabaseList struct {
+	Items []Database `json:"items"`
+}
+
+// DatabaseRestore defines model for DatabaseRestore.
+type DatabaseRestore struct {
+	// At RFC 3339 point in time to recover to. Omit for the latest backup.
+	At *time.Time `json:"at,omitempty"`
+
+	// Name Name for the NEW database. The source is never modified.
+	Name string `json:"name"`
+}
+
 // Deployment defines model for Deployment.
 type Deployment struct {
 	CreatedAt     time.Time `json:"createdAt"`
@@ -261,6 +406,21 @@ type DeploymentList struct {
 // DomainAdd defines model for DomainAdd.
 type DomainAdd struct {
 	Domain string `json:"domain"`
+}
+
+// EngineVersion defines model for EngineVersion.
+type EngineVersion struct {
+	Default bool                `json:"default"`
+	Engine  EngineVersionEngine `json:"engine"`
+	Version string              `json:"version"`
+}
+
+// EngineVersionEngine defines model for EngineVersion.Engine.
+type EngineVersionEngine string
+
+// EngineVersionList defines model for EngineVersionList.
+type EngineVersionList struct {
+	Items []EngineVersion `json:"items"`
 }
 
 // Health defines model for Health.
@@ -348,6 +508,15 @@ type GetOrgsOrgAppsAppLogsParams struct {
 	Follow *bool `form:"follow,omitempty" json:"follow,omitempty"`
 }
 
+// GetOrgsOrgDatabasesDbLogsParams defines parameters for GetOrgsOrgDatabasesDbLogs.
+type GetOrgsOrgDatabasesDbLogsParams struct {
+	// Tail Number of recent lines (default 200)
+	Tail *int `form:"tail,omitempty" json:"tail,omitempty"`
+
+	// Follow Keep the stream open
+	Follow *bool `form:"follow,omitempty" json:"follow,omitempty"`
+}
+
 // PostOrgsOrgAppsJSONRequestBody defines body for PostOrgsOrgApps for application/json ContentType.
 type PostOrgsOrgAppsJSONRequestBody = AppCreate
 
@@ -359,6 +528,15 @@ type PostOrgsOrgAppsAppDeployJSONRequestBody = AppDeploy
 
 // PostOrgsOrgAppsAppDomainsJSONRequestBody defines body for PostOrgsOrgAppsAppDomains for application/json ContentType.
 type PostOrgsOrgAppsAppDomainsJSONRequestBody = DomainAdd
+
+// PostOrgsOrgDatabasesJSONRequestBody defines body for PostOrgsOrgDatabases for application/json ContentType.
+type PostOrgsOrgDatabasesJSONRequestBody = DatabaseCreate
+
+// PostOrgsOrgDatabasesDbBackupsEnableJSONRequestBody defines body for PostOrgsOrgDatabasesDbBackupsEnable for application/json ContentType.
+type PostOrgsOrgDatabasesDbBackupsEnableJSONRequestBody = BackupsEnable
+
+// PostOrgsOrgDatabasesDbRestoreJSONRequestBody defines body for PostOrgsOrgDatabasesDbRestore for application/json ContentType.
+type PostOrgsOrgDatabasesDbRestoreJSONRequestBody = DatabaseRestore
 
 // RequestEditorFn is the function signature for the RequestEditor callback function
 type RequestEditorFn func(ctx context.Context, req *http.Request) error
@@ -433,6 +611,11 @@ func WithRequestEditorFn(fn RequestEditorFn) ClientOption {
 
 // The interface specification for the client above.
 type ClientInterface interface {
+
+	// GetDatabaseEngines Engines and versions available for new databases
+	//
+	// Corresponds with GET /database-engines (the `GetDatabaseEngines` operationId).
+	GetDatabaseEngines(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// GetHealth Liveness, including worker heartbeat age
 	//
@@ -540,10 +723,117 @@ type ClientInterface interface {
 	// Corresponds with GET /orgs/{org}/apps/{app}/logs (the `GetOrgsOrgAppsAppLogs` operationId).
 	GetOrgsOrgAppsAppLogs(ctx context.Context, org string, app string, params *GetOrgsOrgAppsAppLogsParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
+	// GetOrgsOrgDatabases List databases
+	//
+	// Corresponds with GET /orgs/{org}/databases (the `GetOrgsOrgDatabases` operationId).
+	GetOrgsOrgDatabases(ctx context.Context, org string, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// PostOrgsOrgDatabasesWithBody Create a database
+	//
+	// Takes any type of body and a specified content type.
+	//
+	// Corresponds with POST /orgs/{org}/databases (the `PostOrgsOrgDatabases` operationId).
+	PostOrgsOrgDatabasesWithBody(ctx context.Context, org string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// PostOrgsOrgDatabases Create a database
+	//
+	// Takes a body of the `application/json` content type.
+	//
+	// Corresponds with POST /orgs/{org}/databases (the `PostOrgsOrgDatabases` operationId).
+	PostOrgsOrgDatabases(ctx context.Context, org string, body PostOrgsOrgDatabasesJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// DeleteOrgsOrgDatabasesDb Delete a database and its backups
+	//
+	// Corresponds with DELETE /orgs/{org}/databases/{db} (the `DeleteOrgsOrgDatabasesDb` operationId).
+	DeleteOrgsOrgDatabasesDb(ctx context.Context, org string, db string, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// GetOrgsOrgDatabasesDb Get a database
+	//
+	// Corresponds with GET /orgs/{org}/databases/{db} (the `GetOrgsOrgDatabasesDb` operationId).
+	GetOrgsOrgDatabasesDb(ctx context.Context, org string, db string, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// GetOrgsOrgDatabasesDbBackups List backups, newest first
+	//
+	// Corresponds with GET /orgs/{org}/databases/{db}/backups (the `GetOrgsOrgDatabasesDbBackups` operationId).
+	GetOrgsOrgDatabasesDbBackups(ctx context.Context, org string, db string, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// PostOrgsOrgDatabasesDbBackups Take a backup now (PostgreSQL only)
+	//
+	// Corresponds with POST /orgs/{org}/databases/{db}/backups (the `PostOrgsOrgDatabasesDbBackups` operationId).
+	PostOrgsOrgDatabasesDbBackups(ctx context.Context, org string, db string, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// PostOrgsOrgDatabasesDbBackupsEnableWithBody Enable automatic daily backups (PostgreSQL only)
+	//
+	// Takes any type of body and a specified content type.
+	//
+	// Corresponds with POST /orgs/{org}/databases/{db}/backups/enable (the `PostOrgsOrgDatabasesDbBackupsEnable` operationId).
+	PostOrgsOrgDatabasesDbBackupsEnableWithBody(ctx context.Context, org string, db string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// PostOrgsOrgDatabasesDbBackupsEnable Enable automatic daily backups (PostgreSQL only)
+	//
+	// Takes a body of the `application/json` content type.
+	//
+	// Corresponds with POST /orgs/{org}/databases/{db}/backups/enable (the `PostOrgsOrgDatabasesDbBackupsEnable` operationId).
+	PostOrgsOrgDatabasesDbBackupsEnable(ctx context.Context, org string, db string, body PostOrgsOrgDatabasesDbBackupsEnableJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// GetOrgsOrgDatabasesDbCredentials Connection credentials (write-level permission; never cached)
+	//
+	// Corresponds with GET /orgs/{org}/databases/{db}/credentials (the `GetOrgsOrgDatabasesDbCredentials` operationId).
+	GetOrgsOrgDatabasesDbCredentials(ctx context.Context, org string, db string, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// GetOrgsOrgDatabasesDbLogs Stream logs as text/plain
+	//
+	// Corresponds with GET /orgs/{org}/databases/{db}/logs (the `GetOrgsOrgDatabasesDbLogs` operationId).
+	GetOrgsOrgDatabasesDbLogs(ctx context.Context, org string, db string, params *GetOrgsOrgDatabasesDbLogsParams, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// PostOrgsOrgDatabasesDbRestart Restart a database
+	//
+	// Corresponds with POST /orgs/{org}/databases/{db}/restart (the `PostOrgsOrgDatabasesDbRestart` operationId).
+	PostOrgsOrgDatabasesDbRestart(ctx context.Context, org string, db string, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// PostOrgsOrgDatabasesDbRestoreWithBody Restore into a NEW database (PostgreSQL only); the source is untouched
+	//
+	// Takes any type of body and a specified content type.
+	//
+	// Corresponds with POST /orgs/{org}/databases/{db}/restore (the `PostOrgsOrgDatabasesDbRestore` operationId).
+	PostOrgsOrgDatabasesDbRestoreWithBody(ctx context.Context, org string, db string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// PostOrgsOrgDatabasesDbRestore Restore into a NEW database (PostgreSQL only); the source is untouched
+	//
+	// Takes a body of the `application/json` content type.
+	//
+	// Corresponds with POST /orgs/{org}/databases/{db}/restore (the `PostOrgsOrgDatabasesDbRestore` operationId).
+	PostOrgsOrgDatabasesDbRestore(ctx context.Context, org string, db string, body PostOrgsOrgDatabasesDbRestoreJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// PostOrgsOrgDatabasesDbStart Start a stopped database
+	//
+	// Corresponds with POST /orgs/{org}/databases/{db}/start (the `PostOrgsOrgDatabasesDbStart` operationId).
+	PostOrgsOrgDatabasesDbStart(ctx context.Context, org string, db string, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// PostOrgsOrgDatabasesDbStop Stop a database (billing continues for storage)
+	//
+	// Corresponds with POST /orgs/{org}/databases/{db}/stop (the `PostOrgsOrgDatabasesDbStop` operationId).
+	PostOrgsOrgDatabasesDbStop(ctx context.Context, org string, db string, reqEditors ...RequestEditorFn) (*http.Response, error)
+
 	// GetRegions Regions available for new resources
 	//
 	// Corresponds with GET /regions (the `GetRegions` operationId).
 	GetRegions(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error)
+}
+
+// GetDatabaseEngines Engines and versions available for new databases
+//
+// Corresponds with GET /database-engines (the `GetDatabaseEngines` operationId).
+func (c *Client) GetDatabaseEngines(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewGetDatabaseEnginesRequest(c.Server)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
 }
 
 // GetHealth Liveness, including worker heartbeat age
@@ -832,6 +1122,258 @@ func (c *Client) GetOrgsOrgAppsAppLogs(ctx context.Context, org string, app stri
 	return c.Client.Do(req)
 }
 
+// GetOrgsOrgDatabases List databases
+//
+// Corresponds with GET /orgs/{org}/databases (the `GetOrgsOrgDatabases` operationId).
+func (c *Client) GetOrgsOrgDatabases(ctx context.Context, org string, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewGetOrgsOrgDatabasesRequest(c.Server, org)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// PostOrgsOrgDatabasesWithBody Create a database
+//
+// Takes any type of body and a specified content type.
+//
+// Corresponds with POST /orgs/{org}/databases (the `PostOrgsOrgDatabases` operationId).
+func (c *Client) PostOrgsOrgDatabasesWithBody(ctx context.Context, org string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewPostOrgsOrgDatabasesRequestWithBody(c.Server, org, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// PostOrgsOrgDatabases Create a database
+//
+// Takes a body of the `application/json` content type.
+//
+// Corresponds with POST /orgs/{org}/databases (the `PostOrgsOrgDatabases` operationId).
+func (c *Client) PostOrgsOrgDatabases(ctx context.Context, org string, body PostOrgsOrgDatabasesJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewPostOrgsOrgDatabasesRequest(c.Server, org, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// DeleteOrgsOrgDatabasesDb Delete a database and its backups
+//
+// Corresponds with DELETE /orgs/{org}/databases/{db} (the `DeleteOrgsOrgDatabasesDb` operationId).
+func (c *Client) DeleteOrgsOrgDatabasesDb(ctx context.Context, org string, db string, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewDeleteOrgsOrgDatabasesDbRequest(c.Server, org, db)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// GetOrgsOrgDatabasesDb Get a database
+//
+// Corresponds with GET /orgs/{org}/databases/{db} (the `GetOrgsOrgDatabasesDb` operationId).
+func (c *Client) GetOrgsOrgDatabasesDb(ctx context.Context, org string, db string, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewGetOrgsOrgDatabasesDbRequest(c.Server, org, db)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// GetOrgsOrgDatabasesDbBackups List backups, newest first
+//
+// Corresponds with GET /orgs/{org}/databases/{db}/backups (the `GetOrgsOrgDatabasesDbBackups` operationId).
+func (c *Client) GetOrgsOrgDatabasesDbBackups(ctx context.Context, org string, db string, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewGetOrgsOrgDatabasesDbBackupsRequest(c.Server, org, db)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// PostOrgsOrgDatabasesDbBackups Take a backup now (PostgreSQL only)
+//
+// Corresponds with POST /orgs/{org}/databases/{db}/backups (the `PostOrgsOrgDatabasesDbBackups` operationId).
+func (c *Client) PostOrgsOrgDatabasesDbBackups(ctx context.Context, org string, db string, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewPostOrgsOrgDatabasesDbBackupsRequest(c.Server, org, db)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// PostOrgsOrgDatabasesDbBackupsEnableWithBody Enable automatic daily backups (PostgreSQL only)
+//
+// Takes any type of body and a specified content type.
+//
+// Corresponds with POST /orgs/{org}/databases/{db}/backups/enable (the `PostOrgsOrgDatabasesDbBackupsEnable` operationId).
+func (c *Client) PostOrgsOrgDatabasesDbBackupsEnableWithBody(ctx context.Context, org string, db string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewPostOrgsOrgDatabasesDbBackupsEnableRequestWithBody(c.Server, org, db, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// PostOrgsOrgDatabasesDbBackupsEnable Enable automatic daily backups (PostgreSQL only)
+//
+// Takes a body of the `application/json` content type.
+//
+// Corresponds with POST /orgs/{org}/databases/{db}/backups/enable (the `PostOrgsOrgDatabasesDbBackupsEnable` operationId).
+func (c *Client) PostOrgsOrgDatabasesDbBackupsEnable(ctx context.Context, org string, db string, body PostOrgsOrgDatabasesDbBackupsEnableJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewPostOrgsOrgDatabasesDbBackupsEnableRequest(c.Server, org, db, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// GetOrgsOrgDatabasesDbCredentials Connection credentials (write-level permission; never cached)
+//
+// Corresponds with GET /orgs/{org}/databases/{db}/credentials (the `GetOrgsOrgDatabasesDbCredentials` operationId).
+func (c *Client) GetOrgsOrgDatabasesDbCredentials(ctx context.Context, org string, db string, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewGetOrgsOrgDatabasesDbCredentialsRequest(c.Server, org, db)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// GetOrgsOrgDatabasesDbLogs Stream logs as text/plain
+//
+// Corresponds with GET /orgs/{org}/databases/{db}/logs (the `GetOrgsOrgDatabasesDbLogs` operationId).
+func (c *Client) GetOrgsOrgDatabasesDbLogs(ctx context.Context, org string, db string, params *GetOrgsOrgDatabasesDbLogsParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewGetOrgsOrgDatabasesDbLogsRequest(c.Server, org, db, params)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// PostOrgsOrgDatabasesDbRestart Restart a database
+//
+// Corresponds with POST /orgs/{org}/databases/{db}/restart (the `PostOrgsOrgDatabasesDbRestart` operationId).
+func (c *Client) PostOrgsOrgDatabasesDbRestart(ctx context.Context, org string, db string, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewPostOrgsOrgDatabasesDbRestartRequest(c.Server, org, db)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// PostOrgsOrgDatabasesDbRestoreWithBody Restore into a NEW database (PostgreSQL only); the source is untouched
+//
+// Takes any type of body and a specified content type.
+//
+// Corresponds with POST /orgs/{org}/databases/{db}/restore (the `PostOrgsOrgDatabasesDbRestore` operationId).
+func (c *Client) PostOrgsOrgDatabasesDbRestoreWithBody(ctx context.Context, org string, db string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewPostOrgsOrgDatabasesDbRestoreRequestWithBody(c.Server, org, db, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// PostOrgsOrgDatabasesDbRestore Restore into a NEW database (PostgreSQL only); the source is untouched
+//
+// Takes a body of the `application/json` content type.
+//
+// Corresponds with POST /orgs/{org}/databases/{db}/restore (the `PostOrgsOrgDatabasesDbRestore` operationId).
+func (c *Client) PostOrgsOrgDatabasesDbRestore(ctx context.Context, org string, db string, body PostOrgsOrgDatabasesDbRestoreJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewPostOrgsOrgDatabasesDbRestoreRequest(c.Server, org, db, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// PostOrgsOrgDatabasesDbStart Start a stopped database
+//
+// Corresponds with POST /orgs/{org}/databases/{db}/start (the `PostOrgsOrgDatabasesDbStart` operationId).
+func (c *Client) PostOrgsOrgDatabasesDbStart(ctx context.Context, org string, db string, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewPostOrgsOrgDatabasesDbStartRequest(c.Server, org, db)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// PostOrgsOrgDatabasesDbStop Stop a database (billing continues for storage)
+//
+// Corresponds with POST /orgs/{org}/databases/{db}/stop (the `PostOrgsOrgDatabasesDbStop` operationId).
+func (c *Client) PostOrgsOrgDatabasesDbStop(ctx context.Context, org string, db string, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewPostOrgsOrgDatabasesDbStopRequest(c.Server, org, db)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
 // GetRegions Regions available for new resources
 //
 // Corresponds with GET /regions (the `GetRegions` operationId).
@@ -845,6 +1387,33 @@ func (c *Client) GetRegions(ctx context.Context, reqEditors ...RequestEditorFn) 
 		return nil, err
 	}
 	return c.Client.Do(req)
+}
+
+// NewGetDatabaseEnginesRequest constructs an http.Request for the GetDatabaseEngines method
+func NewGetDatabaseEnginesRequest(server string) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/database-engines")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
 }
 
 // NewGetHealthRequest constructs an http.Request for the GetHealth method
@@ -1463,6 +2032,603 @@ func NewGetOrgsOrgAppsAppLogsRequest(server string, org string, app string, para
 	return req, nil
 }
 
+// NewGetOrgsOrgDatabasesRequest constructs an http.Request for the GetOrgsOrgDatabases method
+func NewGetOrgsOrgDatabasesRequest(server string, org string) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "org", org, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/orgs/%s/databases", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewPostOrgsOrgDatabasesRequest calls the generic PostOrgsOrgDatabases builder with application/json body
+func NewPostOrgsOrgDatabasesRequest(server string, org string, body PostOrgsOrgDatabasesJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewPostOrgsOrgDatabasesRequestWithBody(server, org, "application/json", bodyReader)
+}
+
+// NewPostOrgsOrgDatabasesRequestWithBody constructs an http.Request for the PostOrgsOrgDatabases method, with any body, and a specified content type
+func NewPostOrgsOrgDatabasesRequestWithBody(server string, org string, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "org", org, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/orgs/%s/databases", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodPost, queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
+
+	return req, nil
+}
+
+// NewDeleteOrgsOrgDatabasesDbRequest constructs an http.Request for the DeleteOrgsOrgDatabasesDb method
+func NewDeleteOrgsOrgDatabasesDbRequest(server string, org string, db string) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "org", org, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam1 string
+
+	pathParam1, err = runtime.StyleParamWithOptions("simple", false, "db", db, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/orgs/%s/databases/%s", pathParam0, pathParam1)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodDelete, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewGetOrgsOrgDatabasesDbRequest constructs an http.Request for the GetOrgsOrgDatabasesDb method
+func NewGetOrgsOrgDatabasesDbRequest(server string, org string, db string) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "org", org, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam1 string
+
+	pathParam1, err = runtime.StyleParamWithOptions("simple", false, "db", db, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/orgs/%s/databases/%s", pathParam0, pathParam1)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewGetOrgsOrgDatabasesDbBackupsRequest constructs an http.Request for the GetOrgsOrgDatabasesDbBackups method
+func NewGetOrgsOrgDatabasesDbBackupsRequest(server string, org string, db string) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "org", org, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam1 string
+
+	pathParam1, err = runtime.StyleParamWithOptions("simple", false, "db", db, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/orgs/%s/databases/%s/backups", pathParam0, pathParam1)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewPostOrgsOrgDatabasesDbBackupsRequest constructs an http.Request for the PostOrgsOrgDatabasesDbBackups method
+func NewPostOrgsOrgDatabasesDbBackupsRequest(server string, org string, db string) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "org", org, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam1 string
+
+	pathParam1, err = runtime.StyleParamWithOptions("simple", false, "db", db, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/orgs/%s/databases/%s/backups", pathParam0, pathParam1)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodPost, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewPostOrgsOrgDatabasesDbBackupsEnableRequest calls the generic PostOrgsOrgDatabasesDbBackupsEnable builder with application/json body
+func NewPostOrgsOrgDatabasesDbBackupsEnableRequest(server string, org string, db string, body PostOrgsOrgDatabasesDbBackupsEnableJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewPostOrgsOrgDatabasesDbBackupsEnableRequestWithBody(server, org, db, "application/json", bodyReader)
+}
+
+// NewPostOrgsOrgDatabasesDbBackupsEnableRequestWithBody constructs an http.Request for the PostOrgsOrgDatabasesDbBackupsEnable method, with any body, and a specified content type
+func NewPostOrgsOrgDatabasesDbBackupsEnableRequestWithBody(server string, org string, db string, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "org", org, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam1 string
+
+	pathParam1, err = runtime.StyleParamWithOptions("simple", false, "db", db, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/orgs/%s/databases/%s/backups/enable", pathParam0, pathParam1)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodPost, queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
+
+	return req, nil
+}
+
+// NewGetOrgsOrgDatabasesDbCredentialsRequest constructs an http.Request for the GetOrgsOrgDatabasesDbCredentials method
+func NewGetOrgsOrgDatabasesDbCredentialsRequest(server string, org string, db string) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "org", org, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam1 string
+
+	pathParam1, err = runtime.StyleParamWithOptions("simple", false, "db", db, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/orgs/%s/databases/%s/credentials", pathParam0, pathParam1)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewGetOrgsOrgDatabasesDbLogsRequest constructs an http.Request for the GetOrgsOrgDatabasesDbLogs method
+func NewGetOrgsOrgDatabasesDbLogsRequest(server string, org string, db string, params *GetOrgsOrgDatabasesDbLogsParams) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "org", org, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam1 string
+
+	pathParam1, err = runtime.StyleParamWithOptions("simple", false, "db", db, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/orgs/%s/databases/%s/logs", pathParam0, pathParam1)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	if params != nil {
+		// queryValues collects non-styled parameters (passthrough, JSON)
+		// that are safe to round-trip through url.Values.Encode().
+		queryValues := queryURL.Query()
+		// rawQueryFragments collects pre-encoded query fragments from
+		// styled parameters, preserving literal commas as delimiters
+		// per the OpenAPI spec (e.g. "color=blue,black,brown").
+		var rawQueryFragments []string
+
+		if params.Tail != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "tail", *params.Tail, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "integer", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.Follow != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "follow", *params.Follow, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "boolean", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if encoded := queryValues.Encode(); encoded != "" {
+			rawQueryFragments = append(rawQueryFragments, encoded)
+		}
+		queryURL.RawQuery = strings.Join(rawQueryFragments, "&")
+	}
+
+	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewPostOrgsOrgDatabasesDbRestartRequest constructs an http.Request for the PostOrgsOrgDatabasesDbRestart method
+func NewPostOrgsOrgDatabasesDbRestartRequest(server string, org string, db string) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "org", org, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam1 string
+
+	pathParam1, err = runtime.StyleParamWithOptions("simple", false, "db", db, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/orgs/%s/databases/%s/restart", pathParam0, pathParam1)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodPost, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewPostOrgsOrgDatabasesDbRestoreRequest calls the generic PostOrgsOrgDatabasesDbRestore builder with application/json body
+func NewPostOrgsOrgDatabasesDbRestoreRequest(server string, org string, db string, body PostOrgsOrgDatabasesDbRestoreJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewPostOrgsOrgDatabasesDbRestoreRequestWithBody(server, org, db, "application/json", bodyReader)
+}
+
+// NewPostOrgsOrgDatabasesDbRestoreRequestWithBody constructs an http.Request for the PostOrgsOrgDatabasesDbRestore method, with any body, and a specified content type
+func NewPostOrgsOrgDatabasesDbRestoreRequestWithBody(server string, org string, db string, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "org", org, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam1 string
+
+	pathParam1, err = runtime.StyleParamWithOptions("simple", false, "db", db, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/orgs/%s/databases/%s/restore", pathParam0, pathParam1)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodPost, queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
+
+	return req, nil
+}
+
+// NewPostOrgsOrgDatabasesDbStartRequest constructs an http.Request for the PostOrgsOrgDatabasesDbStart method
+func NewPostOrgsOrgDatabasesDbStartRequest(server string, org string, db string) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "org", org, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam1 string
+
+	pathParam1, err = runtime.StyleParamWithOptions("simple", false, "db", db, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/orgs/%s/databases/%s/start", pathParam0, pathParam1)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodPost, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewPostOrgsOrgDatabasesDbStopRequest constructs an http.Request for the PostOrgsOrgDatabasesDbStop method
+func NewPostOrgsOrgDatabasesDbStopRequest(server string, org string, db string) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "org", org, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam1 string
+
+	pathParam1, err = runtime.StyleParamWithOptions("simple", false, "db", db, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/orgs/%s/databases/%s/stop", pathParam0, pathParam1)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodPost, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
 // NewGetRegionsRequest constructs an http.Request for the GetRegions method
 func NewGetRegionsRequest(server string) (*http.Request, error) {
 	var err error
@@ -1533,6 +2699,13 @@ func WithBaseURL(baseURL string) ClientOption {
 
 // ClientWithResponsesInterface is the interface specification for the client with responses above.
 type ClientWithResponsesInterface interface {
+
+	// GetDatabaseEnginesWithResponse Engines and versions available for new databases
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with GET /database-engines (the `GetDatabaseEngines` operationId).
+	GetDatabaseEnginesWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*GetDatabaseEnginesResponse, error)
 
 	// GetHealthWithResponse Liveness, including worker heartbeat age
 	//
@@ -1660,12 +2833,193 @@ type ClientWithResponsesInterface interface {
 	// Corresponds with GET /orgs/{org}/apps/{app}/logs (the `GetOrgsOrgAppsAppLogs` operationId).
 	GetOrgsOrgAppsAppLogsWithResponse(ctx context.Context, org string, app string, params *GetOrgsOrgAppsAppLogsParams, reqEditors ...RequestEditorFn) (*GetOrgsOrgAppsAppLogsResponse, error)
 
+	// GetOrgsOrgDatabasesWithResponse List databases
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with GET /orgs/{org}/databases (the `GetOrgsOrgDatabases` operationId).
+	GetOrgsOrgDatabasesWithResponse(ctx context.Context, org string, reqEditors ...RequestEditorFn) (*GetOrgsOrgDatabasesResponse, error)
+
+	// PostOrgsOrgDatabasesWithBodyWithResponse Create a database
+	//
+	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with POST /orgs/{org}/databases (the `PostOrgsOrgDatabases` operationId).
+	PostOrgsOrgDatabasesWithBodyWithResponse(ctx context.Context, org string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*PostOrgsOrgDatabasesResponse, error)
+
+	// PostOrgsOrgDatabasesWithResponse Create a database
+	//
+	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with POST /orgs/{org}/databases (the `PostOrgsOrgDatabases` operationId).
+	PostOrgsOrgDatabasesWithResponse(ctx context.Context, org string, body PostOrgsOrgDatabasesJSONRequestBody, reqEditors ...RequestEditorFn) (*PostOrgsOrgDatabasesResponse, error)
+
+	// DeleteOrgsOrgDatabasesDbWithResponse Delete a database and its backups
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with DELETE /orgs/{org}/databases/{db} (the `DeleteOrgsOrgDatabasesDb` operationId).
+	DeleteOrgsOrgDatabasesDbWithResponse(ctx context.Context, org string, db string, reqEditors ...RequestEditorFn) (*DeleteOrgsOrgDatabasesDbResponse, error)
+
+	// GetOrgsOrgDatabasesDbWithResponse Get a database
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with GET /orgs/{org}/databases/{db} (the `GetOrgsOrgDatabasesDb` operationId).
+	GetOrgsOrgDatabasesDbWithResponse(ctx context.Context, org string, db string, reqEditors ...RequestEditorFn) (*GetOrgsOrgDatabasesDbResponse, error)
+
+	// GetOrgsOrgDatabasesDbBackupsWithResponse List backups, newest first
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with GET /orgs/{org}/databases/{db}/backups (the `GetOrgsOrgDatabasesDbBackups` operationId).
+	GetOrgsOrgDatabasesDbBackupsWithResponse(ctx context.Context, org string, db string, reqEditors ...RequestEditorFn) (*GetOrgsOrgDatabasesDbBackupsResponse, error)
+
+	// PostOrgsOrgDatabasesDbBackupsWithResponse Take a backup now (PostgreSQL only)
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with POST /orgs/{org}/databases/{db}/backups (the `PostOrgsOrgDatabasesDbBackups` operationId).
+	PostOrgsOrgDatabasesDbBackupsWithResponse(ctx context.Context, org string, db string, reqEditors ...RequestEditorFn) (*PostOrgsOrgDatabasesDbBackupsResponse, error)
+
+	// PostOrgsOrgDatabasesDbBackupsEnableWithBodyWithResponse Enable automatic daily backups (PostgreSQL only)
+	//
+	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with POST /orgs/{org}/databases/{db}/backups/enable (the `PostOrgsOrgDatabasesDbBackupsEnable` operationId).
+	PostOrgsOrgDatabasesDbBackupsEnableWithBodyWithResponse(ctx context.Context, org string, db string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*PostOrgsOrgDatabasesDbBackupsEnableResponse, error)
+
+	// PostOrgsOrgDatabasesDbBackupsEnableWithResponse Enable automatic daily backups (PostgreSQL only)
+	//
+	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with POST /orgs/{org}/databases/{db}/backups/enable (the `PostOrgsOrgDatabasesDbBackupsEnable` operationId).
+	PostOrgsOrgDatabasesDbBackupsEnableWithResponse(ctx context.Context, org string, db string, body PostOrgsOrgDatabasesDbBackupsEnableJSONRequestBody, reqEditors ...RequestEditorFn) (*PostOrgsOrgDatabasesDbBackupsEnableResponse, error)
+
+	// GetOrgsOrgDatabasesDbCredentialsWithResponse Connection credentials (write-level permission; never cached)
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with GET /orgs/{org}/databases/{db}/credentials (the `GetOrgsOrgDatabasesDbCredentials` operationId).
+	GetOrgsOrgDatabasesDbCredentialsWithResponse(ctx context.Context, org string, db string, reqEditors ...RequestEditorFn) (*GetOrgsOrgDatabasesDbCredentialsResponse, error)
+
+	// GetOrgsOrgDatabasesDbLogsWithResponse Stream logs as text/plain
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with GET /orgs/{org}/databases/{db}/logs (the `GetOrgsOrgDatabasesDbLogs` operationId).
+	GetOrgsOrgDatabasesDbLogsWithResponse(ctx context.Context, org string, db string, params *GetOrgsOrgDatabasesDbLogsParams, reqEditors ...RequestEditorFn) (*GetOrgsOrgDatabasesDbLogsResponse, error)
+
+	// PostOrgsOrgDatabasesDbRestartWithResponse Restart a database
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with POST /orgs/{org}/databases/{db}/restart (the `PostOrgsOrgDatabasesDbRestart` operationId).
+	PostOrgsOrgDatabasesDbRestartWithResponse(ctx context.Context, org string, db string, reqEditors ...RequestEditorFn) (*PostOrgsOrgDatabasesDbRestartResponse, error)
+
+	// PostOrgsOrgDatabasesDbRestoreWithBodyWithResponse Restore into a NEW database (PostgreSQL only); the source is untouched
+	//
+	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with POST /orgs/{org}/databases/{db}/restore (the `PostOrgsOrgDatabasesDbRestore` operationId).
+	PostOrgsOrgDatabasesDbRestoreWithBodyWithResponse(ctx context.Context, org string, db string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*PostOrgsOrgDatabasesDbRestoreResponse, error)
+
+	// PostOrgsOrgDatabasesDbRestoreWithResponse Restore into a NEW database (PostgreSQL only); the source is untouched
+	//
+	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with POST /orgs/{org}/databases/{db}/restore (the `PostOrgsOrgDatabasesDbRestore` operationId).
+	PostOrgsOrgDatabasesDbRestoreWithResponse(ctx context.Context, org string, db string, body PostOrgsOrgDatabasesDbRestoreJSONRequestBody, reqEditors ...RequestEditorFn) (*PostOrgsOrgDatabasesDbRestoreResponse, error)
+
+	// PostOrgsOrgDatabasesDbStartWithResponse Start a stopped database
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with POST /orgs/{org}/databases/{db}/start (the `PostOrgsOrgDatabasesDbStart` operationId).
+	PostOrgsOrgDatabasesDbStartWithResponse(ctx context.Context, org string, db string, reqEditors ...RequestEditorFn) (*PostOrgsOrgDatabasesDbStartResponse, error)
+
+	// PostOrgsOrgDatabasesDbStopWithResponse Stop a database (billing continues for storage)
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with POST /orgs/{org}/databases/{db}/stop (the `PostOrgsOrgDatabasesDbStop` operationId).
+	PostOrgsOrgDatabasesDbStopWithResponse(ctx context.Context, org string, db string, reqEditors ...RequestEditorFn) (*PostOrgsOrgDatabasesDbStopResponse, error)
+
 	// GetRegionsWithResponse Regions available for new resources
 	//
 	// Returns a wrapper object for the known response body format(s).
 	//
 	// Corresponds with GET /regions (the `GetRegions` operationId).
 	GetRegionsWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*GetRegionsResponse, error)
+}
+
+type GetDatabaseEnginesResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *EngineVersionList
+	// ApplicationproblemJSON400 the response for an HTTP 400 `application/problem+json` response
+	ApplicationproblemJSON400 *Problem
+	// ApplicationproblemJSON401 the response for an HTTP 401 `application/problem+json` response
+	ApplicationproblemJSON401 *Problem
+	// ApplicationproblemJSON403 the response for an HTTP 403 `application/problem+json` response
+	ApplicationproblemJSON403 *Problem
+	// ApplicationproblemJSON404 the response for an HTTP 404 `application/problem+json` response
+	ApplicationproblemJSON404 *Problem
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r GetDatabaseEnginesResponse) GetJSON200() *EngineVersionList {
+	return r.JSON200
+}
+
+// GetApplicationproblemJSON400 returns the response for an HTTP 400 `application/problem+json` response
+func (r GetDatabaseEnginesResponse) GetApplicationproblemJSON400() *Problem {
+	return r.ApplicationproblemJSON400
+}
+
+// GetApplicationproblemJSON401 returns the response for an HTTP 401 `application/problem+json` response
+func (r GetDatabaseEnginesResponse) GetApplicationproblemJSON401() *Problem {
+	return r.ApplicationproblemJSON401
+}
+
+// GetApplicationproblemJSON403 returns the response for an HTTP 403 `application/problem+json` response
+func (r GetDatabaseEnginesResponse) GetApplicationproblemJSON403() *Problem {
+	return r.ApplicationproblemJSON403
+}
+
+// GetApplicationproblemJSON404 returns the response for an HTTP 404 `application/problem+json` response
+func (r GetDatabaseEnginesResponse) GetApplicationproblemJSON404() *Problem {
+	return r.ApplicationproblemJSON404
+}
+
+// GetBody returns the raw response body bytes
+func (r GetDatabaseEnginesResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r GetDatabaseEnginesResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r GetDatabaseEnginesResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r GetDatabaseEnginesResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
 }
 
 type GetHealthResponse struct {
@@ -2620,6 +3974,924 @@ func (r GetOrgsOrgAppsAppLogsResponse) ContentType() string {
 	return ""
 }
 
+type GetOrgsOrgDatabasesResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *DatabaseList
+	// ApplicationproblemJSON400 the response for an HTTP 400 `application/problem+json` response
+	ApplicationproblemJSON400 *Problem
+	// ApplicationproblemJSON401 the response for an HTTP 401 `application/problem+json` response
+	ApplicationproblemJSON401 *Problem
+	// ApplicationproblemJSON403 the response for an HTTP 403 `application/problem+json` response
+	ApplicationproblemJSON403 *Problem
+	// ApplicationproblemJSON404 the response for an HTTP 404 `application/problem+json` response
+	ApplicationproblemJSON404 *Problem
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r GetOrgsOrgDatabasesResponse) GetJSON200() *DatabaseList {
+	return r.JSON200
+}
+
+// GetApplicationproblemJSON400 returns the response for an HTTP 400 `application/problem+json` response
+func (r GetOrgsOrgDatabasesResponse) GetApplicationproblemJSON400() *Problem {
+	return r.ApplicationproblemJSON400
+}
+
+// GetApplicationproblemJSON401 returns the response for an HTTP 401 `application/problem+json` response
+func (r GetOrgsOrgDatabasesResponse) GetApplicationproblemJSON401() *Problem {
+	return r.ApplicationproblemJSON401
+}
+
+// GetApplicationproblemJSON403 returns the response for an HTTP 403 `application/problem+json` response
+func (r GetOrgsOrgDatabasesResponse) GetApplicationproblemJSON403() *Problem {
+	return r.ApplicationproblemJSON403
+}
+
+// GetApplicationproblemJSON404 returns the response for an HTTP 404 `application/problem+json` response
+func (r GetOrgsOrgDatabasesResponse) GetApplicationproblemJSON404() *Problem {
+	return r.ApplicationproblemJSON404
+}
+
+// GetBody returns the raw response body bytes
+func (r GetOrgsOrgDatabasesResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r GetOrgsOrgDatabasesResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r GetOrgsOrgDatabasesResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r GetOrgsOrgDatabasesResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type PostOrgsOrgDatabasesResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON201 the response for an HTTP 201 `application/json` response
+	JSON201 *Database
+	// ApplicationproblemJSON400 the response for an HTTP 400 `application/problem+json` response
+	ApplicationproblemJSON400 *Problem
+	// ApplicationproblemJSON401 the response for an HTTP 401 `application/problem+json` response
+	ApplicationproblemJSON401 *Problem
+	// ApplicationproblemJSON402 the response for an HTTP 402 `application/problem+json` response
+	ApplicationproblemJSON402 *Problem
+	// ApplicationproblemJSON403 the response for an HTTP 403 `application/problem+json` response
+	ApplicationproblemJSON403 *Problem
+	// ApplicationproblemJSON404 the response for an HTTP 404 `application/problem+json` response
+	ApplicationproblemJSON404 *Problem
+	// ApplicationproblemJSON409 the response for an HTTP 409 `application/problem+json` response
+	ApplicationproblemJSON409 *Problem
+}
+
+// GetJSON201 returns the response for an HTTP 201 `application/json` response
+func (r PostOrgsOrgDatabasesResponse) GetJSON201() *Database {
+	return r.JSON201
+}
+
+// GetApplicationproblemJSON400 returns the response for an HTTP 400 `application/problem+json` response
+func (r PostOrgsOrgDatabasesResponse) GetApplicationproblemJSON400() *Problem {
+	return r.ApplicationproblemJSON400
+}
+
+// GetApplicationproblemJSON401 returns the response for an HTTP 401 `application/problem+json` response
+func (r PostOrgsOrgDatabasesResponse) GetApplicationproblemJSON401() *Problem {
+	return r.ApplicationproblemJSON401
+}
+
+// GetApplicationproblemJSON402 returns the response for an HTTP 402 `application/problem+json` response
+func (r PostOrgsOrgDatabasesResponse) GetApplicationproblemJSON402() *Problem {
+	return r.ApplicationproblemJSON402
+}
+
+// GetApplicationproblemJSON403 returns the response for an HTTP 403 `application/problem+json` response
+func (r PostOrgsOrgDatabasesResponse) GetApplicationproblemJSON403() *Problem {
+	return r.ApplicationproblemJSON403
+}
+
+// GetApplicationproblemJSON404 returns the response for an HTTP 404 `application/problem+json` response
+func (r PostOrgsOrgDatabasesResponse) GetApplicationproblemJSON404() *Problem {
+	return r.ApplicationproblemJSON404
+}
+
+// GetApplicationproblemJSON409 returns the response for an HTTP 409 `application/problem+json` response
+func (r PostOrgsOrgDatabasesResponse) GetApplicationproblemJSON409() *Problem {
+	return r.ApplicationproblemJSON409
+}
+
+// GetBody returns the raw response body bytes
+func (r PostOrgsOrgDatabasesResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r PostOrgsOrgDatabasesResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r PostOrgsOrgDatabasesResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r PostOrgsOrgDatabasesResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type DeleteOrgsOrgDatabasesDbResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// ApplicationproblemJSON400 the response for an HTTP 400 `application/problem+json` response
+	ApplicationproblemJSON400 *Problem
+	// ApplicationproblemJSON401 the response for an HTTP 401 `application/problem+json` response
+	ApplicationproblemJSON401 *Problem
+	// ApplicationproblemJSON403 the response for an HTTP 403 `application/problem+json` response
+	ApplicationproblemJSON403 *Problem
+	// ApplicationproblemJSON404 the response for an HTTP 404 `application/problem+json` response
+	ApplicationproblemJSON404 *Problem
+}
+
+// GetApplicationproblemJSON400 returns the response for an HTTP 400 `application/problem+json` response
+func (r DeleteOrgsOrgDatabasesDbResponse) GetApplicationproblemJSON400() *Problem {
+	return r.ApplicationproblemJSON400
+}
+
+// GetApplicationproblemJSON401 returns the response for an HTTP 401 `application/problem+json` response
+func (r DeleteOrgsOrgDatabasesDbResponse) GetApplicationproblemJSON401() *Problem {
+	return r.ApplicationproblemJSON401
+}
+
+// GetApplicationproblemJSON403 returns the response for an HTTP 403 `application/problem+json` response
+func (r DeleteOrgsOrgDatabasesDbResponse) GetApplicationproblemJSON403() *Problem {
+	return r.ApplicationproblemJSON403
+}
+
+// GetApplicationproblemJSON404 returns the response for an HTTP 404 `application/problem+json` response
+func (r DeleteOrgsOrgDatabasesDbResponse) GetApplicationproblemJSON404() *Problem {
+	return r.ApplicationproblemJSON404
+}
+
+// GetBody returns the raw response body bytes
+func (r DeleteOrgsOrgDatabasesDbResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r DeleteOrgsOrgDatabasesDbResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r DeleteOrgsOrgDatabasesDbResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r DeleteOrgsOrgDatabasesDbResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type GetOrgsOrgDatabasesDbResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *Database
+	// ApplicationproblemJSON400 the response for an HTTP 400 `application/problem+json` response
+	ApplicationproblemJSON400 *Problem
+	// ApplicationproblemJSON401 the response for an HTTP 401 `application/problem+json` response
+	ApplicationproblemJSON401 *Problem
+	// ApplicationproblemJSON403 the response for an HTTP 403 `application/problem+json` response
+	ApplicationproblemJSON403 *Problem
+	// ApplicationproblemJSON404 the response for an HTTP 404 `application/problem+json` response
+	ApplicationproblemJSON404 *Problem
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r GetOrgsOrgDatabasesDbResponse) GetJSON200() *Database {
+	return r.JSON200
+}
+
+// GetApplicationproblemJSON400 returns the response for an HTTP 400 `application/problem+json` response
+func (r GetOrgsOrgDatabasesDbResponse) GetApplicationproblemJSON400() *Problem {
+	return r.ApplicationproblemJSON400
+}
+
+// GetApplicationproblemJSON401 returns the response for an HTTP 401 `application/problem+json` response
+func (r GetOrgsOrgDatabasesDbResponse) GetApplicationproblemJSON401() *Problem {
+	return r.ApplicationproblemJSON401
+}
+
+// GetApplicationproblemJSON403 returns the response for an HTTP 403 `application/problem+json` response
+func (r GetOrgsOrgDatabasesDbResponse) GetApplicationproblemJSON403() *Problem {
+	return r.ApplicationproblemJSON403
+}
+
+// GetApplicationproblemJSON404 returns the response for an HTTP 404 `application/problem+json` response
+func (r GetOrgsOrgDatabasesDbResponse) GetApplicationproblemJSON404() *Problem {
+	return r.ApplicationproblemJSON404
+}
+
+// GetBody returns the raw response body bytes
+func (r GetOrgsOrgDatabasesDbResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r GetOrgsOrgDatabasesDbResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r GetOrgsOrgDatabasesDbResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r GetOrgsOrgDatabasesDbResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type GetOrgsOrgDatabasesDbBackupsResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *BackupList
+	// ApplicationproblemJSON400 the response for an HTTP 400 `application/problem+json` response
+	ApplicationproblemJSON400 *Problem
+	// ApplicationproblemJSON401 the response for an HTTP 401 `application/problem+json` response
+	ApplicationproblemJSON401 *Problem
+	// ApplicationproblemJSON403 the response for an HTTP 403 `application/problem+json` response
+	ApplicationproblemJSON403 *Problem
+	// ApplicationproblemJSON404 the response for an HTTP 404 `application/problem+json` response
+	ApplicationproblemJSON404 *Problem
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r GetOrgsOrgDatabasesDbBackupsResponse) GetJSON200() *BackupList {
+	return r.JSON200
+}
+
+// GetApplicationproblemJSON400 returns the response for an HTTP 400 `application/problem+json` response
+func (r GetOrgsOrgDatabasesDbBackupsResponse) GetApplicationproblemJSON400() *Problem {
+	return r.ApplicationproblemJSON400
+}
+
+// GetApplicationproblemJSON401 returns the response for an HTTP 401 `application/problem+json` response
+func (r GetOrgsOrgDatabasesDbBackupsResponse) GetApplicationproblemJSON401() *Problem {
+	return r.ApplicationproblemJSON401
+}
+
+// GetApplicationproblemJSON403 returns the response for an HTTP 403 `application/problem+json` response
+func (r GetOrgsOrgDatabasesDbBackupsResponse) GetApplicationproblemJSON403() *Problem {
+	return r.ApplicationproblemJSON403
+}
+
+// GetApplicationproblemJSON404 returns the response for an HTTP 404 `application/problem+json` response
+func (r GetOrgsOrgDatabasesDbBackupsResponse) GetApplicationproblemJSON404() *Problem {
+	return r.ApplicationproblemJSON404
+}
+
+// GetBody returns the raw response body bytes
+func (r GetOrgsOrgDatabasesDbBackupsResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r GetOrgsOrgDatabasesDbBackupsResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r GetOrgsOrgDatabasesDbBackupsResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r GetOrgsOrgDatabasesDbBackupsResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type PostOrgsOrgDatabasesDbBackupsResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON201 the response for an HTTP 201 `application/json` response
+	JSON201 *Backup
+	// ApplicationproblemJSON400 the response for an HTTP 400 `application/problem+json` response
+	ApplicationproblemJSON400 *Problem
+	// ApplicationproblemJSON401 the response for an HTTP 401 `application/problem+json` response
+	ApplicationproblemJSON401 *Problem
+	// ApplicationproblemJSON403 the response for an HTTP 403 `application/problem+json` response
+	ApplicationproblemJSON403 *Problem
+	// ApplicationproblemJSON404 the response for an HTTP 404 `application/problem+json` response
+	ApplicationproblemJSON404 *Problem
+}
+
+// GetJSON201 returns the response for an HTTP 201 `application/json` response
+func (r PostOrgsOrgDatabasesDbBackupsResponse) GetJSON201() *Backup {
+	return r.JSON201
+}
+
+// GetApplicationproblemJSON400 returns the response for an HTTP 400 `application/problem+json` response
+func (r PostOrgsOrgDatabasesDbBackupsResponse) GetApplicationproblemJSON400() *Problem {
+	return r.ApplicationproblemJSON400
+}
+
+// GetApplicationproblemJSON401 returns the response for an HTTP 401 `application/problem+json` response
+func (r PostOrgsOrgDatabasesDbBackupsResponse) GetApplicationproblemJSON401() *Problem {
+	return r.ApplicationproblemJSON401
+}
+
+// GetApplicationproblemJSON403 returns the response for an HTTP 403 `application/problem+json` response
+func (r PostOrgsOrgDatabasesDbBackupsResponse) GetApplicationproblemJSON403() *Problem {
+	return r.ApplicationproblemJSON403
+}
+
+// GetApplicationproblemJSON404 returns the response for an HTTP 404 `application/problem+json` response
+func (r PostOrgsOrgDatabasesDbBackupsResponse) GetApplicationproblemJSON404() *Problem {
+	return r.ApplicationproblemJSON404
+}
+
+// GetBody returns the raw response body bytes
+func (r PostOrgsOrgDatabasesDbBackupsResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r PostOrgsOrgDatabasesDbBackupsResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r PostOrgsOrgDatabasesDbBackupsResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r PostOrgsOrgDatabasesDbBackupsResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type PostOrgsOrgDatabasesDbBackupsEnableResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON202 the response for an HTTP 202 `application/json` response
+	JSON202 *BackupsEnabled
+	// ApplicationproblemJSON400 the response for an HTTP 400 `application/problem+json` response
+	ApplicationproblemJSON400 *Problem
+	// ApplicationproblemJSON401 the response for an HTTP 401 `application/problem+json` response
+	ApplicationproblemJSON401 *Problem
+	// ApplicationproblemJSON403 the response for an HTTP 403 `application/problem+json` response
+	ApplicationproblemJSON403 *Problem
+	// ApplicationproblemJSON404 the response for an HTTP 404 `application/problem+json` response
+	ApplicationproblemJSON404 *Problem
+}
+
+// GetJSON202 returns the response for an HTTP 202 `application/json` response
+func (r PostOrgsOrgDatabasesDbBackupsEnableResponse) GetJSON202() *BackupsEnabled {
+	return r.JSON202
+}
+
+// GetApplicationproblemJSON400 returns the response for an HTTP 400 `application/problem+json` response
+func (r PostOrgsOrgDatabasesDbBackupsEnableResponse) GetApplicationproblemJSON400() *Problem {
+	return r.ApplicationproblemJSON400
+}
+
+// GetApplicationproblemJSON401 returns the response for an HTTP 401 `application/problem+json` response
+func (r PostOrgsOrgDatabasesDbBackupsEnableResponse) GetApplicationproblemJSON401() *Problem {
+	return r.ApplicationproblemJSON401
+}
+
+// GetApplicationproblemJSON403 returns the response for an HTTP 403 `application/problem+json` response
+func (r PostOrgsOrgDatabasesDbBackupsEnableResponse) GetApplicationproblemJSON403() *Problem {
+	return r.ApplicationproblemJSON403
+}
+
+// GetApplicationproblemJSON404 returns the response for an HTTP 404 `application/problem+json` response
+func (r PostOrgsOrgDatabasesDbBackupsEnableResponse) GetApplicationproblemJSON404() *Problem {
+	return r.ApplicationproblemJSON404
+}
+
+// GetBody returns the raw response body bytes
+func (r PostOrgsOrgDatabasesDbBackupsEnableResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r PostOrgsOrgDatabasesDbBackupsEnableResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r PostOrgsOrgDatabasesDbBackupsEnableResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r PostOrgsOrgDatabasesDbBackupsEnableResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type GetOrgsOrgDatabasesDbCredentialsResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *Credentials
+	// ApplicationproblemJSON400 the response for an HTTP 400 `application/problem+json` response
+	ApplicationproblemJSON400 *Problem
+	// ApplicationproblemJSON401 the response for an HTTP 401 `application/problem+json` response
+	ApplicationproblemJSON401 *Problem
+	// ApplicationproblemJSON403 the response for an HTTP 403 `application/problem+json` response
+	ApplicationproblemJSON403 *Problem
+	// ApplicationproblemJSON404 the response for an HTTP 404 `application/problem+json` response
+	ApplicationproblemJSON404 *Problem
+	// ApplicationproblemJSON409 the response for an HTTP 409 `application/problem+json` response
+	ApplicationproblemJSON409 *Problem
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r GetOrgsOrgDatabasesDbCredentialsResponse) GetJSON200() *Credentials {
+	return r.JSON200
+}
+
+// GetApplicationproblemJSON400 returns the response for an HTTP 400 `application/problem+json` response
+func (r GetOrgsOrgDatabasesDbCredentialsResponse) GetApplicationproblemJSON400() *Problem {
+	return r.ApplicationproblemJSON400
+}
+
+// GetApplicationproblemJSON401 returns the response for an HTTP 401 `application/problem+json` response
+func (r GetOrgsOrgDatabasesDbCredentialsResponse) GetApplicationproblemJSON401() *Problem {
+	return r.ApplicationproblemJSON401
+}
+
+// GetApplicationproblemJSON403 returns the response for an HTTP 403 `application/problem+json` response
+func (r GetOrgsOrgDatabasesDbCredentialsResponse) GetApplicationproblemJSON403() *Problem {
+	return r.ApplicationproblemJSON403
+}
+
+// GetApplicationproblemJSON404 returns the response for an HTTP 404 `application/problem+json` response
+func (r GetOrgsOrgDatabasesDbCredentialsResponse) GetApplicationproblemJSON404() *Problem {
+	return r.ApplicationproblemJSON404
+}
+
+// GetApplicationproblemJSON409 returns the response for an HTTP 409 `application/problem+json` response
+func (r GetOrgsOrgDatabasesDbCredentialsResponse) GetApplicationproblemJSON409() *Problem {
+	return r.ApplicationproblemJSON409
+}
+
+// GetBody returns the raw response body bytes
+func (r GetOrgsOrgDatabasesDbCredentialsResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r GetOrgsOrgDatabasesDbCredentialsResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r GetOrgsOrgDatabasesDbCredentialsResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r GetOrgsOrgDatabasesDbCredentialsResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type GetOrgsOrgDatabasesDbLogsResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// ApplicationproblemJSON400 the response for an HTTP 400 `application/problem+json` response
+	ApplicationproblemJSON400 *Problem
+	// ApplicationproblemJSON401 the response for an HTTP 401 `application/problem+json` response
+	ApplicationproblemJSON401 *Problem
+	// ApplicationproblemJSON403 the response for an HTTP 403 `application/problem+json` response
+	ApplicationproblemJSON403 *Problem
+	// ApplicationproblemJSON404 the response for an HTTP 404 `application/problem+json` response
+	ApplicationproblemJSON404 *Problem
+}
+
+// GetApplicationproblemJSON400 returns the response for an HTTP 400 `application/problem+json` response
+func (r GetOrgsOrgDatabasesDbLogsResponse) GetApplicationproblemJSON400() *Problem {
+	return r.ApplicationproblemJSON400
+}
+
+// GetApplicationproblemJSON401 returns the response for an HTTP 401 `application/problem+json` response
+func (r GetOrgsOrgDatabasesDbLogsResponse) GetApplicationproblemJSON401() *Problem {
+	return r.ApplicationproblemJSON401
+}
+
+// GetApplicationproblemJSON403 returns the response for an HTTP 403 `application/problem+json` response
+func (r GetOrgsOrgDatabasesDbLogsResponse) GetApplicationproblemJSON403() *Problem {
+	return r.ApplicationproblemJSON403
+}
+
+// GetApplicationproblemJSON404 returns the response for an HTTP 404 `application/problem+json` response
+func (r GetOrgsOrgDatabasesDbLogsResponse) GetApplicationproblemJSON404() *Problem {
+	return r.ApplicationproblemJSON404
+}
+
+// GetBody returns the raw response body bytes
+func (r GetOrgsOrgDatabasesDbLogsResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r GetOrgsOrgDatabasesDbLogsResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r GetOrgsOrgDatabasesDbLogsResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r GetOrgsOrgDatabasesDbLogsResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type PostOrgsOrgDatabasesDbRestartResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON202 the response for an HTTP 202 `application/json` response
+	JSON202 *Database
+	// ApplicationproblemJSON400 the response for an HTTP 400 `application/problem+json` response
+	ApplicationproblemJSON400 *Problem
+	// ApplicationproblemJSON401 the response for an HTTP 401 `application/problem+json` response
+	ApplicationproblemJSON401 *Problem
+	// ApplicationproblemJSON403 the response for an HTTP 403 `application/problem+json` response
+	ApplicationproblemJSON403 *Problem
+	// ApplicationproblemJSON404 the response for an HTTP 404 `application/problem+json` response
+	ApplicationproblemJSON404 *Problem
+}
+
+// GetJSON202 returns the response for an HTTP 202 `application/json` response
+func (r PostOrgsOrgDatabasesDbRestartResponse) GetJSON202() *Database {
+	return r.JSON202
+}
+
+// GetApplicationproblemJSON400 returns the response for an HTTP 400 `application/problem+json` response
+func (r PostOrgsOrgDatabasesDbRestartResponse) GetApplicationproblemJSON400() *Problem {
+	return r.ApplicationproblemJSON400
+}
+
+// GetApplicationproblemJSON401 returns the response for an HTTP 401 `application/problem+json` response
+func (r PostOrgsOrgDatabasesDbRestartResponse) GetApplicationproblemJSON401() *Problem {
+	return r.ApplicationproblemJSON401
+}
+
+// GetApplicationproblemJSON403 returns the response for an HTTP 403 `application/problem+json` response
+func (r PostOrgsOrgDatabasesDbRestartResponse) GetApplicationproblemJSON403() *Problem {
+	return r.ApplicationproblemJSON403
+}
+
+// GetApplicationproblemJSON404 returns the response for an HTTP 404 `application/problem+json` response
+func (r PostOrgsOrgDatabasesDbRestartResponse) GetApplicationproblemJSON404() *Problem {
+	return r.ApplicationproblemJSON404
+}
+
+// GetBody returns the raw response body bytes
+func (r PostOrgsOrgDatabasesDbRestartResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r PostOrgsOrgDatabasesDbRestartResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r PostOrgsOrgDatabasesDbRestartResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r PostOrgsOrgDatabasesDbRestartResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type PostOrgsOrgDatabasesDbRestoreResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON201 the response for an HTTP 201 `application/json` response
+	JSON201 *Database
+	// ApplicationproblemJSON400 the response for an HTTP 400 `application/problem+json` response
+	ApplicationproblemJSON400 *Problem
+	// ApplicationproblemJSON401 the response for an HTTP 401 `application/problem+json` response
+	ApplicationproblemJSON401 *Problem
+	// ApplicationproblemJSON402 the response for an HTTP 402 `application/problem+json` response
+	ApplicationproblemJSON402 *Problem
+	// ApplicationproblemJSON403 the response for an HTTP 403 `application/problem+json` response
+	ApplicationproblemJSON403 *Problem
+	// ApplicationproblemJSON404 the response for an HTTP 404 `application/problem+json` response
+	ApplicationproblemJSON404 *Problem
+	// ApplicationproblemJSON409 the response for an HTTP 409 `application/problem+json` response
+	ApplicationproblemJSON409 *Problem
+}
+
+// GetJSON201 returns the response for an HTTP 201 `application/json` response
+func (r PostOrgsOrgDatabasesDbRestoreResponse) GetJSON201() *Database {
+	return r.JSON201
+}
+
+// GetApplicationproblemJSON400 returns the response for an HTTP 400 `application/problem+json` response
+func (r PostOrgsOrgDatabasesDbRestoreResponse) GetApplicationproblemJSON400() *Problem {
+	return r.ApplicationproblemJSON400
+}
+
+// GetApplicationproblemJSON401 returns the response for an HTTP 401 `application/problem+json` response
+func (r PostOrgsOrgDatabasesDbRestoreResponse) GetApplicationproblemJSON401() *Problem {
+	return r.ApplicationproblemJSON401
+}
+
+// GetApplicationproblemJSON402 returns the response for an HTTP 402 `application/problem+json` response
+func (r PostOrgsOrgDatabasesDbRestoreResponse) GetApplicationproblemJSON402() *Problem {
+	return r.ApplicationproblemJSON402
+}
+
+// GetApplicationproblemJSON403 returns the response for an HTTP 403 `application/problem+json` response
+func (r PostOrgsOrgDatabasesDbRestoreResponse) GetApplicationproblemJSON403() *Problem {
+	return r.ApplicationproblemJSON403
+}
+
+// GetApplicationproblemJSON404 returns the response for an HTTP 404 `application/problem+json` response
+func (r PostOrgsOrgDatabasesDbRestoreResponse) GetApplicationproblemJSON404() *Problem {
+	return r.ApplicationproblemJSON404
+}
+
+// GetApplicationproblemJSON409 returns the response for an HTTP 409 `application/problem+json` response
+func (r PostOrgsOrgDatabasesDbRestoreResponse) GetApplicationproblemJSON409() *Problem {
+	return r.ApplicationproblemJSON409
+}
+
+// GetBody returns the raw response body bytes
+func (r PostOrgsOrgDatabasesDbRestoreResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r PostOrgsOrgDatabasesDbRestoreResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r PostOrgsOrgDatabasesDbRestoreResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r PostOrgsOrgDatabasesDbRestoreResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type PostOrgsOrgDatabasesDbStartResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON202 the response for an HTTP 202 `application/json` response
+	JSON202 *Database
+	// ApplicationproblemJSON400 the response for an HTTP 400 `application/problem+json` response
+	ApplicationproblemJSON400 *Problem
+	// ApplicationproblemJSON401 the response for an HTTP 401 `application/problem+json` response
+	ApplicationproblemJSON401 *Problem
+	// ApplicationproblemJSON403 the response for an HTTP 403 `application/problem+json` response
+	ApplicationproblemJSON403 *Problem
+	// ApplicationproblemJSON404 the response for an HTTP 404 `application/problem+json` response
+	ApplicationproblemJSON404 *Problem
+}
+
+// GetJSON202 returns the response for an HTTP 202 `application/json` response
+func (r PostOrgsOrgDatabasesDbStartResponse) GetJSON202() *Database {
+	return r.JSON202
+}
+
+// GetApplicationproblemJSON400 returns the response for an HTTP 400 `application/problem+json` response
+func (r PostOrgsOrgDatabasesDbStartResponse) GetApplicationproblemJSON400() *Problem {
+	return r.ApplicationproblemJSON400
+}
+
+// GetApplicationproblemJSON401 returns the response for an HTTP 401 `application/problem+json` response
+func (r PostOrgsOrgDatabasesDbStartResponse) GetApplicationproblemJSON401() *Problem {
+	return r.ApplicationproblemJSON401
+}
+
+// GetApplicationproblemJSON403 returns the response for an HTTP 403 `application/problem+json` response
+func (r PostOrgsOrgDatabasesDbStartResponse) GetApplicationproblemJSON403() *Problem {
+	return r.ApplicationproblemJSON403
+}
+
+// GetApplicationproblemJSON404 returns the response for an HTTP 404 `application/problem+json` response
+func (r PostOrgsOrgDatabasesDbStartResponse) GetApplicationproblemJSON404() *Problem {
+	return r.ApplicationproblemJSON404
+}
+
+// GetBody returns the raw response body bytes
+func (r PostOrgsOrgDatabasesDbStartResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r PostOrgsOrgDatabasesDbStartResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r PostOrgsOrgDatabasesDbStartResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r PostOrgsOrgDatabasesDbStartResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type PostOrgsOrgDatabasesDbStopResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON202 the response for an HTTP 202 `application/json` response
+	JSON202 *Database
+	// ApplicationproblemJSON400 the response for an HTTP 400 `application/problem+json` response
+	ApplicationproblemJSON400 *Problem
+	// ApplicationproblemJSON401 the response for an HTTP 401 `application/problem+json` response
+	ApplicationproblemJSON401 *Problem
+	// ApplicationproblemJSON403 the response for an HTTP 403 `application/problem+json` response
+	ApplicationproblemJSON403 *Problem
+	// ApplicationproblemJSON404 the response for an HTTP 404 `application/problem+json` response
+	ApplicationproblemJSON404 *Problem
+}
+
+// GetJSON202 returns the response for an HTTP 202 `application/json` response
+func (r PostOrgsOrgDatabasesDbStopResponse) GetJSON202() *Database {
+	return r.JSON202
+}
+
+// GetApplicationproblemJSON400 returns the response for an HTTP 400 `application/problem+json` response
+func (r PostOrgsOrgDatabasesDbStopResponse) GetApplicationproblemJSON400() *Problem {
+	return r.ApplicationproblemJSON400
+}
+
+// GetApplicationproblemJSON401 returns the response for an HTTP 401 `application/problem+json` response
+func (r PostOrgsOrgDatabasesDbStopResponse) GetApplicationproblemJSON401() *Problem {
+	return r.ApplicationproblemJSON401
+}
+
+// GetApplicationproblemJSON403 returns the response for an HTTP 403 `application/problem+json` response
+func (r PostOrgsOrgDatabasesDbStopResponse) GetApplicationproblemJSON403() *Problem {
+	return r.ApplicationproblemJSON403
+}
+
+// GetApplicationproblemJSON404 returns the response for an HTTP 404 `application/problem+json` response
+func (r PostOrgsOrgDatabasesDbStopResponse) GetApplicationproblemJSON404() *Problem {
+	return r.ApplicationproblemJSON404
+}
+
+// GetBody returns the raw response body bytes
+func (r PostOrgsOrgDatabasesDbStopResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r PostOrgsOrgDatabasesDbStopResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r PostOrgsOrgDatabasesDbStopResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r PostOrgsOrgDatabasesDbStopResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
 type GetRegionsResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
@@ -2687,6 +4959,19 @@ func (r GetRegionsResponse) ContentType() string {
 		return r.HTTPResponse.Header.Get("Content-Type")
 	}
 	return ""
+}
+
+// GetDatabaseEnginesWithResponse Engines and versions available for new databases
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with GET /database-engines (the `GetDatabaseEngines` operationId).
+func (c *ClientWithResponses) GetDatabaseEnginesWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*GetDatabaseEnginesResponse, error) {
+	rsp, err := c.GetDatabaseEngines(ctx, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseGetDatabaseEnginesResponse(rsp)
 }
 
 // GetHealthWithResponse Liveness, including worker heartbeat age
@@ -2923,6 +5208,214 @@ func (c *ClientWithResponses) GetOrgsOrgAppsAppLogsWithResponse(ctx context.Cont
 	return ParseGetOrgsOrgAppsAppLogsResponse(rsp)
 }
 
+// GetOrgsOrgDatabasesWithResponse List databases
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with GET /orgs/{org}/databases (the `GetOrgsOrgDatabases` operationId).
+func (c *ClientWithResponses) GetOrgsOrgDatabasesWithResponse(ctx context.Context, org string, reqEditors ...RequestEditorFn) (*GetOrgsOrgDatabasesResponse, error) {
+	rsp, err := c.GetOrgsOrgDatabases(ctx, org, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseGetOrgsOrgDatabasesResponse(rsp)
+}
+
+// PostOrgsOrgDatabasesWithBodyWithResponse Create a database
+//
+// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with POST /orgs/{org}/databases (the `PostOrgsOrgDatabases` operationId).
+func (c *ClientWithResponses) PostOrgsOrgDatabasesWithBodyWithResponse(ctx context.Context, org string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*PostOrgsOrgDatabasesResponse, error) {
+	rsp, err := c.PostOrgsOrgDatabasesWithBody(ctx, org, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParsePostOrgsOrgDatabasesResponse(rsp)
+}
+
+// PostOrgsOrgDatabasesWithResponse Create a database
+//
+// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with POST /orgs/{org}/databases (the `PostOrgsOrgDatabases` operationId).
+func (c *ClientWithResponses) PostOrgsOrgDatabasesWithResponse(ctx context.Context, org string, body PostOrgsOrgDatabasesJSONRequestBody, reqEditors ...RequestEditorFn) (*PostOrgsOrgDatabasesResponse, error) {
+	rsp, err := c.PostOrgsOrgDatabases(ctx, org, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParsePostOrgsOrgDatabasesResponse(rsp)
+}
+
+// DeleteOrgsOrgDatabasesDbWithResponse Delete a database and its backups
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with DELETE /orgs/{org}/databases/{db} (the `DeleteOrgsOrgDatabasesDb` operationId).
+func (c *ClientWithResponses) DeleteOrgsOrgDatabasesDbWithResponse(ctx context.Context, org string, db string, reqEditors ...RequestEditorFn) (*DeleteOrgsOrgDatabasesDbResponse, error) {
+	rsp, err := c.DeleteOrgsOrgDatabasesDb(ctx, org, db, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseDeleteOrgsOrgDatabasesDbResponse(rsp)
+}
+
+// GetOrgsOrgDatabasesDbWithResponse Get a database
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with GET /orgs/{org}/databases/{db} (the `GetOrgsOrgDatabasesDb` operationId).
+func (c *ClientWithResponses) GetOrgsOrgDatabasesDbWithResponse(ctx context.Context, org string, db string, reqEditors ...RequestEditorFn) (*GetOrgsOrgDatabasesDbResponse, error) {
+	rsp, err := c.GetOrgsOrgDatabasesDb(ctx, org, db, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseGetOrgsOrgDatabasesDbResponse(rsp)
+}
+
+// GetOrgsOrgDatabasesDbBackupsWithResponse List backups, newest first
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with GET /orgs/{org}/databases/{db}/backups (the `GetOrgsOrgDatabasesDbBackups` operationId).
+func (c *ClientWithResponses) GetOrgsOrgDatabasesDbBackupsWithResponse(ctx context.Context, org string, db string, reqEditors ...RequestEditorFn) (*GetOrgsOrgDatabasesDbBackupsResponse, error) {
+	rsp, err := c.GetOrgsOrgDatabasesDbBackups(ctx, org, db, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseGetOrgsOrgDatabasesDbBackupsResponse(rsp)
+}
+
+// PostOrgsOrgDatabasesDbBackupsWithResponse Take a backup now (PostgreSQL only)
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with POST /orgs/{org}/databases/{db}/backups (the `PostOrgsOrgDatabasesDbBackups` operationId).
+func (c *ClientWithResponses) PostOrgsOrgDatabasesDbBackupsWithResponse(ctx context.Context, org string, db string, reqEditors ...RequestEditorFn) (*PostOrgsOrgDatabasesDbBackupsResponse, error) {
+	rsp, err := c.PostOrgsOrgDatabasesDbBackups(ctx, org, db, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParsePostOrgsOrgDatabasesDbBackupsResponse(rsp)
+}
+
+// PostOrgsOrgDatabasesDbBackupsEnableWithBodyWithResponse Enable automatic daily backups (PostgreSQL only)
+//
+// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with POST /orgs/{org}/databases/{db}/backups/enable (the `PostOrgsOrgDatabasesDbBackupsEnable` operationId).
+func (c *ClientWithResponses) PostOrgsOrgDatabasesDbBackupsEnableWithBodyWithResponse(ctx context.Context, org string, db string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*PostOrgsOrgDatabasesDbBackupsEnableResponse, error) {
+	rsp, err := c.PostOrgsOrgDatabasesDbBackupsEnableWithBody(ctx, org, db, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParsePostOrgsOrgDatabasesDbBackupsEnableResponse(rsp)
+}
+
+// PostOrgsOrgDatabasesDbBackupsEnableWithResponse Enable automatic daily backups (PostgreSQL only)
+//
+// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with POST /orgs/{org}/databases/{db}/backups/enable (the `PostOrgsOrgDatabasesDbBackupsEnable` operationId).
+func (c *ClientWithResponses) PostOrgsOrgDatabasesDbBackupsEnableWithResponse(ctx context.Context, org string, db string, body PostOrgsOrgDatabasesDbBackupsEnableJSONRequestBody, reqEditors ...RequestEditorFn) (*PostOrgsOrgDatabasesDbBackupsEnableResponse, error) {
+	rsp, err := c.PostOrgsOrgDatabasesDbBackupsEnable(ctx, org, db, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParsePostOrgsOrgDatabasesDbBackupsEnableResponse(rsp)
+}
+
+// GetOrgsOrgDatabasesDbCredentialsWithResponse Connection credentials (write-level permission; never cached)
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with GET /orgs/{org}/databases/{db}/credentials (the `GetOrgsOrgDatabasesDbCredentials` operationId).
+func (c *ClientWithResponses) GetOrgsOrgDatabasesDbCredentialsWithResponse(ctx context.Context, org string, db string, reqEditors ...RequestEditorFn) (*GetOrgsOrgDatabasesDbCredentialsResponse, error) {
+	rsp, err := c.GetOrgsOrgDatabasesDbCredentials(ctx, org, db, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseGetOrgsOrgDatabasesDbCredentialsResponse(rsp)
+}
+
+// GetOrgsOrgDatabasesDbLogsWithResponse Stream logs as text/plain
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with GET /orgs/{org}/databases/{db}/logs (the `GetOrgsOrgDatabasesDbLogs` operationId).
+func (c *ClientWithResponses) GetOrgsOrgDatabasesDbLogsWithResponse(ctx context.Context, org string, db string, params *GetOrgsOrgDatabasesDbLogsParams, reqEditors ...RequestEditorFn) (*GetOrgsOrgDatabasesDbLogsResponse, error) {
+	rsp, err := c.GetOrgsOrgDatabasesDbLogs(ctx, org, db, params, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseGetOrgsOrgDatabasesDbLogsResponse(rsp)
+}
+
+// PostOrgsOrgDatabasesDbRestartWithResponse Restart a database
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with POST /orgs/{org}/databases/{db}/restart (the `PostOrgsOrgDatabasesDbRestart` operationId).
+func (c *ClientWithResponses) PostOrgsOrgDatabasesDbRestartWithResponse(ctx context.Context, org string, db string, reqEditors ...RequestEditorFn) (*PostOrgsOrgDatabasesDbRestartResponse, error) {
+	rsp, err := c.PostOrgsOrgDatabasesDbRestart(ctx, org, db, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParsePostOrgsOrgDatabasesDbRestartResponse(rsp)
+}
+
+// PostOrgsOrgDatabasesDbRestoreWithBodyWithResponse Restore into a NEW database (PostgreSQL only); the source is untouched
+//
+// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with POST /orgs/{org}/databases/{db}/restore (the `PostOrgsOrgDatabasesDbRestore` operationId).
+func (c *ClientWithResponses) PostOrgsOrgDatabasesDbRestoreWithBodyWithResponse(ctx context.Context, org string, db string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*PostOrgsOrgDatabasesDbRestoreResponse, error) {
+	rsp, err := c.PostOrgsOrgDatabasesDbRestoreWithBody(ctx, org, db, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParsePostOrgsOrgDatabasesDbRestoreResponse(rsp)
+}
+
+// PostOrgsOrgDatabasesDbRestoreWithResponse Restore into a NEW database (PostgreSQL only); the source is untouched
+//
+// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with POST /orgs/{org}/databases/{db}/restore (the `PostOrgsOrgDatabasesDbRestore` operationId).
+func (c *ClientWithResponses) PostOrgsOrgDatabasesDbRestoreWithResponse(ctx context.Context, org string, db string, body PostOrgsOrgDatabasesDbRestoreJSONRequestBody, reqEditors ...RequestEditorFn) (*PostOrgsOrgDatabasesDbRestoreResponse, error) {
+	rsp, err := c.PostOrgsOrgDatabasesDbRestore(ctx, org, db, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParsePostOrgsOrgDatabasesDbRestoreResponse(rsp)
+}
+
+// PostOrgsOrgDatabasesDbStartWithResponse Start a stopped database
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with POST /orgs/{org}/databases/{db}/start (the `PostOrgsOrgDatabasesDbStart` operationId).
+func (c *ClientWithResponses) PostOrgsOrgDatabasesDbStartWithResponse(ctx context.Context, org string, db string, reqEditors ...RequestEditorFn) (*PostOrgsOrgDatabasesDbStartResponse, error) {
+	rsp, err := c.PostOrgsOrgDatabasesDbStart(ctx, org, db, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParsePostOrgsOrgDatabasesDbStartResponse(rsp)
+}
+
+// PostOrgsOrgDatabasesDbStopWithResponse Stop a database (billing continues for storage)
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with POST /orgs/{org}/databases/{db}/stop (the `PostOrgsOrgDatabasesDbStop` operationId).
+func (c *ClientWithResponses) PostOrgsOrgDatabasesDbStopWithResponse(ctx context.Context, org string, db string, reqEditors ...RequestEditorFn) (*PostOrgsOrgDatabasesDbStopResponse, error) {
+	rsp, err := c.PostOrgsOrgDatabasesDbStop(ctx, org, db, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParsePostOrgsOrgDatabasesDbStopResponse(rsp)
+}
+
 // GetRegionsWithResponse Regions available for new resources
 //
 // Returns a wrapper object for the known response body format(s).
@@ -2934,6 +5427,60 @@ func (c *ClientWithResponses) GetRegionsWithResponse(ctx context.Context, reqEdi
 		return nil, err
 	}
 	return ParseGetRegionsResponse(rsp)
+}
+
+// ParseGetDatabaseEnginesResponse parses an HTTP response from a GetDatabaseEnginesWithResponse call
+func ParseGetDatabaseEnginesResponse(rsp *http.Response) (*GetDatabaseEnginesResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &GetDatabaseEnginesResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest EngineVersionList
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON404 = &dest
+
+	}
+
+	return response, nil
 }
 
 // ParseGetHealthResponse parses an HTTP response from a GetHealthWithResponse call
@@ -3651,6 +6198,732 @@ func ParseGetOrgsOrgAppsAppLogsResponse(rsp *http.Response) (*GetOrgsOrgAppsAppL
 	}
 
 	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON404 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseGetOrgsOrgDatabasesResponse parses an HTTP response from a GetOrgsOrgDatabasesWithResponse call
+func ParseGetOrgsOrgDatabasesResponse(rsp *http.Response) (*GetOrgsOrgDatabasesResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &GetOrgsOrgDatabasesResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest DatabaseList
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON404 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParsePostOrgsOrgDatabasesResponse parses an HTTP response from a PostOrgsOrgDatabasesWithResponse call
+func ParsePostOrgsOrgDatabasesResponse(rsp *http.Response) (*PostOrgsOrgDatabasesResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &PostOrgsOrgDatabasesResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 201:
+		var dest Database
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON201 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 402:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON402 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON409 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseDeleteOrgsOrgDatabasesDbResponse parses an HTTP response from a DeleteOrgsOrgDatabasesDbWithResponse call
+func ParseDeleteOrgsOrgDatabasesDbResponse(rsp *http.Response) (*DeleteOrgsOrgDatabasesDbResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &DeleteOrgsOrgDatabasesDbResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case rsp.StatusCode == 204:
+		break // No content-type
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON404 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseGetOrgsOrgDatabasesDbResponse parses an HTTP response from a GetOrgsOrgDatabasesDbWithResponse call
+func ParseGetOrgsOrgDatabasesDbResponse(rsp *http.Response) (*GetOrgsOrgDatabasesDbResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &GetOrgsOrgDatabasesDbResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest Database
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON404 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseGetOrgsOrgDatabasesDbBackupsResponse parses an HTTP response from a GetOrgsOrgDatabasesDbBackupsWithResponse call
+func ParseGetOrgsOrgDatabasesDbBackupsResponse(rsp *http.Response) (*GetOrgsOrgDatabasesDbBackupsResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &GetOrgsOrgDatabasesDbBackupsResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest BackupList
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON404 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParsePostOrgsOrgDatabasesDbBackupsResponse parses an HTTP response from a PostOrgsOrgDatabasesDbBackupsWithResponse call
+func ParsePostOrgsOrgDatabasesDbBackupsResponse(rsp *http.Response) (*PostOrgsOrgDatabasesDbBackupsResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &PostOrgsOrgDatabasesDbBackupsResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 201:
+		var dest Backup
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON201 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON404 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParsePostOrgsOrgDatabasesDbBackupsEnableResponse parses an HTTP response from a PostOrgsOrgDatabasesDbBackupsEnableWithResponse call
+func ParsePostOrgsOrgDatabasesDbBackupsEnableResponse(rsp *http.Response) (*PostOrgsOrgDatabasesDbBackupsEnableResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &PostOrgsOrgDatabasesDbBackupsEnableResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 202:
+		var dest BackupsEnabled
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON202 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON404 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseGetOrgsOrgDatabasesDbCredentialsResponse parses an HTTP response from a GetOrgsOrgDatabasesDbCredentialsWithResponse call
+func ParseGetOrgsOrgDatabasesDbCredentialsResponse(rsp *http.Response) (*GetOrgsOrgDatabasesDbCredentialsResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &GetOrgsOrgDatabasesDbCredentialsResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest Credentials
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON409 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseGetOrgsOrgDatabasesDbLogsResponse parses an HTTP response from a GetOrgsOrgDatabasesDbLogsWithResponse call
+func ParseGetOrgsOrgDatabasesDbLogsResponse(rsp *http.Response) (*GetOrgsOrgDatabasesDbLogsResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &GetOrgsOrgDatabasesDbLogsResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON404 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParsePostOrgsOrgDatabasesDbRestartResponse parses an HTTP response from a PostOrgsOrgDatabasesDbRestartWithResponse call
+func ParsePostOrgsOrgDatabasesDbRestartResponse(rsp *http.Response) (*PostOrgsOrgDatabasesDbRestartResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &PostOrgsOrgDatabasesDbRestartResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 202:
+		var dest Database
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON202 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON404 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParsePostOrgsOrgDatabasesDbRestoreResponse parses an HTTP response from a PostOrgsOrgDatabasesDbRestoreWithResponse call
+func ParsePostOrgsOrgDatabasesDbRestoreResponse(rsp *http.Response) (*PostOrgsOrgDatabasesDbRestoreResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &PostOrgsOrgDatabasesDbRestoreResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 201:
+		var dest Database
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON201 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 402:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON402 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON409 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParsePostOrgsOrgDatabasesDbStartResponse parses an HTTP response from a PostOrgsOrgDatabasesDbStartWithResponse call
+func ParsePostOrgsOrgDatabasesDbStartResponse(rsp *http.Response) (*PostOrgsOrgDatabasesDbStartResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &PostOrgsOrgDatabasesDbStartResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 202:
+		var dest Database
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON202 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON404 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParsePostOrgsOrgDatabasesDbStopResponse parses an HTTP response from a PostOrgsOrgDatabasesDbStopWithResponse call
+func ParsePostOrgsOrgDatabasesDbStopResponse(rsp *http.Response) (*PostOrgsOrgDatabasesDbStopResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &PostOrgsOrgDatabasesDbStopResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 202:
+		var dest Database
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON202 = &dest
+
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
 		var dest Problem
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
