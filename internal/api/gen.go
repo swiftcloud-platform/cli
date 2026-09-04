@@ -182,7 +182,7 @@ type App struct {
 	ReplicasMin int    `json:"replicasMin"`
 	Size        string `json:"size"`
 
-	// Status deploying | running | stopped | failed | suspended | deleting. Advanced by the platform worker; poll until terminal.
+	// Status deploying | ready | stopped | suspended | failed | delete_failed | deleting. `ready` is the healthy state. Advanced by the platform worker; poll until terminal (ready, stopped, suspended, failed, delete_failed).
 	Status    string    `json:"status"`
 	UpdatedAt time.Time `json:"updatedAt"`
 
@@ -345,7 +345,7 @@ type Database struct {
 	RegionId string `json:"regionId"`
 	Size     string `json:"size"`
 
-	// Status provisioning | starting | running | stopping | stopped | failed | deleting. Advanced by the platform worker; poll until terminal.
+	// Status provisioning | starting | ready | stopped | suspended | failed | delete_failed | deleting. `ready` is the healthy state. Advanced by the platform worker; poll until terminal (ready, stopped, suspended, failed, delete_failed).
 	Status    string    `json:"status"`
 	UpdatedAt time.Time `json:"updatedAt"`
 	Version   string    `json:"version"`
