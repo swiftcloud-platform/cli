@@ -265,6 +265,57 @@ func TestLive_SyncIsIdempotent(t *testing.T) {
 // Multipart: a body above the threshold must round-trip byte-identically, and
 // its ETag must come back as a multipart one — which is what makes the sync
 // comparison fall back to size.
+// TestLive_SmallPartMultipartRoundTrips proves the multipart path against the
+// real endpoint using 5 MiB parts — S3's minimum — so it needs ~10 MiB of
+// buffers instead of 64 MiB. Same code, same edge, small enough to run on a
+// busy machine.
+func TestLive_SmallPartMultipartRoundTrips(t *testing.T) {
+	endpoint := os.Getenv("CLOUD_S3_ENDPOINT")
+	bucket := os.Getenv("CLOUD_S3_BUCKET")
+	ak := os.Getenv("CLOUD_S3_ACCESS_KEY")
+	sk := os.Getenv("CLOUD_S3_SECRET_KEY")
+	if endpoint == "" || bucket == "" || ak == "" || sk == "" {
+		t.Skip("live S3 test: set CLOUD_S3_ENDPOINT, CLOUD_S3_BUCKET, CLOUD_S3_ACCESS_KEY and CLOUD_S3_SECRET_KEY")
+	}
+	c, err := New(Options{
+		Endpoint: endpoint, AccessKey: ak, SecretKey: sk,
+		PartSize: 5 << 20, Concurrency: 2,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	ctx := context.Background()
+	prefix := livePrefix(t, c, bucket)
+	key := prefix + "multipart.bin"
+
+	// 12 MiB over 5 MiB parts is three parts, so the whole multipart dance
+	// runs: create, upload parts concurrently, complete.
+	size := int64(12 << 20)
+	if err := c.Put(ctx, URI{Bucket: bucket, Key: key}, io.LimitReader(&repeatingReader{}, size), ""); err != nil {
+		t.Fatalf("multipart put: %v", err)
+	}
+	o, err := c.Stat(ctx, URI{Bucket: bucket, Key: key})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if o.Size != size {
+		t.Errorf("size = %d, want %d", o.Size, size)
+	}
+	if !isMultipartETag(o.ETag) {
+		t.Errorf("ETag %q is not a multipart ETag, so this did not exercise multipart", o.ETag)
+	}
+	h := newRepeatingChecker()
+	if _, err := c.Get(ctx, URI{Bucket: bucket, Key: key}, h); err != nil {
+		t.Fatalf("multipart get: %v", err)
+	}
+	if h.mismatchAt >= 0 {
+		t.Errorf("byte %d differs after a multipart round trip", h.mismatchAt)
+	}
+	if h.n != size {
+		t.Errorf("read %d bytes, want %d", h.n, size)
+	}
+}
+
 func TestLive_MultipartUploadRoundTrips(t *testing.T) {
 	if os.Getenv("CLOUD_S3_MULTIPART") == "" {
 		t.Skip("set CLOUD_S3_MULTIPART=1 to move ~80 MiB through the region endpoint")
