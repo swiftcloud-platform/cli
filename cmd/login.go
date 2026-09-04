@@ -30,7 +30,18 @@ passes through the terminal, and it works over SSH.
 
 For scripts and CI, pipe an API token from the dashboard instead:
   echo "$TOKEN" | cloud login --token-stdin
-or skip login entirely and set CLOUD_TOKEN.`,
+or skip login entirely and set CLOUD_TOKEN.
+
+The credential is stored per API host, so signing in to a staging or local API
+does not disturb your production session — and vice versa.`,
+	Example: `  cloud login
+  cloud login --no-browser                       print the URL, do not open it
+
+  # a token from the dashboard, for CI
+  echo "$CLOUD_API_TOKEN" | cloud login --token-stdin
+
+  # sign in to a local or staging API instead of production
+  CLOUD_API_URL=http://localhost:5173/api/v1 cloud login`,
 	Args: cobra.NoArgs,
 	RunE: func(cmd *cobra.Command, _ []string) error {
 		store, err := credentialStore()

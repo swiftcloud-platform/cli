@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"strings"
 
 	"github.com/spf13/cobra"
 
@@ -37,7 +38,21 @@ var rootCmd = &cobra.Command{
 	Long: `cloud deploys apps, manages databases and works with object storage on SwiftCloud.
 
 Sign in once with "cloud login"; every other command uses that session.
-Set CLOUD_TOKEN, CLOUD_ORG and CLOUD_REGION in CI instead of a config file.`,
+Set CLOUD_TOKEN, CLOUD_ORG and CLOUD_REGION in CI instead of a config file.
+
+Commands read as: cloud <resource> <verb> [name] [flags]. A name in <angle
+brackets> is a positional argument and comes before any flags, so the app is
+named first and the thing being done to it second:
+
+  cloud app domain list <app>
+  cloud app domain add <app> <hostname>
+
+Every command's own --help lists its arguments, flags and examples.`,
+	Example: `  cloud login                                    sign in on this machine
+  cloud whoami                                   who am I, and which API
+  cloud app list                                 apps in the current organisation
+  cloud app create demo --image nginx:1.27       create one and print its URL
+  cloud app domain list demo                     domains attached to "demo"`,
 	SilenceUsage:  true,
 	SilenceErrors: true,
 	PersistentPreRunE: func(cmd *cobra.Command, _ []string) error {
@@ -115,6 +130,15 @@ func ExitCode(err error) int {
 }
 
 func init() {
+	// Cobra lists subcommands by name only, so "list <app>" shows up as a bare
+	// "list" and the reader has to open a second --help to learn where the app
+	// name goes. Listing .Use instead puts the arguments in the first screen.
+	rootCmd.SetUsageTemplate(strings.ReplaceAll(
+		rootCmd.UsageTemplate(),
+		"rpad .Name .NamePadding ",
+		"rpad .Use 28 ",
+	))
+
 	pf := rootCmd.PersistentFlags()
 	pf.StringVar(&flagContext, "context", "", "named context from the config file (env CLOUD_CONTEXT)")
 	pf.StringVar(&flagAPIURL, "api-url", "", fmt.Sprintf("API base URL (env CLOUD_API_URL; default %s)", config.DefaultAPIURL))

@@ -57,7 +57,15 @@ func orgRowsFrom(orgs []api.Org) orgRows {
 var whoamiCmd = &cobra.Command{
 	Use:   "whoami",
 	Short: "Show who you are signed in as, and where the CLI points",
-	Args:  cobra.NoArgs,
+	Long: `Show the signed-in account, the API URL in use, the default
+organisation and region, and where each of those values came from — flag,
+environment, context or built-in default.
+
+Run this first whenever a command says you are not signed in: credentials are
+stored per API host, so a session for one API URL does not apply to another.`,
+	Example: `  cloud whoami
+  cloud whoami -o json`,
+	Args: cobra.NoArgs,
 	RunE: func(cmd *cobra.Command, _ []string) error {
 		c, cred, err := apiClient()
 		if err != nil {

@@ -10,12 +10,23 @@ import (
 	"cloud/internal/config"
 )
 
-var orgCmd = &cobra.Command{Use: "org", Short: "Organisations you belong to"}
+var orgCmd = &cobra.Command{
+	Use:   "org",
+	Short: "Organisations you belong to",
+	Long: `Apps, databases and buckets all belong to an organisation, so most
+commands need to know which one. Set it once with "cloud org use <slug>" and
+every later command uses it; override per command with --org or CLOUD_ORG.`,
+	Example: `  cloud org list
+  cloud org use platform
+  cloud app list --org another-org     # just this once, without changing the default`,
+}
 
 var orgListCmd = &cobra.Command{
 	Use:   "list",
 	Short: "List your organisations and your role in each",
-	Args:  cobra.NoArgs,
+	Example: `  cloud org list
+  cloud org list -o json`,
+	Args: cobra.NoArgs,
 	RunE: func(cmd *cobra.Command, _ []string) error {
 		c, _, err := apiClient()
 		if err != nil {
@@ -39,7 +50,10 @@ var orgListCmd = &cobra.Command{
 var orgUseCmd = &cobra.Command{
 	Use:   "use <slug>",
 	Short: "Set the default organisation for the current context",
-	Args:  cobra.ExactArgs(1),
+	Long: `Set the default organisation, written to the config file so it survives
+new shells. The argument is the slug from "cloud org list", not the display name.`,
+	Example: `  cloud org use platform`,
+	Args:    cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		slug := args[0]
 		// Verify before writing, so a typo does not become the default.

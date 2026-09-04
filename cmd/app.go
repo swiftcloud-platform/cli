@@ -76,12 +76,28 @@ func (r domainRows) IDs() []string {
 
 // ── commands ────────────────────────────────────────────────────────────────
 
-var appCmd = &cobra.Command{Use: "app", Short: "Container apps"}
+var appCmd = &cobra.Command{
+	Use:   "app",
+	Short: "Container apps",
+	Long: `Container apps: an image, a port, a replica range and an https URL.
+
+Every command below except "list" takes the app's name as its first argument,
+before any flags. Apps belong to an organisation, taken from --org, CLOUD_ORG
+or the current context, so the name alone is enough to identify one.`,
+	Example: `  cloud app list
+  cloud app create demo --image nginx:1.27 --wait
+  cloud app get demo
+  cloud app logs demo -f
+  cloud app domain list demo`,
+}
 
 var appListCmd = &cobra.Command{
 	Use:   "list",
 	Short: "List apps in the organisation",
-	Args:  cobra.NoArgs,
+	Example: `  cloud app list
+  cloud app list -o json
+  cloud app list --quiet            # names only, one per line, for scripts`,
+	Args: cobra.NoArgs,
 	RunE: func(cmd *cobra.Command, _ []string) error {
 		org, err := requireOrg()
 		if err != nil {
@@ -119,7 +135,21 @@ var (
 var appCreateCmd = &cobra.Command{
 	Use:   "create <name> --image <ref>",
 	Short: "Create an app from a container image",
-	Args:  cobra.ExactArgs(1),
+	Long: `Create an app. The name is yours to choose and is how every other
+command refers to it; --image is the only required flag.
+
+The app is created immediately but starts as "provisioning"; pass --wait to
+block until it is running (or fails), which is when the https URL works.`,
+	Example: `  cloud app create demo --image nginx:1.27
+  cloud app create api --image ghcr.io/acme/api:1.4 --port 3000 --min 1 --max 5 --wait
+
+  # environment variables: repeat --env
+  cloud app create api --image ghcr.io/acme/api:1.4 --env LOG_LEVEL=debug --env TZ=Africa/Lusaka
+
+  # a private registry; the password is read from stdin, never from argv
+  echo "$REGISTRY_TOKEN" | cloud app create api --image registry.acme.io/api:1.4 \
+      --registry-server registry.acme.io --registry-username deploy --registry-password-stdin`,
+	Args: cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		org, err := requireOrg()
 		if err != nil {
@@ -201,7 +231,10 @@ var appCreateCmd = &cobra.Command{
 var appGetCmd = &cobra.Command{
 	Use:   "get <name>",
 	Short: "Show an app",
-	Args:  cobra.ExactArgs(1),
+	Example: `  cloud app get demo
+  cloud app get demo -o yaml         # every field, including env and image
+  cloud app get demo -o json | jq -r .url`,
+	Args: cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		org, err := requireOrg()
 		if err != nil {
@@ -247,7 +280,15 @@ var deployImage string
 var appDeployCmd = &cobra.Command{
 	Use:   "deploy <name> --image <ref>",
 	Short: "Roll out a new image",
-	Args:  cobra.ExactArgs(1),
+	Long: `Roll out a new image for an existing app. Nothing else about the app
+changes — port, replica range, environment and domains are kept.
+
+Without --wait the command returns as soon as the rollout is accepted; with it,
+the CLI polls until the app is running again or the rollout fails.`,
+	Example: `  cloud app deploy demo --image nginx:1.27
+  cloud app deploy api --image ghcr.io/acme/api:1.5 --wait
+  cloud app deploy api --image ghcr.io/acme/api:1.5 --wait --timeout 3m`,
+	Args: cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		org, err := requireOrg()
 		if err != nil {
@@ -291,7 +332,15 @@ var scaleMin, scaleMax int
 var appScaleCmd = &cobra.Command{
 	Use:   "scale <name> --min N --max N",
 	Short: "Change the replica range",
-	Args:  cobra.ExactArgs(1),
+	Long: `Change how far an app is allowed to scale. Pass one flag or both; a
+flag you leave out is left as it is.
+
+A minimum of 0 lets the app scale to zero when idle, which costs nothing but
+adds a cold start to the next request.`,
+	Example: `  cloud app scale demo --min 1 --max 5
+  cloud app scale demo --max 10        # raise the ceiling, keep the floor
+  cloud app scale demo --min 0         # allow scale to zero when idle`,
+	Args: cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		if !cmd.Flags().Changed("min") && !cmd.Flags().Changed("max") {
 			return &UsageError{errors.New("pass --min and/or --max")}
@@ -338,7 +387,11 @@ var logsTail int
 var appLogsCmd = &cobra.Command{
 	Use:   "logs <name>",
 	Short: "Print recent logs; -f to follow",
-	Args:  cobra.ExactArgs(1),
+	Example: `  cloud app logs demo
+  cloud app logs demo -f               # keep streaming until Ctrl-C
+  cloud app logs demo --tail 1000
+  cloud app logs demo --tail 2000 | grep -i error`,
+	Args: cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		org, err := requireOrg()
 		if err != nil {
@@ -380,7 +433,13 @@ var deleteYes bool
 var appDeleteCmd = &cobra.Command{
 	Use:   "delete <name>",
 	Short: "Delete an app and everything about it",
-	Args:  cobra.ExactArgs(1),
+	Long: `Delete an app, its deployments and its custom domains.
+
+You are asked to type the app's name to confirm, because the name is the only
+safeguard: deleted names become available again. Use --yes in scripts.`,
+	Example: `  cloud app delete demo
+  cloud app delete demo --yes          # no prompt, for scripts`,
+	Args: cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		org, err := requireOrg()
 		if err != nil {
@@ -409,12 +468,30 @@ var appDeleteCmd = &cobra.Command{
 
 // ── domains ─────────────────────────────────────────────────────────────────
 
-var appDomainCmd = &cobra.Command{Use: "domain", Short: "Custom domains on an app"}
+var appDomainCmd = &cobra.Command{
+	Use:   "domain",
+	Short: "Custom domains on an app",
+	Long: `Attach your own hostnames to an app, alongside the URL it already has.
+
+The app comes first in every one of these commands and the hostname second:
+"cloud app domain add <app> <hostname>". Adding a domain prints the CNAME
+target to create in your DNS; TLS is issued once that record resolves.`,
+	Example: `  cloud app domain list demo
+  cloud app domain add demo www.example.com
+  cloud app domain remove demo www.example.com`,
+}
 
 var appDomainListCmd = &cobra.Command{
 	Use:   "list <app>",
 	Short: "List custom domains and their routing/TLS state",
-	Args:  cobra.ExactArgs(1),
+	Long: `List the custom domains attached to one app, with whether traffic is
+routing and whether a TLS certificate has been issued.
+
+The argument is the app's name, not a domain — "cloud app domain list demo"
+lists every hostname on the app called "demo".`,
+	Example: `  cloud app domain list demo
+  cloud app domain list demo -o json`,
+	Args: cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		org, err := requireOrg()
 		if err != nil {
@@ -442,7 +519,13 @@ var appDomainListCmd = &cobra.Command{
 var appDomainAddCmd = &cobra.Command{
 	Use:   "add <app> <hostname>",
 	Short: "Attach a custom domain (prints the CNAME target if DNS is not yet pointing at us)",
-	Args:  cobra.ExactArgs(2),
+	Long: `Attach a hostname to an app: the app's name first, then the hostname.
+
+If DNS is not yet pointing here, the CNAME target to create is printed. TLS is
+issued after that record resolves, so re-run "domain list" to watch it turn.`,
+	Example: `  cloud app domain add demo www.example.com
+  cloud app domain add demo api.example.com`,
+	Args: cobra.ExactArgs(2),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		org, err := requireOrg()
 		if err != nil {
@@ -477,7 +560,10 @@ var appDomainAddCmd = &cobra.Command{
 var appDomainRemoveCmd = &cobra.Command{
 	Use:   "remove <app> <hostname>",
 	Short: "Detach a custom domain",
-	Args:  cobra.ExactArgs(2),
+	Long: `Detach a hostname from an app. The app keeps running on its own URL and
+any other domains; only this hostname stops routing.`,
+	Example: `  cloud app domain remove demo www.example.com`,
+	Args:    cobra.ExactArgs(2),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		org, err := requireOrg()
 		if err != nil {
