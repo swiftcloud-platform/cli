@@ -17,6 +17,21 @@ import (
 	"github.com/oapi-codegen/runtime"
 )
 
+// Defines values for BucketCreateStorageClass.
+const (
+	STANDARD BucketCreateStorageClass = "STANDARD"
+)
+
+// Valid indicates whether the value is a known member of the BucketCreateStorageClass enum.
+func (e BucketCreateStorageClass) Valid() bool {
+	switch e {
+	case STANDARD:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for DatabaseCreateEngine.
 const (
 	DatabaseCreateEngineMariadb    DatabaseCreateEngine = "mariadb"
@@ -146,6 +161,48 @@ func (e OrgRole) Valid() bool {
 	case Owner:
 		return true
 	case Viewer:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for PresignRequestMethod.
+const (
+	PresignRequestMethodDELETE PresignRequestMethod = "DELETE"
+	PresignRequestMethodGET    PresignRequestMethod = "GET"
+	PresignRequestMethodPUT    PresignRequestMethod = "PUT"
+)
+
+// Valid indicates whether the value is a known member of the PresignRequestMethod enum.
+func (e PresignRequestMethod) Valid() bool {
+	switch e {
+	case PresignRequestMethodDELETE:
+		return true
+	case PresignRequestMethodGET:
+		return true
+	case PresignRequestMethodPUT:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for PresignResponseMethod.
+const (
+	PresignResponseMethodDELETE PresignResponseMethod = "DELETE"
+	PresignResponseMethodGET    PresignResponseMethod = "GET"
+	PresignResponseMethodPUT    PresignResponseMethod = "PUT"
+)
+
+// Valid indicates whether the value is a known member of the PresignResponseMethod enum.
+func (e PresignResponseMethod) Valid() bool {
+	switch e {
+	case PresignResponseMethodDELETE:
+		return true
+	case PresignResponseMethodGET:
+		return true
+	case PresignResponseMethodPUT:
 		return true
 	default:
 		return false
@@ -282,6 +339,81 @@ type BackupsEnable struct {
 type BackupsEnabled struct {
 	Enabled   bool   `json:"enabled"`
 	Retention string `json:"retention"`
+}
+
+// Bucket defines model for Bucket.
+type Bucket struct {
+	// BucketName Physical S3 bucket name — use THIS with the S3 endpoint.
+	BucketName string    `json:"bucketName"`
+	CreatedAt  time.Time `json:"createdAt"`
+
+	// Endpoint Public S3 endpoint for the region (path-style). Null when the region has none configured.
+	Endpoint string `json:"endpoint"`
+	Id       string `json:"id"`
+
+	// Name Unique within the organisation, 3–63 characters, S3 naming rules.
+	Name           string `json:"name"`
+	ObjectCount    int    `json:"objectCount"`
+	OrganizationId string `json:"organizationId"`
+	PublicAccess   bool   `json:"publicAccess"`
+
+	// Region Region name
+	Region   string `json:"region"`
+	RegionId string `json:"regionId"`
+
+	// Size Pricing tier
+	Size string `json:"size"`
+
+	// SizeBytes Measured usage in bytes, as a decimal string (may exceed 2^53). Refreshed periodically, not live.
+	SizeBytes string `json:"sizeBytes"`
+
+	// Status creating | ready | failed | deleting. Advanced by the platform; poll until terminal.
+	Status       string    `json:"status"`
+	StorageClass string    `json:"storageClass"`
+	UpdatedAt    time.Time `json:"updatedAt"`
+	Versioning   bool      `json:"versioning"`
+
+	// VirtualHost Virtual-hosted address of the bucket, <bucketName>.s3.<region domain>
+	VirtualHost string `json:"virtualHost"`
+}
+
+// BucketCreate defines model for BucketCreate.
+type BucketCreate struct {
+	// Name Unique within the organisation, 3–63 characters, S3 naming rules.
+	Name string `json:"name"`
+
+	// Region Region id or name
+	Region string `json:"region"`
+
+	// Size Pricing tier name (see /pricing). Defaults to the smallest.
+	Size *string `json:"size,omitempty"`
+
+	// StorageClass Only STANDARD is offered today.
+	StorageClass *BucketCreateStorageClass `json:"storageClass,omitempty"`
+}
+
+// BucketCreateStorageClass Only STANDARD is offered today.
+type BucketCreateStorageClass string
+
+// BucketCredentials defines model for BucketCredentials.
+type BucketCredentials struct {
+	AccessKeyId string `json:"accessKeyId"`
+
+	// BucketName Physical bucket name to use with the endpoint
+	BucketName string `json:"bucketName"`
+
+	// Endpoint Public S3 endpoint for the region. Use path-style addressing with region "us-east-1".
+	Endpoint string `json:"endpoint"`
+
+	// Region Platform region name (informational; the S3 signing region is always us-east-1)
+	Region          string `json:"region"`
+	SecretAccessKey string `json:"secretAccessKey"`
+	VirtualHost     string `json:"virtualHost"`
+}
+
+// BucketList defines model for BucketList.
+type BucketList struct {
+	Items []Bucket `json:"items"`
 }
 
 // Credentials defines model for Credentials.
@@ -478,6 +610,29 @@ type OrgList struct {
 	Items []Org `json:"items"`
 }
 
+// PresignRequest defines model for PresignRequest.
+type PresignRequest struct {
+	// ExpiresIn Seconds; max 7 days
+	ExpiresIn *int `json:"expiresIn,omitempty"`
+
+	// Key Object key
+	Key    string                `json:"key"`
+	Method *PresignRequestMethod `json:"method,omitempty"`
+}
+
+// PresignRequestMethod defines model for PresignRequest.Method.
+type PresignRequestMethod string
+
+// PresignResponse defines model for PresignResponse.
+type PresignResponse struct {
+	ExpiresAt time.Time             `json:"expiresAt"`
+	Method    PresignResponseMethod `json:"method"`
+	Url       string                `json:"url"`
+}
+
+// PresignResponseMethod defines model for PresignResponse.Method.
+type PresignResponseMethod string
+
 // Problem RFC 9457 problem details
 type Problem struct {
 	Detail string `json:"detail"`
@@ -491,7 +646,10 @@ type Region struct {
 	Id       string  `json:"id"`
 	Location *string `json:"location"`
 	Name     string  `json:"name"`
-	Status   string  `json:"status"`
+
+	// S3Endpoint Public S3 endpoint for buckets in this region (path-style, signing region us-east-1), or null when none is configured.
+	S3Endpoint *string `json:"s3Endpoint"`
+	Status     string  `json:"status"`
 }
 
 // RegionList defines model for RegionList.
@@ -528,6 +686,12 @@ type PostOrgsOrgAppsAppDeployJSONRequestBody = AppDeploy
 
 // PostOrgsOrgAppsAppDomainsJSONRequestBody defines body for PostOrgsOrgAppsAppDomains for application/json ContentType.
 type PostOrgsOrgAppsAppDomainsJSONRequestBody = DomainAdd
+
+// PostOrgsOrgBucketsJSONRequestBody defines body for PostOrgsOrgBuckets for application/json ContentType.
+type PostOrgsOrgBucketsJSONRequestBody = BucketCreate
+
+// PostOrgsOrgBucketsBucketPresignJSONRequestBody defines body for PostOrgsOrgBucketsBucketPresign for application/json ContentType.
+type PostOrgsOrgBucketsBucketPresignJSONRequestBody = PresignRequest
 
 // PostOrgsOrgDatabasesJSONRequestBody defines body for PostOrgsOrgDatabases for application/json ContentType.
 type PostOrgsOrgDatabasesJSONRequestBody = DatabaseCreate
@@ -722,6 +886,54 @@ type ClientInterface interface {
 	//
 	// Corresponds with GET /orgs/{org}/apps/{app}/logs (the `GetOrgsOrgAppsAppLogs` operationId).
 	GetOrgsOrgAppsAppLogs(ctx context.Context, org string, app string, params *GetOrgsOrgAppsAppLogsParams, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// GetOrgsOrgBuckets List buckets
+	//
+	// Corresponds with GET /orgs/{org}/buckets (the `GetOrgsOrgBuckets` operationId).
+	GetOrgsOrgBuckets(ctx context.Context, org string, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// PostOrgsOrgBucketsWithBody Create a bucket (exists on the object store when this returns)
+	//
+	// Takes any type of body and a specified content type.
+	//
+	// Corresponds with POST /orgs/{org}/buckets (the `PostOrgsOrgBuckets` operationId).
+	PostOrgsOrgBucketsWithBody(ctx context.Context, org string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// PostOrgsOrgBuckets Create a bucket (exists on the object store when this returns)
+	//
+	// Takes a body of the `application/json` content type.
+	//
+	// Corresponds with POST /orgs/{org}/buckets (the `PostOrgsOrgBuckets` operationId).
+	PostOrgsOrgBuckets(ctx context.Context, org string, body PostOrgsOrgBucketsJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// DeleteOrgsOrgBucketsBucket Delete a bucket AND every object in it
+	//
+	// Corresponds with DELETE /orgs/{org}/buckets/{bucket} (the `DeleteOrgsOrgBucketsBucket` operationId).
+	DeleteOrgsOrgBucketsBucket(ctx context.Context, org string, bucket string, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// GetOrgsOrgBucketsBucket Get a bucket, by display name, physical name or id
+	//
+	// Corresponds with GET /orgs/{org}/buckets/{bucket} (the `GetOrgsOrgBucketsBucket` operationId).
+	GetOrgsOrgBucketsBucket(ctx context.Context, org string, bucket string, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// GetOrgsOrgBucketsBucketCredentials S3 credentials with endpoint and physical bucket name (write-level; never cached)
+	//
+	// Corresponds with GET /orgs/{org}/buckets/{bucket}/credentials (the `GetOrgsOrgBucketsBucketCredentials` operationId).
+	GetOrgsOrgBucketsBucketCredentials(ctx context.Context, org string, bucket string, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// PostOrgsOrgBucketsBucketPresignWithBody Mint a pre-signed URL for one object
+	//
+	// Takes any type of body and a specified content type.
+	//
+	// Corresponds with POST /orgs/{org}/buckets/{bucket}/presign (the `PostOrgsOrgBucketsBucketPresign` operationId).
+	PostOrgsOrgBucketsBucketPresignWithBody(ctx context.Context, org string, bucket string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// PostOrgsOrgBucketsBucketPresign Mint a pre-signed URL for one object
+	//
+	// Takes a body of the `application/json` content type.
+	//
+	// Corresponds with POST /orgs/{org}/buckets/{bucket}/presign (the `PostOrgsOrgBucketsBucketPresign` operationId).
+	PostOrgsOrgBucketsBucketPresign(ctx context.Context, org string, bucket string, body PostOrgsOrgBucketsBucketPresignJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// GetOrgsOrgDatabases List databases
 	//
@@ -1112,6 +1324,134 @@ func (c *Client) DeleteOrgsOrgAppsAppDomainsDomain(ctx context.Context, org stri
 // Corresponds with GET /orgs/{org}/apps/{app}/logs (the `GetOrgsOrgAppsAppLogs` operationId).
 func (c *Client) GetOrgsOrgAppsAppLogs(ctx context.Context, org string, app string, params *GetOrgsOrgAppsAppLogsParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewGetOrgsOrgAppsAppLogsRequest(c.Server, org, app, params)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// GetOrgsOrgBuckets List buckets
+//
+// Corresponds with GET /orgs/{org}/buckets (the `GetOrgsOrgBuckets` operationId).
+func (c *Client) GetOrgsOrgBuckets(ctx context.Context, org string, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewGetOrgsOrgBucketsRequest(c.Server, org)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// PostOrgsOrgBucketsWithBody Create a bucket (exists on the object store when this returns)
+//
+// Takes any type of body and a specified content type.
+//
+// Corresponds with POST /orgs/{org}/buckets (the `PostOrgsOrgBuckets` operationId).
+func (c *Client) PostOrgsOrgBucketsWithBody(ctx context.Context, org string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewPostOrgsOrgBucketsRequestWithBody(c.Server, org, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// PostOrgsOrgBuckets Create a bucket (exists on the object store when this returns)
+//
+// Takes a body of the `application/json` content type.
+//
+// Corresponds with POST /orgs/{org}/buckets (the `PostOrgsOrgBuckets` operationId).
+func (c *Client) PostOrgsOrgBuckets(ctx context.Context, org string, body PostOrgsOrgBucketsJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewPostOrgsOrgBucketsRequest(c.Server, org, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// DeleteOrgsOrgBucketsBucket Delete a bucket AND every object in it
+//
+// Corresponds with DELETE /orgs/{org}/buckets/{bucket} (the `DeleteOrgsOrgBucketsBucket` operationId).
+func (c *Client) DeleteOrgsOrgBucketsBucket(ctx context.Context, org string, bucket string, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewDeleteOrgsOrgBucketsBucketRequest(c.Server, org, bucket)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// GetOrgsOrgBucketsBucket Get a bucket, by display name, physical name or id
+//
+// Corresponds with GET /orgs/{org}/buckets/{bucket} (the `GetOrgsOrgBucketsBucket` operationId).
+func (c *Client) GetOrgsOrgBucketsBucket(ctx context.Context, org string, bucket string, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewGetOrgsOrgBucketsBucketRequest(c.Server, org, bucket)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// GetOrgsOrgBucketsBucketCredentials S3 credentials with endpoint and physical bucket name (write-level; never cached)
+//
+// Corresponds with GET /orgs/{org}/buckets/{bucket}/credentials (the `GetOrgsOrgBucketsBucketCredentials` operationId).
+func (c *Client) GetOrgsOrgBucketsBucketCredentials(ctx context.Context, org string, bucket string, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewGetOrgsOrgBucketsBucketCredentialsRequest(c.Server, org, bucket)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// PostOrgsOrgBucketsBucketPresignWithBody Mint a pre-signed URL for one object
+//
+// Takes any type of body and a specified content type.
+//
+// Corresponds with POST /orgs/{org}/buckets/{bucket}/presign (the `PostOrgsOrgBucketsBucketPresign` operationId).
+func (c *Client) PostOrgsOrgBucketsBucketPresignWithBody(ctx context.Context, org string, bucket string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewPostOrgsOrgBucketsBucketPresignRequestWithBody(c.Server, org, bucket, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// PostOrgsOrgBucketsBucketPresign Mint a pre-signed URL for one object
+//
+// Takes a body of the `application/json` content type.
+//
+// Corresponds with POST /orgs/{org}/buckets/{bucket}/presign (the `PostOrgsOrgBucketsBucketPresign` operationId).
+func (c *Client) PostOrgsOrgBucketsBucketPresign(ctx context.Context, org string, bucket string, body PostOrgsOrgBucketsBucketPresignJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewPostOrgsOrgBucketsBucketPresignRequest(c.Server, org, bucket, body)
 	if err != nil {
 		return nil, err
 	}
@@ -2032,6 +2372,264 @@ func NewGetOrgsOrgAppsAppLogsRequest(server string, org string, app string, para
 	return req, nil
 }
 
+// NewGetOrgsOrgBucketsRequest constructs an http.Request for the GetOrgsOrgBuckets method
+func NewGetOrgsOrgBucketsRequest(server string, org string) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "org", org, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/orgs/%s/buckets", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewPostOrgsOrgBucketsRequest calls the generic PostOrgsOrgBuckets builder with application/json body
+func NewPostOrgsOrgBucketsRequest(server string, org string, body PostOrgsOrgBucketsJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewPostOrgsOrgBucketsRequestWithBody(server, org, "application/json", bodyReader)
+}
+
+// NewPostOrgsOrgBucketsRequestWithBody constructs an http.Request for the PostOrgsOrgBuckets method, with any body, and a specified content type
+func NewPostOrgsOrgBucketsRequestWithBody(server string, org string, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "org", org, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/orgs/%s/buckets", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodPost, queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
+
+	return req, nil
+}
+
+// NewDeleteOrgsOrgBucketsBucketRequest constructs an http.Request for the DeleteOrgsOrgBucketsBucket method
+func NewDeleteOrgsOrgBucketsBucketRequest(server string, org string, bucket string) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "org", org, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam1 string
+
+	pathParam1, err = runtime.StyleParamWithOptions("simple", false, "bucket", bucket, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/orgs/%s/buckets/%s", pathParam0, pathParam1)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodDelete, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewGetOrgsOrgBucketsBucketRequest constructs an http.Request for the GetOrgsOrgBucketsBucket method
+func NewGetOrgsOrgBucketsBucketRequest(server string, org string, bucket string) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "org", org, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam1 string
+
+	pathParam1, err = runtime.StyleParamWithOptions("simple", false, "bucket", bucket, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/orgs/%s/buckets/%s", pathParam0, pathParam1)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewGetOrgsOrgBucketsBucketCredentialsRequest constructs an http.Request for the GetOrgsOrgBucketsBucketCredentials method
+func NewGetOrgsOrgBucketsBucketCredentialsRequest(server string, org string, bucket string) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "org", org, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam1 string
+
+	pathParam1, err = runtime.StyleParamWithOptions("simple", false, "bucket", bucket, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/orgs/%s/buckets/%s/credentials", pathParam0, pathParam1)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewPostOrgsOrgBucketsBucketPresignRequest calls the generic PostOrgsOrgBucketsBucketPresign builder with application/json body
+func NewPostOrgsOrgBucketsBucketPresignRequest(server string, org string, bucket string, body PostOrgsOrgBucketsBucketPresignJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewPostOrgsOrgBucketsBucketPresignRequestWithBody(server, org, bucket, "application/json", bodyReader)
+}
+
+// NewPostOrgsOrgBucketsBucketPresignRequestWithBody constructs an http.Request for the PostOrgsOrgBucketsBucketPresign method, with any body, and a specified content type
+func NewPostOrgsOrgBucketsBucketPresignRequestWithBody(server string, org string, bucket string, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "org", org, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam1 string
+
+	pathParam1, err = runtime.StyleParamWithOptions("simple", false, "bucket", bucket, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/orgs/%s/buckets/%s/presign", pathParam0, pathParam1)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodPost, queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
+
+	return req, nil
+}
+
 // NewGetOrgsOrgDatabasesRequest constructs an http.Request for the GetOrgsOrgDatabases method
 func NewGetOrgsOrgDatabasesRequest(server string, org string) (*http.Request, error) {
 	var err error
@@ -2832,6 +3430,62 @@ type ClientWithResponsesInterface interface {
 	//
 	// Corresponds with GET /orgs/{org}/apps/{app}/logs (the `GetOrgsOrgAppsAppLogs` operationId).
 	GetOrgsOrgAppsAppLogsWithResponse(ctx context.Context, org string, app string, params *GetOrgsOrgAppsAppLogsParams, reqEditors ...RequestEditorFn) (*GetOrgsOrgAppsAppLogsResponse, error)
+
+	// GetOrgsOrgBucketsWithResponse List buckets
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with GET /orgs/{org}/buckets (the `GetOrgsOrgBuckets` operationId).
+	GetOrgsOrgBucketsWithResponse(ctx context.Context, org string, reqEditors ...RequestEditorFn) (*GetOrgsOrgBucketsResponse, error)
+
+	// PostOrgsOrgBucketsWithBodyWithResponse Create a bucket (exists on the object store when this returns)
+	//
+	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with POST /orgs/{org}/buckets (the `PostOrgsOrgBuckets` operationId).
+	PostOrgsOrgBucketsWithBodyWithResponse(ctx context.Context, org string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*PostOrgsOrgBucketsResponse, error)
+
+	// PostOrgsOrgBucketsWithResponse Create a bucket (exists on the object store when this returns)
+	//
+	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with POST /orgs/{org}/buckets (the `PostOrgsOrgBuckets` operationId).
+	PostOrgsOrgBucketsWithResponse(ctx context.Context, org string, body PostOrgsOrgBucketsJSONRequestBody, reqEditors ...RequestEditorFn) (*PostOrgsOrgBucketsResponse, error)
+
+	// DeleteOrgsOrgBucketsBucketWithResponse Delete a bucket AND every object in it
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with DELETE /orgs/{org}/buckets/{bucket} (the `DeleteOrgsOrgBucketsBucket` operationId).
+	DeleteOrgsOrgBucketsBucketWithResponse(ctx context.Context, org string, bucket string, reqEditors ...RequestEditorFn) (*DeleteOrgsOrgBucketsBucketResponse, error)
+
+	// GetOrgsOrgBucketsBucketWithResponse Get a bucket, by display name, physical name or id
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with GET /orgs/{org}/buckets/{bucket} (the `GetOrgsOrgBucketsBucket` operationId).
+	GetOrgsOrgBucketsBucketWithResponse(ctx context.Context, org string, bucket string, reqEditors ...RequestEditorFn) (*GetOrgsOrgBucketsBucketResponse, error)
+
+	// GetOrgsOrgBucketsBucketCredentialsWithResponse S3 credentials with endpoint and physical bucket name (write-level; never cached)
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with GET /orgs/{org}/buckets/{bucket}/credentials (the `GetOrgsOrgBucketsBucketCredentials` operationId).
+	GetOrgsOrgBucketsBucketCredentialsWithResponse(ctx context.Context, org string, bucket string, reqEditors ...RequestEditorFn) (*GetOrgsOrgBucketsBucketCredentialsResponse, error)
+
+	// PostOrgsOrgBucketsBucketPresignWithBodyWithResponse Mint a pre-signed URL for one object
+	//
+	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with POST /orgs/{org}/buckets/{bucket}/presign (the `PostOrgsOrgBucketsBucketPresign` operationId).
+	PostOrgsOrgBucketsBucketPresignWithBodyWithResponse(ctx context.Context, org string, bucket string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*PostOrgsOrgBucketsBucketPresignResponse, error)
+
+	// PostOrgsOrgBucketsBucketPresignWithResponse Mint a pre-signed URL for one object
+	//
+	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with POST /orgs/{org}/buckets/{bucket}/presign (the `PostOrgsOrgBucketsBucketPresign` operationId).
+	PostOrgsOrgBucketsBucketPresignWithResponse(ctx context.Context, org string, bucket string, body PostOrgsOrgBucketsBucketPresignJSONRequestBody, reqEditors ...RequestEditorFn) (*PostOrgsOrgBucketsBucketPresignResponse, error)
 
 	// GetOrgsOrgDatabasesWithResponse List databases
 	//
@@ -3968,6 +4622,441 @@ func (r GetOrgsOrgAppsAppLogsResponse) StatusCode() int {
 
 // ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
 func (r GetOrgsOrgAppsAppLogsResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type GetOrgsOrgBucketsResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *BucketList
+	// ApplicationproblemJSON400 the response for an HTTP 400 `application/problem+json` response
+	ApplicationproblemJSON400 *Problem
+	// ApplicationproblemJSON401 the response for an HTTP 401 `application/problem+json` response
+	ApplicationproblemJSON401 *Problem
+	// ApplicationproblemJSON403 the response for an HTTP 403 `application/problem+json` response
+	ApplicationproblemJSON403 *Problem
+	// ApplicationproblemJSON404 the response for an HTTP 404 `application/problem+json` response
+	ApplicationproblemJSON404 *Problem
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r GetOrgsOrgBucketsResponse) GetJSON200() *BucketList {
+	return r.JSON200
+}
+
+// GetApplicationproblemJSON400 returns the response for an HTTP 400 `application/problem+json` response
+func (r GetOrgsOrgBucketsResponse) GetApplicationproblemJSON400() *Problem {
+	return r.ApplicationproblemJSON400
+}
+
+// GetApplicationproblemJSON401 returns the response for an HTTP 401 `application/problem+json` response
+func (r GetOrgsOrgBucketsResponse) GetApplicationproblemJSON401() *Problem {
+	return r.ApplicationproblemJSON401
+}
+
+// GetApplicationproblemJSON403 returns the response for an HTTP 403 `application/problem+json` response
+func (r GetOrgsOrgBucketsResponse) GetApplicationproblemJSON403() *Problem {
+	return r.ApplicationproblemJSON403
+}
+
+// GetApplicationproblemJSON404 returns the response for an HTTP 404 `application/problem+json` response
+func (r GetOrgsOrgBucketsResponse) GetApplicationproblemJSON404() *Problem {
+	return r.ApplicationproblemJSON404
+}
+
+// GetBody returns the raw response body bytes
+func (r GetOrgsOrgBucketsResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r GetOrgsOrgBucketsResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r GetOrgsOrgBucketsResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r GetOrgsOrgBucketsResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type PostOrgsOrgBucketsResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON201 the response for an HTTP 201 `application/json` response
+	JSON201 *Bucket
+	// ApplicationproblemJSON400 the response for an HTTP 400 `application/problem+json` response
+	ApplicationproblemJSON400 *Problem
+	// ApplicationproblemJSON401 the response for an HTTP 401 `application/problem+json` response
+	ApplicationproblemJSON401 *Problem
+	// ApplicationproblemJSON402 the response for an HTTP 402 `application/problem+json` response
+	ApplicationproblemJSON402 *Problem
+	// ApplicationproblemJSON403 the response for an HTTP 403 `application/problem+json` response
+	ApplicationproblemJSON403 *Problem
+	// ApplicationproblemJSON404 the response for an HTTP 404 `application/problem+json` response
+	ApplicationproblemJSON404 *Problem
+	// ApplicationproblemJSON409 the response for an HTTP 409 `application/problem+json` response
+	ApplicationproblemJSON409 *Problem
+}
+
+// GetJSON201 returns the response for an HTTP 201 `application/json` response
+func (r PostOrgsOrgBucketsResponse) GetJSON201() *Bucket {
+	return r.JSON201
+}
+
+// GetApplicationproblemJSON400 returns the response for an HTTP 400 `application/problem+json` response
+func (r PostOrgsOrgBucketsResponse) GetApplicationproblemJSON400() *Problem {
+	return r.ApplicationproblemJSON400
+}
+
+// GetApplicationproblemJSON401 returns the response for an HTTP 401 `application/problem+json` response
+func (r PostOrgsOrgBucketsResponse) GetApplicationproblemJSON401() *Problem {
+	return r.ApplicationproblemJSON401
+}
+
+// GetApplicationproblemJSON402 returns the response for an HTTP 402 `application/problem+json` response
+func (r PostOrgsOrgBucketsResponse) GetApplicationproblemJSON402() *Problem {
+	return r.ApplicationproblemJSON402
+}
+
+// GetApplicationproblemJSON403 returns the response for an HTTP 403 `application/problem+json` response
+func (r PostOrgsOrgBucketsResponse) GetApplicationproblemJSON403() *Problem {
+	return r.ApplicationproblemJSON403
+}
+
+// GetApplicationproblemJSON404 returns the response for an HTTP 404 `application/problem+json` response
+func (r PostOrgsOrgBucketsResponse) GetApplicationproblemJSON404() *Problem {
+	return r.ApplicationproblemJSON404
+}
+
+// GetApplicationproblemJSON409 returns the response for an HTTP 409 `application/problem+json` response
+func (r PostOrgsOrgBucketsResponse) GetApplicationproblemJSON409() *Problem {
+	return r.ApplicationproblemJSON409
+}
+
+// GetBody returns the raw response body bytes
+func (r PostOrgsOrgBucketsResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r PostOrgsOrgBucketsResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r PostOrgsOrgBucketsResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r PostOrgsOrgBucketsResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type DeleteOrgsOrgBucketsBucketResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// ApplicationproblemJSON400 the response for an HTTP 400 `application/problem+json` response
+	ApplicationproblemJSON400 *Problem
+	// ApplicationproblemJSON401 the response for an HTTP 401 `application/problem+json` response
+	ApplicationproblemJSON401 *Problem
+	// ApplicationproblemJSON403 the response for an HTTP 403 `application/problem+json` response
+	ApplicationproblemJSON403 *Problem
+	// ApplicationproblemJSON404 the response for an HTTP 404 `application/problem+json` response
+	ApplicationproblemJSON404 *Problem
+}
+
+// GetApplicationproblemJSON400 returns the response for an HTTP 400 `application/problem+json` response
+func (r DeleteOrgsOrgBucketsBucketResponse) GetApplicationproblemJSON400() *Problem {
+	return r.ApplicationproblemJSON400
+}
+
+// GetApplicationproblemJSON401 returns the response for an HTTP 401 `application/problem+json` response
+func (r DeleteOrgsOrgBucketsBucketResponse) GetApplicationproblemJSON401() *Problem {
+	return r.ApplicationproblemJSON401
+}
+
+// GetApplicationproblemJSON403 returns the response for an HTTP 403 `application/problem+json` response
+func (r DeleteOrgsOrgBucketsBucketResponse) GetApplicationproblemJSON403() *Problem {
+	return r.ApplicationproblemJSON403
+}
+
+// GetApplicationproblemJSON404 returns the response for an HTTP 404 `application/problem+json` response
+func (r DeleteOrgsOrgBucketsBucketResponse) GetApplicationproblemJSON404() *Problem {
+	return r.ApplicationproblemJSON404
+}
+
+// GetBody returns the raw response body bytes
+func (r DeleteOrgsOrgBucketsBucketResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r DeleteOrgsOrgBucketsBucketResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r DeleteOrgsOrgBucketsBucketResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r DeleteOrgsOrgBucketsBucketResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type GetOrgsOrgBucketsBucketResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *Bucket
+	// ApplicationproblemJSON400 the response for an HTTP 400 `application/problem+json` response
+	ApplicationproblemJSON400 *Problem
+	// ApplicationproblemJSON401 the response for an HTTP 401 `application/problem+json` response
+	ApplicationproblemJSON401 *Problem
+	// ApplicationproblemJSON403 the response for an HTTP 403 `application/problem+json` response
+	ApplicationproblemJSON403 *Problem
+	// ApplicationproblemJSON404 the response for an HTTP 404 `application/problem+json` response
+	ApplicationproblemJSON404 *Problem
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r GetOrgsOrgBucketsBucketResponse) GetJSON200() *Bucket {
+	return r.JSON200
+}
+
+// GetApplicationproblemJSON400 returns the response for an HTTP 400 `application/problem+json` response
+func (r GetOrgsOrgBucketsBucketResponse) GetApplicationproblemJSON400() *Problem {
+	return r.ApplicationproblemJSON400
+}
+
+// GetApplicationproblemJSON401 returns the response for an HTTP 401 `application/problem+json` response
+func (r GetOrgsOrgBucketsBucketResponse) GetApplicationproblemJSON401() *Problem {
+	return r.ApplicationproblemJSON401
+}
+
+// GetApplicationproblemJSON403 returns the response for an HTTP 403 `application/problem+json` response
+func (r GetOrgsOrgBucketsBucketResponse) GetApplicationproblemJSON403() *Problem {
+	return r.ApplicationproblemJSON403
+}
+
+// GetApplicationproblemJSON404 returns the response for an HTTP 404 `application/problem+json` response
+func (r GetOrgsOrgBucketsBucketResponse) GetApplicationproblemJSON404() *Problem {
+	return r.ApplicationproblemJSON404
+}
+
+// GetBody returns the raw response body bytes
+func (r GetOrgsOrgBucketsBucketResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r GetOrgsOrgBucketsBucketResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r GetOrgsOrgBucketsBucketResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r GetOrgsOrgBucketsBucketResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type GetOrgsOrgBucketsBucketCredentialsResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *BucketCredentials
+	// ApplicationproblemJSON400 the response for an HTTP 400 `application/problem+json` response
+	ApplicationproblemJSON400 *Problem
+	// ApplicationproblemJSON401 the response for an HTTP 401 `application/problem+json` response
+	ApplicationproblemJSON401 *Problem
+	// ApplicationproblemJSON403 the response for an HTTP 403 `application/problem+json` response
+	ApplicationproblemJSON403 *Problem
+	// ApplicationproblemJSON404 the response for an HTTP 404 `application/problem+json` response
+	ApplicationproblemJSON404 *Problem
+	// ApplicationproblemJSON409 the response for an HTTP 409 `application/problem+json` response
+	ApplicationproblemJSON409 *Problem
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r GetOrgsOrgBucketsBucketCredentialsResponse) GetJSON200() *BucketCredentials {
+	return r.JSON200
+}
+
+// GetApplicationproblemJSON400 returns the response for an HTTP 400 `application/problem+json` response
+func (r GetOrgsOrgBucketsBucketCredentialsResponse) GetApplicationproblemJSON400() *Problem {
+	return r.ApplicationproblemJSON400
+}
+
+// GetApplicationproblemJSON401 returns the response for an HTTP 401 `application/problem+json` response
+func (r GetOrgsOrgBucketsBucketCredentialsResponse) GetApplicationproblemJSON401() *Problem {
+	return r.ApplicationproblemJSON401
+}
+
+// GetApplicationproblemJSON403 returns the response for an HTTP 403 `application/problem+json` response
+func (r GetOrgsOrgBucketsBucketCredentialsResponse) GetApplicationproblemJSON403() *Problem {
+	return r.ApplicationproblemJSON403
+}
+
+// GetApplicationproblemJSON404 returns the response for an HTTP 404 `application/problem+json` response
+func (r GetOrgsOrgBucketsBucketCredentialsResponse) GetApplicationproblemJSON404() *Problem {
+	return r.ApplicationproblemJSON404
+}
+
+// GetApplicationproblemJSON409 returns the response for an HTTP 409 `application/problem+json` response
+func (r GetOrgsOrgBucketsBucketCredentialsResponse) GetApplicationproblemJSON409() *Problem {
+	return r.ApplicationproblemJSON409
+}
+
+// GetBody returns the raw response body bytes
+func (r GetOrgsOrgBucketsBucketCredentialsResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r GetOrgsOrgBucketsBucketCredentialsResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r GetOrgsOrgBucketsBucketCredentialsResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r GetOrgsOrgBucketsBucketCredentialsResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type PostOrgsOrgBucketsBucketPresignResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *PresignResponse
+	// ApplicationproblemJSON400 the response for an HTTP 400 `application/problem+json` response
+	ApplicationproblemJSON400 *Problem
+	// ApplicationproblemJSON401 the response for an HTTP 401 `application/problem+json` response
+	ApplicationproblemJSON401 *Problem
+	// ApplicationproblemJSON403 the response for an HTTP 403 `application/problem+json` response
+	ApplicationproblemJSON403 *Problem
+	// ApplicationproblemJSON404 the response for an HTTP 404 `application/problem+json` response
+	ApplicationproblemJSON404 *Problem
+	// ApplicationproblemJSON409 the response for an HTTP 409 `application/problem+json` response
+	ApplicationproblemJSON409 *Problem
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r PostOrgsOrgBucketsBucketPresignResponse) GetJSON200() *PresignResponse {
+	return r.JSON200
+}
+
+// GetApplicationproblemJSON400 returns the response for an HTTP 400 `application/problem+json` response
+func (r PostOrgsOrgBucketsBucketPresignResponse) GetApplicationproblemJSON400() *Problem {
+	return r.ApplicationproblemJSON400
+}
+
+// GetApplicationproblemJSON401 returns the response for an HTTP 401 `application/problem+json` response
+func (r PostOrgsOrgBucketsBucketPresignResponse) GetApplicationproblemJSON401() *Problem {
+	return r.ApplicationproblemJSON401
+}
+
+// GetApplicationproblemJSON403 returns the response for an HTTP 403 `application/problem+json` response
+func (r PostOrgsOrgBucketsBucketPresignResponse) GetApplicationproblemJSON403() *Problem {
+	return r.ApplicationproblemJSON403
+}
+
+// GetApplicationproblemJSON404 returns the response for an HTTP 404 `application/problem+json` response
+func (r PostOrgsOrgBucketsBucketPresignResponse) GetApplicationproblemJSON404() *Problem {
+	return r.ApplicationproblemJSON404
+}
+
+// GetApplicationproblemJSON409 returns the response for an HTTP 409 `application/problem+json` response
+func (r PostOrgsOrgBucketsBucketPresignResponse) GetApplicationproblemJSON409() *Problem {
+	return r.ApplicationproblemJSON409
+}
+
+// GetBody returns the raw response body bytes
+func (r PostOrgsOrgBucketsBucketPresignResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r PostOrgsOrgBucketsBucketPresignResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r PostOrgsOrgBucketsBucketPresignResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r PostOrgsOrgBucketsBucketPresignResponse) ContentType() string {
 	if r.HTTPResponse != nil {
 		return r.HTTPResponse.Header.Get("Content-Type")
 	}
@@ -5208,6 +6297,110 @@ func (c *ClientWithResponses) GetOrgsOrgAppsAppLogsWithResponse(ctx context.Cont
 	return ParseGetOrgsOrgAppsAppLogsResponse(rsp)
 }
 
+// GetOrgsOrgBucketsWithResponse List buckets
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with GET /orgs/{org}/buckets (the `GetOrgsOrgBuckets` operationId).
+func (c *ClientWithResponses) GetOrgsOrgBucketsWithResponse(ctx context.Context, org string, reqEditors ...RequestEditorFn) (*GetOrgsOrgBucketsResponse, error) {
+	rsp, err := c.GetOrgsOrgBuckets(ctx, org, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseGetOrgsOrgBucketsResponse(rsp)
+}
+
+// PostOrgsOrgBucketsWithBodyWithResponse Create a bucket (exists on the object store when this returns)
+//
+// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with POST /orgs/{org}/buckets (the `PostOrgsOrgBuckets` operationId).
+func (c *ClientWithResponses) PostOrgsOrgBucketsWithBodyWithResponse(ctx context.Context, org string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*PostOrgsOrgBucketsResponse, error) {
+	rsp, err := c.PostOrgsOrgBucketsWithBody(ctx, org, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParsePostOrgsOrgBucketsResponse(rsp)
+}
+
+// PostOrgsOrgBucketsWithResponse Create a bucket (exists on the object store when this returns)
+//
+// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with POST /orgs/{org}/buckets (the `PostOrgsOrgBuckets` operationId).
+func (c *ClientWithResponses) PostOrgsOrgBucketsWithResponse(ctx context.Context, org string, body PostOrgsOrgBucketsJSONRequestBody, reqEditors ...RequestEditorFn) (*PostOrgsOrgBucketsResponse, error) {
+	rsp, err := c.PostOrgsOrgBuckets(ctx, org, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParsePostOrgsOrgBucketsResponse(rsp)
+}
+
+// DeleteOrgsOrgBucketsBucketWithResponse Delete a bucket AND every object in it
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with DELETE /orgs/{org}/buckets/{bucket} (the `DeleteOrgsOrgBucketsBucket` operationId).
+func (c *ClientWithResponses) DeleteOrgsOrgBucketsBucketWithResponse(ctx context.Context, org string, bucket string, reqEditors ...RequestEditorFn) (*DeleteOrgsOrgBucketsBucketResponse, error) {
+	rsp, err := c.DeleteOrgsOrgBucketsBucket(ctx, org, bucket, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseDeleteOrgsOrgBucketsBucketResponse(rsp)
+}
+
+// GetOrgsOrgBucketsBucketWithResponse Get a bucket, by display name, physical name or id
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with GET /orgs/{org}/buckets/{bucket} (the `GetOrgsOrgBucketsBucket` operationId).
+func (c *ClientWithResponses) GetOrgsOrgBucketsBucketWithResponse(ctx context.Context, org string, bucket string, reqEditors ...RequestEditorFn) (*GetOrgsOrgBucketsBucketResponse, error) {
+	rsp, err := c.GetOrgsOrgBucketsBucket(ctx, org, bucket, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseGetOrgsOrgBucketsBucketResponse(rsp)
+}
+
+// GetOrgsOrgBucketsBucketCredentialsWithResponse S3 credentials with endpoint and physical bucket name (write-level; never cached)
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with GET /orgs/{org}/buckets/{bucket}/credentials (the `GetOrgsOrgBucketsBucketCredentials` operationId).
+func (c *ClientWithResponses) GetOrgsOrgBucketsBucketCredentialsWithResponse(ctx context.Context, org string, bucket string, reqEditors ...RequestEditorFn) (*GetOrgsOrgBucketsBucketCredentialsResponse, error) {
+	rsp, err := c.GetOrgsOrgBucketsBucketCredentials(ctx, org, bucket, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseGetOrgsOrgBucketsBucketCredentialsResponse(rsp)
+}
+
+// PostOrgsOrgBucketsBucketPresignWithBodyWithResponse Mint a pre-signed URL for one object
+//
+// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with POST /orgs/{org}/buckets/{bucket}/presign (the `PostOrgsOrgBucketsBucketPresign` operationId).
+func (c *ClientWithResponses) PostOrgsOrgBucketsBucketPresignWithBodyWithResponse(ctx context.Context, org string, bucket string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*PostOrgsOrgBucketsBucketPresignResponse, error) {
+	rsp, err := c.PostOrgsOrgBucketsBucketPresignWithBody(ctx, org, bucket, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParsePostOrgsOrgBucketsBucketPresignResponse(rsp)
+}
+
+// PostOrgsOrgBucketsBucketPresignWithResponse Mint a pre-signed URL for one object
+//
+// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with POST /orgs/{org}/buckets/{bucket}/presign (the `PostOrgsOrgBucketsBucketPresign` operationId).
+func (c *ClientWithResponses) PostOrgsOrgBucketsBucketPresignWithResponse(ctx context.Context, org string, bucket string, body PostOrgsOrgBucketsBucketPresignJSONRequestBody, reqEditors ...RequestEditorFn) (*PostOrgsOrgBucketsBucketPresignResponse, error) {
+	rsp, err := c.PostOrgsOrgBucketsBucketPresign(ctx, org, bucket, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParsePostOrgsOrgBucketsBucketPresignResponse(rsp)
+}
+
 // GetOrgsOrgDatabasesWithResponse List databases
 //
 // Returns a wrapper object for the known response body format(s).
@@ -6225,6 +7418,354 @@ func ParseGetOrgsOrgAppsAppLogsResponse(rsp *http.Response) (*GetOrgsOrgAppsAppL
 			return nil, err
 		}
 		response.ApplicationproblemJSON404 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseGetOrgsOrgBucketsResponse parses an HTTP response from a GetOrgsOrgBucketsWithResponse call
+func ParseGetOrgsOrgBucketsResponse(rsp *http.Response) (*GetOrgsOrgBucketsResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &GetOrgsOrgBucketsResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest BucketList
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON404 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParsePostOrgsOrgBucketsResponse parses an HTTP response from a PostOrgsOrgBucketsWithResponse call
+func ParsePostOrgsOrgBucketsResponse(rsp *http.Response) (*PostOrgsOrgBucketsResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &PostOrgsOrgBucketsResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 201:
+		var dest Bucket
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON201 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 402:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON402 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON409 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseDeleteOrgsOrgBucketsBucketResponse parses an HTTP response from a DeleteOrgsOrgBucketsBucketWithResponse call
+func ParseDeleteOrgsOrgBucketsBucketResponse(rsp *http.Response) (*DeleteOrgsOrgBucketsBucketResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &DeleteOrgsOrgBucketsBucketResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case rsp.StatusCode == 204:
+		break // No content-type
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON404 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseGetOrgsOrgBucketsBucketResponse parses an HTTP response from a GetOrgsOrgBucketsBucketWithResponse call
+func ParseGetOrgsOrgBucketsBucketResponse(rsp *http.Response) (*GetOrgsOrgBucketsBucketResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &GetOrgsOrgBucketsBucketResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest Bucket
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON404 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseGetOrgsOrgBucketsBucketCredentialsResponse parses an HTTP response from a GetOrgsOrgBucketsBucketCredentialsWithResponse call
+func ParseGetOrgsOrgBucketsBucketCredentialsResponse(rsp *http.Response) (*GetOrgsOrgBucketsBucketCredentialsResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &GetOrgsOrgBucketsBucketCredentialsResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest BucketCredentials
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON409 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParsePostOrgsOrgBucketsBucketPresignResponse parses an HTTP response from a PostOrgsOrgBucketsBucketPresignWithResponse call
+func ParsePostOrgsOrgBucketsBucketPresignResponse(rsp *http.Response) (*PostOrgsOrgBucketsBucketPresignResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &PostOrgsOrgBucketsBucketPresignResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest PresignResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON409 = &dest
 
 	}
 
