@@ -124,6 +124,12 @@ func ExitCode(err error) int {
 			return ExitMissing
 		case "validation", "conflict":
 			return ExitUsage
+		case "unsupported-engine", "limit-reached", "billing-blocked":
+			// The platform refused something it understood: automatic backups
+			// on MariaDB, a plan limit, an unfunded organisation. Each is a
+			// mistake in the request or the account, not a CLI failure, and
+			// each carries a sentence worth printing verbatim.
+			return ExitUsage
 		}
 	}
 	return ExitError
