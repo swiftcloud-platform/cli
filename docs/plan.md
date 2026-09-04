@@ -14,6 +14,21 @@ Decided 2026-09-04. This document is the source of truth for the rebuild; update
 | 5 Object storage + S3 | not started | |
 | 6 Release | not started | |
 
+**Phases 1 and 2 are built but not reachable** (checked 2026-09-04, after `cloud login` returned
+`HTTP 404`). They live on `feat_new_cloud` in the platform repo (`swiftcloud-platform/cloud`, local
+checkout `../test/cloud`), which is 98 commits ahead of `main`; `059ee02` is on that branch only.
+`cloud.co.zm` still serves the pre-migration `main` — it sets an `__Secure-authjs.callback-url`
+cookie, so it is the Auth.js build from before better-auth, and every `/api/*` path falls through to
+the SvelteKit SSR handler and answers 404 with HTML. No merge date is set: the branch is a
+deliberate rewrite and go-live is also blocked on the infra side (tailnet-only API server, missing
+kubeconfig scopes), so do not assume `cloud.co.zm` serves `/api/v1` soon.
+
+**Develop and test against the dev server**, not production: `CLOUD_API_URL=http://localhost:5173/api/v1`
+runs `feat_new_cloud` with the worker up, and the device flow works there — `cloud login` prints a
+code and the `/device` page approves it. For a scripted token, sign in at `/dash`, mint one under
+Settings → API tokens, then `echo "$TOKEN" | cloud login --token-stdin`. (`../swiftcloud-frontend`
+and `../swiftcloud-backend` are unrelated scaffolds — not the platform.)
+
 ## Decisions
 
 | Question | Decision |
