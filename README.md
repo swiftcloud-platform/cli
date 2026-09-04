@@ -10,7 +10,7 @@ Deploy apps, manage databases and work with object storage on [SwiftCloud](https
 curl -fsSL https://cloud.co.zm/install.sh | sh
 ```
 
-Or download a release for Linux, macOS or Windows from the [Releases](https://github.com/swiftcloud-platform/cli/releases) page. Homebrew: `brew install swiftcloud-platform/tap/cloud`.
+Or download a release for Linux, macOS or Windows from the [Releases](https://github.com/swiftcloud-platform/cli/releases) page.
 
 ## Use
 
