@@ -162,7 +162,7 @@ var (
 )
 
 var contextSetCmd = &cobra.Command{
-	Use:   "set <name> [--api-url URL] [--org SLUG] [--region NAME]",
+	Use:   "set <name>",
 	Short: "Create a context or change its fields",
 	Long: `Create a context, or change only the fields you pass on an existing one.
 Omitted fields are kept. Pass an empty value ("") to clear a field.`,
