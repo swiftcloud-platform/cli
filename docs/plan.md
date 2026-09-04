@@ -10,7 +10,7 @@ Decided 2026-09-04. This document is the source of truth for the rebuild; update
 | 1 Platform auth | done 2026-09-04 | app `059ee02` — device login, API tokens, `/api/v1/health`, `/api/v1/me` |
 | 2 API core (apps) | done 2026-09-04 | app `e40a7ed`, `9942427` — `/api/v1/orgs`, `/regions`, apps CRUD/deploy/logs/domains, `/api/v1/openapi.json` |
 | 3 CLI core | done 2026-09-04 | `cli` — login (device flow + `--token-stdin`), logout, whoami, org, region, app list/create/get/deploy/scale/logs/delete/domain; typed client generated from `api/openapi.json`; `--wait` with worker-heartbeat check; exit codes 2/3/4/5 |
-| 4 Databases | API done 2026-09-04 (app `b28860a`: `/database-engines`, databases CRUD, start/stop/restart, logs, credentials, backups, enable, restore; client regenerated in `cli` `11bb526`); CLI `cloud db` in progress (cli session) | |
+| 4 Databases | API done 2026-09-04 (app `b28860a`: `/database-engines`, databases CRUD, start/stop/restart, logs, credentials, backups, enable, restore; client regenerated in `cli` `11bb526`); CLI done 2026-09-04 (`cli` `cb362a4`: the `cloud db` tree — list/create/get/delete, credentials with `--format env|url`, start/stop/restart, logs, backup enable/create/list, restore `--to`/`--at`, engines; `unsupported-engine`, `limit-reached` and `billing-blocked` mapped to exit 2). Restore-to-new is not yet exercised against a live cluster, since it provisions a real database. | |
 | 5 Object storage + S3 | not started | |
 | 6 Release | not started | |
 
