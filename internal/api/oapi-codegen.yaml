@@ -1,0 +1,9 @@
+# Generates the typed client from the platform's OpenAPI document.
+# Regenerate with `make generate` after fetching a fresh api/openapi.json.
+package: api
+output: internal/api/gen.go
+generate:
+  models: true
+  client: true
+output-options:
+  skip-prune: true

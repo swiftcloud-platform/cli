@@ -11,7 +11,7 @@ export CGO_ENABLED := 0
 
 PLATFORMS := linux/amd64 linux/arm64 darwin/amd64 darwin/arm64 windows/amd64 windows/arm64
 
-.PHONY: all build install run test cover lint fmt tidy cross snapshot clean help
+.PHONY: all build install run test cover lint fmt tidy cross snapshot clean help generate fetch-openapi
 
 all: build
 
@@ -35,6 +35,12 @@ lint:               ## golangci-lint (CI uses the latest; local needs one built 
 
 fmt:                ## gofmt + goimports
 	gofmt -s -w . && go run golang.org/x/tools/cmd/goimports@latest -w .
+
+generate:           ## Regenerate internal/api/gen.go from api/openapi.json (needs oapi-codegen)
+	oapi-codegen -config internal/api/oapi-codegen.yaml api/openapi.json
+
+fetch-openapi:      ## Refresh api/openapi.json from a running platform (API_URL=http://localhost:5173/api/v1)
+	curl -fsS $${API_URL:-http://localhost:5173/api/v1}/openapi.json -o api/openapi.json
 
 tidy:               ## go mod tidy + verify
 	go mod tidy && go mod verify

@@ -9,6 +9,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"cloud/internal/api"
 	"cloud/internal/config"
 	"cloud/internal/output"
 	"cloud/internal/version"
@@ -92,6 +93,23 @@ func ExitCode(err error) int {
 	var u *UsageError
 	if errors.As(err, &u) {
 		return ExitUsage
+	}
+	var a *AuthError
+	if errors.As(err, &a) {
+		return ExitAuth
+	}
+	var e *api.Error
+	if errors.As(err, &e) {
+		switch e.Type {
+		case "unauthenticated":
+			return ExitAuth
+		case "forbidden":
+			return ExitDenied
+		case "not-found":
+			return ExitMissing
+		case "validation", "conflict":
+			return ExitUsage
+		}
 	}
 	return ExitError
 }

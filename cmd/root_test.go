@@ -3,27 +3,54 @@ package cmd
 import (
 	"bytes"
 	"errors"
+	"io"
 	"strings"
 	"testing"
 
+	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
 )
 
-// run executes the root command with a clean flag state. Cobra flags are
-// package-level variables, so without the reset a value set by one test
-// would leak into the next.
+// run executes the root command with a clean flag state and returns STDOUT.
+// Cobra flags are package-level variables, so without the reset a value set by
+// one test (say --yes) would leak into the next; the reset walks every command
+// in the tree, not just the root's persistent flags.
 func run(t *testing.T, args ...string) (string, error) {
 	t.Helper()
-	rootCmd.PersistentFlags().VisitAll(func(f *pflag.Flag) {
-		_ = f.Value.Set(f.DefValue)
-		f.Changed = false
-	})
-	var out bytes.Buffer
+	resetFlags(rootCmd)
+	// Tests are never interactive: stdin is whatever the test queued, else empty.
+	if testStdin == nil {
+		rootCmd.SetIn(strings.NewReader(""))
+	} else {
+		rootCmd.SetIn(testStdin)
+		testStdin = nil
+	}
+	var out, errOut bytes.Buffer
 	rootCmd.SetOut(&out)
-	rootCmd.SetErr(&out)
+	rootCmd.SetErr(&errOut)
 	rootCmd.SetArgs(args)
 	err := rootCmd.Execute()
 	return out.String(), err
+}
+
+// testStdin, when set, is consumed by the next run().
+var testStdin io.Reader
+
+func resetFlags(c *cobra.Command) {
+	reset := func(f *pflag.Flag) {
+		// Slice flags append on Set, so "[]" would become a literal element.
+		if sv, ok := f.Value.(pflag.SliceValue); ok {
+			_ = sv.Replace(nil)
+		} else {
+			_ = f.Value.Set(f.DefValue)
+		}
+		f.Changed = false
+	}
+	c.PersistentFlags().VisitAll(reset)
+	c.Flags().VisitAll(reset)
+	for _, sub := range c.Commands() {
+		resetFlags(sub)
+	}
 }
 
 func TestVersion_WorksWithoutAnyConfig(t *testing.T) {
