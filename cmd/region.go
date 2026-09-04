@@ -26,12 +26,22 @@ func (r regionRows) IDs() []string {
 	return out
 }
 
-var regionCmd = &cobra.Command{Use: "region", Short: "Regions available for new resources"}
+var regionCmd = &cobra.Command{
+	Use:   "region",
+	Short: "Regions available for new resources",
+	Long: `Regions are where new resources are created. A region only matters at
+creation time, so pass --region to "cloud app create", or set a default with
+CLOUD_REGION or a context.`,
+	Example: `  cloud region list
+  cloud app create demo --image nginx:1.27 --region zm-lusaka-central-1`,
+}
 
 var regionListCmd = &cobra.Command{
 	Use:   "list",
 	Short: "List regions",
-	Args:  cobra.NoArgs,
+	Example: `  cloud region list
+  cloud region list -o json`,
+	Args: cobra.NoArgs,
 	RunE: func(cmd *cobra.Command, _ []string) error {
 		c, _, err := apiClient()
 		if err != nil {
