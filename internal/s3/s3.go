@@ -48,6 +48,18 @@ const Concurrency = 4
 
 // Options describe one bucket's data path: where the region's endpoint is, and
 // the key pair that may reach it.
+//
+// HTTPClient is deliberately left nil in production, which takes the SDK's
+// default: connection-level timeouts only — dial, TLS handshake, idle
+// connection — and no overall request timeout.
+//
+// That absence is load-bearing. Uploading a large object over a slow uplink
+// legitimately takes minutes for a single part, and the region's edge no
+// longer cuts a slow body off (its 60 s read timeout was what made every
+// upload above a few tens of MiB fail with a 502). So the client's own
+// timeout is now the only ceiling, and there should not be one. The platform
+// API client is a separate http.Client with a 60 s timeout, which is right
+// for a JSON call and would be wrong here; do not share it.
 type Options struct {
 	// Endpoint is the region's S3 endpoint, e.g. https://s3.zm-lusaka-central-1.cloud.co.zm
 	Endpoint  string
@@ -55,6 +67,13 @@ type Options struct {
 	SecretKey string
 	// HTTPClient is injectable for tests; nil means the SDK's default.
 	HTTPClient *http.Client
+	// PartSize and Concurrency override the defaults below. Zero means the
+	// default. They exist because the multipart path is otherwise only
+	// exercisable by moving 64 MiB or more, which a constrained machine
+	// cannot always do — a small part size proves the same code with a
+	// fraction of the memory. S3 will not accept a part below 5 MiB.
+	PartSize    int64
+	Concurrency int
 }
 
 // Client is the object data path for one endpoint and key pair.
@@ -90,7 +109,13 @@ func New(o Options) (*Client, error) {
 		presign: s3.NewPresignClient(api),
 		uploader: manager.NewUploader(api, func(u *manager.Uploader) {
 			u.PartSize = PartSize
+			if o.PartSize > 0 {
+				u.PartSize = o.PartSize
+			}
 			u.Concurrency = Concurrency
+			if o.Concurrency > 0 {
+				u.Concurrency = o.Concurrency
+			}
 		}),
 		endpoint: o.Endpoint,
 	}, nil
