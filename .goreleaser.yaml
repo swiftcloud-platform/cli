@@ -52,20 +52,15 @@ release:
   draft: false
   prerelease: auto
 
-# Homebrew tap; the repository swiftcloud-platform/homebrew-tap must exist and
-# HOMEBREW_TAP_GITHUB_TOKEN must be set in the release workflow.
-brews:
-  - name: cloud
-    repository:
-      owner: swiftcloud-platform
-      name: homebrew-tap
-      token: "{{ .Env.HOMEBREW_TAP_GITHUB_TOKEN }}"
-    homepage: https://cloud.co.zm
-    description: SwiftCloud from the command line
-    license: Apache-2.0
-    install: |
-      bin.install "cloud"
-      generate_completions_from_executable(bin/"cloud", "completion")
-    test: |
-      system "#{bin}/cloud", "version"
-    skip_upload: auto
+# Homebrew: deliberately absent for now. goreleaser's `brews` publisher fails the
+# whole release when the tap repository or its token is missing, and
+# swiftcloud-platform/homebrew-tap does not exist yet. Re-add once it does:
+#
+#   brews:
+#     - name: cloud
+#       repository: { owner: swiftcloud-platform, name: homebrew-tap, token: "{{ .Env.HOMEBREW_TAP_GITHUB_TOKEN }}" }
+#       homepage: https://cloud.co.zm
+#       description: SwiftCloud from the command line
+#       install: bin.install "cloud"
+#
+# and set HOMEBREW_TAP_GITHUB_TOKEN in .github/workflows/release.yml.
