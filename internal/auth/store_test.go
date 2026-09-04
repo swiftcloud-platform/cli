@@ -50,6 +50,30 @@ func TestStore_NotLoggedIn(t *testing.T) {
 	if !strings.Contains(err.Error(), "cloud login") || !strings.Contains(err.Error(), "CLOUD_TOKEN") {
 		t.Errorf("error must name both ways in: %v", err)
 	}
+	if !strings.Contains(err.Error(), "https://cloud.co.zm/api/v1") {
+		t.Errorf("error must name the API it looked for: %v", err)
+	}
+}
+
+// The trap Arthur hit: sign in with CLOUD_API_URL=localhost, then run a command
+// without it. "Not signed in" is true for cloud.co.zm but hides the reason.
+func TestStore_NotLoggedIn_NamesTheHostsYouAreSignedInTo(t *testing.T) {
+	s := &Store{Dir: t.TempDir(), Env: env(nil)}
+	_ = s.Save("http://localhost:5173/api/v1", &Credential{Token: "dev", Kind: KindSession})
+	_, err := s.Load("https://cloud.co.zm/api/v1")
+	if !errors.Is(err, ErrNotLoggedIn) {
+		t.Fatalf("want ErrNotLoggedIn, got %v", err)
+	}
+	msg := err.Error()
+	if !strings.Contains(msg, "not signed in to https://cloud.co.zm/api/v1") {
+		t.Errorf("must name the target: %q", msg)
+	}
+	if !strings.Contains(msg, "localhost:5173") || !strings.Contains(msg, "--api-url") || !strings.Contains(msg, "cloud context use") {
+		t.Errorf("must name where you ARE signed in and how to target it: %q", msg)
+	}
+	if hosts := s.Hosts(); len(hosts) != 1 || hosts[0] != "localhost:5173" {
+		t.Errorf("Hosts() = %v", hosts)
+	}
 }
 
 // Staging and production logins must not overwrite each other.

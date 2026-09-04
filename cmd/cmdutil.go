@@ -50,6 +50,9 @@ func apiClient() (*api.ClientWithResponses, *auth.Credential, error) {
 	}
 	cred, err := store.Load(cfg.APIURL)
 	if err != nil {
+		// The store's error already names the API it looked for and any hosts
+		// that do have a credential — the difference between "sign in" and
+		// "you signed in to a different host".
 		return nil, nil, &AuthError{err}
 	}
 	if cred.Expired(time.Now()) {

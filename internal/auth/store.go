@@ -60,7 +60,29 @@ type Store struct {
 }
 
 // ErrNotLoggedIn is returned when no credential is available for a host.
-var ErrNotLoggedIn = errors.New("not signed in — run `cloud login`, or set CLOUD_TOKEN")
+// Callers wrap it with NotLoggedInError so the message names the host.
+var ErrNotLoggedIn = errors.New("not signed in")
+
+// NotLoggedInError explains WHICH API the CLI looked for a credential for, and
+// which ones it does have. Credentials are keyed by host, so a person who just
+// signed in to localhost and then ran a command against the production default
+// is "not signed in" for a reason the bare phrase hides.
+type NotLoggedInError struct {
+	APIURL string
+	// Other API hosts that do have a stored credential.
+	OtherHosts []string
+}
+
+func (e *NotLoggedInError) Error() string {
+	msg := fmt.Sprintf("not signed in to %s — run `cloud login`, or set CLOUD_TOKEN", e.APIURL)
+	if len(e.OtherHosts) > 0 {
+		msg += fmt.Sprintf(" (you are signed in to %s; use --api-url or `cloud context use` to target it)", strings.Join(e.OtherHosts, ", "))
+	}
+	return msg
+}
+
+func (e *NotLoggedInError) Is(target error) bool { return target == ErrNotLoggedIn }
+func (e *NotLoggedInError) Unwrap() error        { return ErrNotLoggedIn }
 
 // hostKey turns an API URL into a filename-safe key: host and port only.
 func hostKey(apiURL string) (string, error) {
@@ -92,7 +114,7 @@ func (s *Store) Load(apiURL string) (*Credential, error) {
 	}
 	data, err := os.ReadFile(p)
 	if errors.Is(err, os.ErrNotExist) {
-		return nil, ErrNotLoggedIn
+		return nil, &NotLoggedInError{APIURL: apiURL, OtherHosts: s.Hosts()}
 	}
 	if err != nil {
 		return nil, fmt.Errorf("reading credential: %w", err)
@@ -102,7 +124,7 @@ func (s *Store) Load(apiURL string) (*Credential, error) {
 		return nil, fmt.Errorf("credential file %s is corrupt; run `cloud logout` then `cloud login`", p)
 	}
 	if c.Token == "" {
-		return nil, ErrNotLoggedIn
+		return nil, &NotLoggedInError{APIURL: apiURL, OtherHosts: s.Hosts()}
 	}
 	c.Path = p
 	return &c, nil
@@ -155,4 +177,21 @@ func KindOfToken(token string) Kind {
 		return KindAPIToken
 	}
 	return KindSession
+}
+
+// Hosts lists the API hosts that have a stored credential, as host[:port].
+func (s *Store) Hosts() []string {
+	entries, err := os.ReadDir(filepath.Join(s.Dir, "tokens"))
+	if err != nil {
+		return nil
+	}
+	var hosts []string
+	for _, e := range entries {
+		name := e.Name()
+		if e.IsDir() || !strings.HasSuffix(name, ".json") {
+			continue
+		}
+		hosts = append(hosts, strings.ReplaceAll(strings.TrimSuffix(name, ".json"), "_", ":"))
+	}
+	return hosts
 }
