@@ -6,7 +6,7 @@
 # Downloads the latest release for this OS and architecture from GitHub,
 # verifies its SHA-256 against the release's checksums.txt, and installs the
 # `cloud` binary to /usr/local/bin (or $CLOUD_INSTALL_DIR). Linux and macOS
-# only; on Windows download the .zip from the Releases page.
+# only; Windows has install.ps1, which does the same thing.
 set -eu
 
 REPO="swiftcloud-platform/cli"
@@ -22,7 +22,7 @@ need curl; need tar; need uname
 os=$(uname -s | tr '[:upper:]' '[:lower:]')
 case "$os" in
   linux|darwin) ;;
-  *) die "unsupported OS '$os' — on Windows, download cloud_*_windows_*.zip from https://github.com/$REPO/releases" ;;
+  *) die "unsupported OS '$os' — on Windows run: irm https://cloud.co.zm/install.ps1 | iex" ;;
 esac
 
 arch=$(uname -m)

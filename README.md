@@ -6,11 +6,28 @@ Deploy apps, manage databases and work with object storage on [SwiftCloud](https
 
 ## Install
 
+**Linux and macOS**
+
 ```sh
 curl -fsSL https://cloud.co.zm/install.sh | sh
 ```
 
-Or download a release for Linux, macOS or Windows from the [Releases](https://github.com/swiftcloud-platform/cli/releases) page.
+**Windows** (PowerShell)
+
+```powershell
+irm https://cloud.co.zm/install.ps1 | iex
+```
+
+Both scripts verify the download's SHA-256 against the release's own
+`checksums.txt` before installing anything. The shell script installs to
+`/usr/local/bin`; the PowerShell one installs to
+`%LOCALAPPDATA%\Programs\cloud` and adds it to your PATH, so neither `sudo`
+nor an administrator prompt is needed on Windows.
+
+Set `CLOUD_VERSION` to install a specific tag, or `CLOUD_INSTALL_DIR` to choose
+where it goes. Prebuilt binaries for Linux, macOS and Windows on amd64 and
+arm64 are on the [Releases](https://github.com/swiftcloud-platform/cli/releases)
+page, and `cloud update` upgrades an existing install in place.
 
 ## Use
 
