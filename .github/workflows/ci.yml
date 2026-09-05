@@ -13,19 +13,19 @@ jobs:
     name: Lint and test
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-go@v5
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
         with:
           go-version-file: go.mod
           cache: true
       - name: Verify go.mod is tidy
         run: go mod tidy && git diff --exit-code go.mod go.sum
-      # v8 of the action installs golangci-lint v2, which is what .golangci.yml
-      # is written for (`version: "2"`). The v6 action can only install v1, and
-      # its "latest" is 1.64.8 — built with Go 1.24, so it refuses this module's
-      # `go 1.25.0` outright. Keep the action major version and the config
-      # format in step.
-      - uses: golangci/golangci-lint-action@v8
+      # This action's major version and .golangci.yml's `version:` move
+      # together: v6 of the action could only install golangci-lint v1, whose
+      # last release (1.64.8) is built with Go 1.24 and refuses this module's
+      # `go 1.25.0` outright. v7 and later install v2, which the config is
+      # written for.
+      - uses: golangci/golangci-lint-action@v9
         with:
           version: latest
       - run: go test -race -coverprofile=coverage.out ./...
@@ -43,8 +43,8 @@ jobs:
         goos: [linux, darwin, windows]
         goarch: [amd64, arm64]
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-go@v5
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
         with:
           go-version-file: go.mod
           cache: true
@@ -58,8 +58,8 @@ jobs:
     name: goreleaser config
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: goreleaser/goreleaser-action@v6
+      - uses: actions/checkout@v7
+      - uses: goreleaser/goreleaser-action@v7
         with:
           version: "~> v2"
           args: check
