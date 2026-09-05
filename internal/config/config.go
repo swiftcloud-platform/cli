@@ -99,6 +99,8 @@ func Dir(env Env) (string, error) {
 // Load reads config.yaml. A missing file is not an error: it is the state
 // every fresh machine starts in, and the defaults must work there.
 func Load(path string) (*File, error) {
+	// #nosec G304 -- reading the config file the user pointed us at is the
+	// function's entire purpose.
 	data, err := os.ReadFile(path)
 	if errors.Is(err, os.ErrNotExist) {
 		return &File{Contexts: map[string]Context{}}, nil

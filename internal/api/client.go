@@ -1,3 +1,6 @@
+// Package api is the generated platform client plus the error handling around
+// it: RFC 9457 problem documents become typed errors whose Type the command
+// layer maps to an exit code.
 package api
 
 import (
@@ -40,6 +43,8 @@ func (e *Error) Is(target error) bool {
 	return ok && t.Type == e.Type
 }
 
+// Sentinel errors for the problem types the CLI branches on. Compare with
+// errors.Is; the Detail carried by a real response is preserved separately.
 var (
 	ErrUnauthenticated = &Error{Type: "unauthenticated"}
 	ErrForbidden       = &Error{Type: "forbidden"}

@@ -22,7 +22,7 @@ in. No password ever passes through the terminal, and the same flow works over
 SSH: the URL can be opened on any device.
 
 The platform answers these under its auth base — `/api/auth/device/...` — not
-under `/api/v1`; AuthBaseFromAPI derives one from the other so a CLI pointed at
+under `/api/v1`; BaseFromAPI derives one from the other so a CLI pointed at
 staging also logs in against staging.
 */
 
@@ -31,8 +31,8 @@ const ClientID = "cloud-cli"
 
 const grantType = "urn:ietf:params:oauth:grant-type:device_code"
 
-// AuthBaseFromAPI maps https://host/api/v1 → https://host/api/auth.
-func AuthBaseFromAPI(apiURL string) (string, error) {
+// BaseFromAPI maps https://host/api/v1 → https://host/api/auth.
+func BaseFromAPI(apiURL string) (string, error) {
 	u, err := url.Parse(apiURL)
 	if err != nil || u.Host == "" {
 		return "", fmt.Errorf("invalid API URL %q", apiURL)
@@ -101,7 +101,7 @@ func (d *DeviceFlow) post(ctx context.Context, path string, body any) (int, []by
 	if err != nil {
 		return 0, nil, err
 	}
-	defer res.Body.Close()
+	defer func() { _ = res.Body.Close() }()
 	data, _ := io.ReadAll(io.LimitReader(res.Body, 1<<20))
 	return res.StatusCode, data, nil
 }

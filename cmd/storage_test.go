@@ -1,7 +1,6 @@
 package cmd
 
 import (
-	"encoding/xml"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -25,16 +24,10 @@ type fakeStorage struct {
 	// puts and deletes record what the data path did.
 	puts    []string
 	deletes []string
-	// apiOverride replaces an API path's handler.
-	apiOverride map[string]http.HandlerFunc
 }
 
 func (f *fakeStorage) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if strings.HasPrefix(r.URL.Path, "/api/v1/") {
-		if h, ok := f.apiOverride[r.URL.Path]; ok {
-			h(w, r)
-			return
-		}
 		f.serveAPI(w, r)
 		return
 	}
@@ -56,21 +49,6 @@ func (f *fakeStorage) serveAPI(w http.ResponseWriter, r *http.Request) {
 		fmt.Fprintf(w, `{"id":"b1","name":"pics","bucketName":"pics-abc123","organizationId":"o1","region":"zm-lusaka-central-1","regionId":"r1","status":"ready","objectCount":2,"sizeBytes":"2048","size":"s3-1","storageClass":"STANDARD","versioning":false,"publicAccess":false,"endpoint":%q,"virtualHost":"pics-abc123.s3.example","createdAt":"2026-09-01T00:00:00Z","updatedAt":"2026-09-01T00:00:00Z"}`, base)
 	default:
 		problem(w, 404, "not-found", "no such thing: "+r.URL.Path)
-	}
-}
-
-// listResult is the subset of ListObjectsV2 the fake needs to produce.
-type listResult struct {
-	XMLName     xml.Name `xml:"ListBucketResult"`
-	IsTruncated bool     `xml:"IsTruncated"`
-	Contents    []struct {
-		Key          string `xml:"Key"`
-		Size         int64  `xml:"Size"`
-		ETag         string `xml:"ETag"`
-		LastModified string `xml:"LastModified"`
-	}
-	CommonPrefixes []struct {
-		Prefix string `xml:"Prefix"`
 	}
 }
 
@@ -149,12 +127,12 @@ func (f *fakeStorage) listObjects(w http.ResponseWriter, r *http.Request) {
 	_, _ = w.Write([]byte(b.String()))
 }
 
-func storageSetup(t *testing.T, objects map[string][]byte, apiOverride map[string]http.HandlerFunc) *fakeStorage {
+func storageSetup(t *testing.T, objects map[string][]byte) *fakeStorage {
 	t.Helper()
 	if objects == nil {
 		objects = map[string][]byte{}
 	}
-	fake := &fakeStorage{t: t, objects: objects, apiOverride: apiOverride}
+	fake := &fakeStorage{t: t, objects: objects}
 	srv := httptest.NewServer(fake)
 	t.Cleanup(srv.Close)
 	t.Setenv("CLOUD_CONFIG_DIR", t.TempDir())
@@ -193,7 +171,7 @@ func TestHumanBytes(t *testing.T) {
 }
 
 func TestBucketList_ShowsBothNames(t *testing.T) {
-	storageSetup(t, nil, nil)
+	storageSetup(t, nil)
 	out, err := run(t, "storage", "bucket", "list")
 	if err != nil {
 		t.Fatal(err)
@@ -213,7 +191,7 @@ func TestLs_ResolvesTheDisplayName(t *testing.T) {
 	storageSetup(t, map[string][]byte{
 		"top.txt":       []byte("hi"),
 		"dir/inner.txt": []byte("deeper"),
-	}, nil)
+	})
 	out, err := run(t, "storage", "ls", "s3://pics")
 	if err != nil {
 		t.Fatal(err)
@@ -231,7 +209,7 @@ func TestLs_RecursiveListsEveryObject(t *testing.T) {
 	storageSetup(t, map[string][]byte{
 		"top.txt":       []byte("hi"),
 		"dir/inner.txt": []byte("deeper"),
-	}, nil)
+	})
 	out, err := run(t, "storage", "ls", "s3://pics", "--recursive")
 	if err != nil {
 		t.Fatal(err)
@@ -242,7 +220,7 @@ func TestLs_RecursiveListsEveryObject(t *testing.T) {
 }
 
 func TestLs_UnknownBucketExits5(t *testing.T) {
-	storageSetup(t, nil, nil)
+	storageSetup(t, nil)
 	_, err := run(t, "storage", "ls", "s3://nosuchbucket")
 	if err == nil {
 		t.Fatal("expected an error for an unknown bucket")
@@ -253,7 +231,7 @@ func TestLs_UnknownBucketExits5(t *testing.T) {
 }
 
 func TestCat_StreamsExactBytes(t *testing.T) {
-	storageSetup(t, map[string][]byte{"notes.txt": []byte("exact bytes\n")}, nil)
+	storageSetup(t, map[string][]byte{"notes.txt": []byte("exact bytes\n")})
 	out, err := run(t, "storage", "cat", "s3://pics/notes.txt")
 	if err != nil {
 		t.Fatal(err)
@@ -264,7 +242,7 @@ func TestCat_StreamsExactBytes(t *testing.T) {
 }
 
 func TestCat_RefusesAPrefix(t *testing.T) {
-	storageSetup(t, nil, nil)
+	storageSetup(t, nil)
 	_, err := run(t, "storage", "cat", "s3://pics")
 	if err == nil || ExitCode(err) != ExitUsage {
 		t.Fatalf("cat on a bucket should be a usage error, got %v", err)
@@ -272,7 +250,7 @@ func TestCat_RefusesAPrefix(t *testing.T) {
 }
 
 func TestStat_MissingKeyExits5(t *testing.T) {
-	storageSetup(t, nil, nil)
+	storageSetup(t, nil)
 	_, err := run(t, "storage", "stat", "s3://pics/gone.txt")
 	if err == nil {
 		t.Fatal("expected an error")
@@ -283,7 +261,7 @@ func TestStat_MissingKeyExits5(t *testing.T) {
 }
 
 func TestCp_UploadsAFile(t *testing.T) {
-	fake := storageSetup(t, nil, nil)
+	fake := storageSetup(t, nil)
 	dir := t.TempDir()
 	src := filepath.Join(dir, "photo.jpg")
 	if err := os.WriteFile(src, []byte("jpegdata"), 0o644); err != nil {
@@ -299,7 +277,7 @@ func TestCp_UploadsAFile(t *testing.T) {
 
 // A destination ending in "/" keeps the source's file name.
 func TestCp_PrefixDestinationKeepsTheFileName(t *testing.T) {
-	fake := storageSetup(t, nil, nil)
+	fake := storageSetup(t, nil)
 	dir := t.TempDir()
 	src := filepath.Join(dir, "photo.jpg")
 	if err := os.WriteFile(src, []byte("x"), 0o644); err != nil {
@@ -314,7 +292,7 @@ func TestCp_PrefixDestinationKeepsTheFileName(t *testing.T) {
 }
 
 func TestCp_DirectoryNeedsRecursive(t *testing.T) {
-	storageSetup(t, nil, nil)
+	storageSetup(t, nil)
 	dir := t.TempDir()
 	_, err := run(t, "storage", "cp", dir, "s3://pics/tree/")
 	if err == nil || ExitCode(err) != ExitUsage {
@@ -323,7 +301,7 @@ func TestCp_DirectoryNeedsRecursive(t *testing.T) {
 }
 
 func TestCp_RefusesTwoLocalPaths(t *testing.T) {
-	storageSetup(t, nil, nil)
+	storageSetup(t, nil)
 	_, err := run(t, "storage", "cp", "./a", "./b")
 	if err == nil || ExitCode(err) != ExitUsage {
 		t.Fatalf("a local-to-local copy should be refused, got %v", err)
@@ -331,7 +309,7 @@ func TestCp_RefusesTwoLocalPaths(t *testing.T) {
 }
 
 func TestCp_DownloadsToADirectory(t *testing.T) {
-	storageSetup(t, map[string][]byte{"photo.jpg": []byte("jpegdata")}, nil)
+	storageSetup(t, map[string][]byte{"photo.jpg": []byte("jpegdata")})
 	dir := t.TempDir()
 	if _, err := run(t, "storage", "cp", "s3://pics/photo.jpg", dir); err != nil {
 		t.Fatal(err)
@@ -346,7 +324,7 @@ func TestCp_DownloadsToADirectory(t *testing.T) {
 }
 
 func TestSync_DryRunChangesNothingAndExplainsItself(t *testing.T) {
-	fake := storageSetup(t, map[string][]byte{"site/index.html": []byte("old")}, nil)
+	fake := storageSetup(t, map[string][]byte{"site/index.html": []byte("old")})
 	dir := t.TempDir()
 	if err := os.WriteFile(filepath.Join(dir, "index.html"), []byte("new and longer"), 0o644); err != nil {
 		t.Fatal(err)
@@ -364,7 +342,7 @@ func TestSync_DryRunChangesNothingAndExplainsItself(t *testing.T) {
 }
 
 func TestRm_PrefixNeedsRecursive(t *testing.T) {
-	fake := storageSetup(t, map[string][]byte{"dir/a.txt": []byte("a")}, nil)
+	fake := storageSetup(t, map[string][]byte{"dir/a.txt": []byte("a")})
 	_, err := run(t, "storage", "rm", "s3://pics/dir/")
 	if err == nil || ExitCode(err) != ExitUsage {
 		t.Fatalf("deleting a prefix without --recursive should be a usage error, got %v", err)
@@ -375,7 +353,7 @@ func TestRm_PrefixNeedsRecursive(t *testing.T) {
 }
 
 func TestRm_RecursiveWithoutConfirmationIsRefused(t *testing.T) {
-	fake := storageSetup(t, map[string][]byte{"dir/a.txt": []byte("a"), "dir/b.txt": []byte("b")}, nil)
+	fake := storageSetup(t, map[string][]byte{"dir/a.txt": []byte("a"), "dir/b.txt": []byte("b")})
 	_, err := run(t, "storage", "rm", "s3://pics/dir/", "--recursive")
 	if err == nil || ExitCode(err) != ExitUsage {
 		t.Fatalf("a non-interactive recursive delete without --yes must be refused, got %v", err)
@@ -386,7 +364,7 @@ func TestRm_RecursiveWithoutConfirmationIsRefused(t *testing.T) {
 }
 
 func TestRm_RecursiveWithYesBatches(t *testing.T) {
-	fake := storageSetup(t, map[string][]byte{"dir/a.txt": []byte("a"), "dir/b.txt": []byte("b")}, nil)
+	fake := storageSetup(t, map[string][]byte{"dir/a.txt": []byte("a"), "dir/b.txt": []byte("b")})
 	if _, err := run(t, "storage", "rm", "s3://pics/dir/", "--recursive", "--yes"); err != nil {
 		t.Fatal(err)
 	}
@@ -396,7 +374,7 @@ func TestRm_RecursiveWithYesBatches(t *testing.T) {
 }
 
 func TestPresign_ValidatesItsFlags(t *testing.T) {
-	storageSetup(t, nil, nil)
+	storageSetup(t, nil)
 	for _, args := range [][]string{
 		{"storage", "presign", "s3://pics/a.txt", "--method", "delete"},
 		{"storage", "presign", "s3://pics/a.txt", "--expires", "200h"},
@@ -410,7 +388,7 @@ func TestPresign_ValidatesItsFlags(t *testing.T) {
 }
 
 func TestPresign_SignsLocallyWithoutCallingTheStorageLayer(t *testing.T) {
-	fake := storageSetup(t, map[string][]byte{"a.txt": []byte("x")}, nil)
+	fake := storageSetup(t, map[string][]byte{"a.txt": []byte("x")})
 	out, err := run(t, "storage", "presign", "s3://pics/a.txt", "--expires", "15m")
 	if err != nil {
 		t.Fatal(err)
@@ -428,7 +406,7 @@ func TestPresign_SignsLocallyWithoutCallingTheStorageLayer(t *testing.T) {
 }
 
 func TestBucketCredentials_Formats(t *testing.T) {
-	storageSetup(t, nil, nil)
+	storageSetup(t, nil)
 	env, err := run(t, "storage", "bucket", "credentials", "pics", "--format", "env")
 	if err != nil {
 		t.Fatal(err)
@@ -466,7 +444,7 @@ func TestBucketCredentials_Formats(t *testing.T) {
 }
 
 func TestBucketDelete_RefusesWithoutConfirmationWhenNotATerminal(t *testing.T) {
-	storageSetup(t, nil, nil)
+	storageSetup(t, nil)
 	_, err := run(t, "storage", "bucket", "delete", "pics")
 	if err == nil || ExitCode(err) != ExitUsage {
 		t.Fatalf("a non-interactive bucket delete without --yes must be refused, got %v", err)
@@ -474,7 +452,7 @@ func TestBucketDelete_RefusesWithoutConfirmationWhenNotATerminal(t *testing.T) {
 }
 
 func TestBucketCreate_NeedsARegion(t *testing.T) {
-	storageSetup(t, nil, nil)
+	storageSetup(t, nil)
 	t.Setenv("CLOUD_REGION", "")
 	_, err := run(t, "storage", "bucket", "create", "photos")
 	if err == nil || ExitCode(err) != ExitUsage {

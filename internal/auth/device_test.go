@@ -11,19 +11,19 @@ import (
 	"time"
 )
 
-func TestAuthBaseFromAPI(t *testing.T) {
+func TestBaseFromAPI(t *testing.T) {
 	for in, want := range map[string]string{
 		"https://cloud.co.zm/api/v1":           "https://cloud.co.zm/api/auth",
 		"https://cloud.co.zm/api/v1/":          "https://cloud.co.zm/api/auth",
 		"http://localhost:5173/api/v1":         "http://localhost:5173/api/auth",
 		"https://staging.cloud.co.zm/api/v1?x": "https://staging.cloud.co.zm/api/auth",
 	} {
-		got, err := AuthBaseFromAPI(in)
+		got, err := BaseFromAPI(in)
 		if err != nil || got != want {
-			t.Errorf("AuthBaseFromAPI(%q) = %q, %v; want %q", in, got, err, want)
+			t.Errorf("BaseFromAPI(%q) = %q, %v; want %q", in, got, err, want)
 		}
 	}
-	if _, err := AuthBaseFromAPI("not a url"); err == nil {
+	if _, err := BaseFromAPI("not a url"); err == nil {
 		t.Error("garbage must be rejected")
 	}
 }

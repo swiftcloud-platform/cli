@@ -34,26 +34,6 @@ func (r appRows) IDs() []string {
 	return out
 }
 
-type deploymentRows []api.Deployment
-
-func (r deploymentRows) Columns() []string {
-	return []string{"CREATED", "STATUS", "IMAGE", "REVISION", "REASON"}
-}
-func (r deploymentRows) Rows() [][]string {
-	out := make([][]string, len(r))
-	for i, d := range r {
-		out[i] = []string{d.CreatedAt.Local().Format("2006-01-02 15:04"), d.Status, d.Image, d.Revision, d.FailureReason}
-	}
-	return out
-}
-func (r deploymentRows) IDs() []string {
-	out := make([]string, len(r))
-	for i, d := range r {
-		out[i] = d.Id
-	}
-	return out
-}
-
 type domainRows []api.CustomDomain
 
 func (r domainRows) Columns() []string { return []string{"DOMAIN", "ROUTING", "TLS", "NOTE"} }
@@ -410,7 +390,7 @@ var appLogsCmd = &cobra.Command{
 		if err != nil {
 			return reachErr(err)
 		}
-		defer res.Body.Close()
+		defer func() { _ = res.Body.Close() }()
 		if res.StatusCode != 200 {
 			body, _ := io.ReadAll(io.LimitReader(res.Body, 64<<10))
 			return apiErr(res.StatusCode, body)

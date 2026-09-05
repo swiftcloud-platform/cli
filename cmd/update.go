@@ -167,7 +167,7 @@ func installUpdate(ctx context.Context, assetURL, assetName, sumsURL, target str
 	if err != nil {
 		return err
 	}
-	defer os.Remove(archive)
+	defer func() { _ = os.Remove(archive) }()
 
 	want, err := checksumFor(ctx, sumsURL, assetName)
 	if err != nil {
@@ -185,7 +185,7 @@ func installUpdate(ctx context.Context, assetURL, assetName, sumsURL, target str
 	if err != nil {
 		return err
 	}
-	defer os.Remove(binary)
+	defer func() { _ = os.Remove(binary) }()
 
 	return replaceBinary(binary, target)
 }
@@ -202,7 +202,7 @@ func latestRelease(ctx context.Context) (*release, error) {
 	if err != nil {
 		return nil, fmt.Errorf("could not reach GitHub to look for a release: %w", err)
 	}
-	defer res.Body.Close()
+	defer func() { _ = res.Body.Close() }()
 	body, _ := io.ReadAll(io.LimitReader(res.Body, 1<<20))
 	if res.StatusCode == http.StatusNotFound {
 		return nil, fmt.Errorf("%s has published no releases yet", updateRepo)
@@ -246,7 +246,7 @@ func checksumFor(ctx context.Context, url, assetName string) (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("could not download checksums.txt: %w", err)
 	}
-	defer res.Body.Close()
+	defer func() { _ = res.Body.Close() }()
 	if res.StatusCode != http.StatusOK {
 		return "", fmt.Errorf("downloading checksums.txt: HTTP %d", res.StatusCode)
 	}
@@ -273,7 +273,7 @@ func download(ctx context.Context, url string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	defer res.Body.Close()
+	defer func() { _ = res.Body.Close() }()
 	if res.StatusCode != http.StatusOK {
 		return "", fmt.Errorf("downloading %s: HTTP %d", url, res.StatusCode)
 	}
@@ -294,11 +294,12 @@ func download(ctx context.Context, url string) (string, error) {
 }
 
 func fileSHA256(path string) (string, error) {
+	// #nosec G304 -- path is the archive this process just downloaded.
 	f, err := os.Open(path)
 	if err != nil {
 		return "", err
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 	h := sha256.New()
 	if _, err := io.Copy(h, f); err != nil {
 		return "", err
@@ -401,7 +402,7 @@ func extractBinary(archive, dir string) (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("cannot write to %s: %w", dir, err)
 	}
-	defer out.Close()
+	defer func() { _ = out.Close() }()
 
 	copyOut := func(r io.Reader) error {
 		n, err := io.Copy(out, io.LimitReader(r, updateSizeLimit))
@@ -420,7 +421,7 @@ func extractBinary(archive, dir string) (string, error) {
 			_ = os.Remove(out.Name())
 			return "", err
 		}
-		defer zr.Close()
+		defer func() { _ = zr.Close() }()
 		for _, f := range zr.File {
 			if path.Base(f.Name) != want {
 				continue
@@ -431,7 +432,7 @@ func extractBinary(archive, dir string) (string, error) {
 				return "", err
 			}
 			err = copyOut(rc)
-			rc.Close()
+			_ = rc.Close()
 			if err != nil {
 				_ = os.Remove(out.Name())
 				return "", err
@@ -442,18 +443,19 @@ func extractBinary(archive, dir string) (string, error) {
 		return "", fmt.Errorf("the release archive contains no %s", want)
 	}
 
+	// #nosec G304 -- archive is the file this process just downloaded.
 	f, err := os.Open(archive)
 	if err != nil {
 		_ = os.Remove(out.Name())
 		return "", err
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 	gz, err := gzip.NewReader(f)
 	if err != nil {
 		_ = os.Remove(out.Name())
 		return "", fmt.Errorf("the release archive is not a gzip file: %w", err)
 	}
-	defer gz.Close()
+	defer func() { _ = gz.Close() }()
 	tr := tar.NewReader(gz)
 	for {
 		h, err := tr.Next()

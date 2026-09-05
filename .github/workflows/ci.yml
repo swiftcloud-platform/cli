@@ -20,7 +20,12 @@ jobs:
           cache: true
       - name: Verify go.mod is tidy
         run: go mod tidy && git diff --exit-code go.mod go.sum
-      - uses: golangci/golangci-lint-action@v6
+      # v8 of the action installs golangci-lint v2, which is what .golangci.yml
+      # is written for (`version: "2"`). The v6 action can only install v1, and
+      # its "latest" is 1.64.8 — built with Go 1.24, so it refuses this module's
+      # `go 1.25.0` outright. Keep the action major version and the config
+      # format in step.
+      - uses: golangci/golangci-lint-action@v8
         with:
           version: latest
       - run: go test -race -coverprofile=coverage.out ./...

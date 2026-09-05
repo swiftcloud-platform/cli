@@ -97,9 +97,6 @@ func Until(ctx context.Context, poll Poll, health Health, o Options) (string, er
 	last := ""
 	lastChange := start
 	healthChecked := false
-	workerDown := false
-	var workerAge time.Duration
-
 	for {
 		status, done, err := poll(ctx)
 		if err != nil {
@@ -117,14 +114,14 @@ func Until(ctx context.Context, poll Poll, health Health, o Options) (string, er
 		}
 		elapsed := now().Sub(start)
 		if elapsed >= o.Timeout {
-			return status, &ErrTimeout{LastStatus: status, Elapsed: elapsed, WorkerDown: workerDown, WorkerAge: workerAge}
+			// WorkerDown is false here by construction: the only place that
+			// finds a dead worker returns below, without falling through.
+			return status, &ErrTimeout{LastStatus: status, Elapsed: elapsed}
 		}
 		// Stalled: ask once whether anyone is actually working on it.
 		if !healthChecked && health != nil && now().Sub(lastChange) >= o.StallAfter {
 			healthChecked = true
 			if ok, age, herr := health(ctx); herr == nil && !ok {
-				workerDown = true
-				workerAge = age
 				// No point waiting the full timeout for a worker that is not there.
 				return status, &ErrTimeout{LastStatus: status, Elapsed: elapsed, WorkerDown: true, WorkerAge: age}
 			}

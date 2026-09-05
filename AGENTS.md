@@ -5,7 +5,7 @@ Read `docs/plan.md` first. It holds every decision (stack, auth, scope, API host
 ## Layout
 
 ```
-main.go                  entry point; version injected via -ldflags (main.version_, main.commit, main.date)
+main.go                  entry point; version injected via -ldflags (main.version, main.commit, main.date)
 cmd/                     Cobra commands only. Thin: parse flags → call internal → print via output.
 internal/config          contexts, CLOUD_* env, precedence flag > env > context > default; refuses retired hosts
 internal/output          --output table|json|yaml and --quiet; anything printed goes through Printer

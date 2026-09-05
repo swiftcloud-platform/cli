@@ -2,7 +2,7 @@ package s3
 
 import (
 	"context"
-	"crypto/md5"
+	"crypto/md5" // #nosec G501 -- S3 ETags are MD5; see FileMD5
 	"encoding/hex"
 	"fmt"
 	"io"
@@ -125,12 +125,13 @@ func isMultipartETag(etag string) bool {
 // FileMD5 returns the hex MD5 of a file, which is what S3 reports as the ETag
 // for an object stored in one part.
 func FileMD5(path string) (string, error) {
+	// #nosec G304 -- hashing a file the user asked to upload is the point.
 	f, err := os.Open(path)
 	if err != nil {
 		return "", err
 	}
-	defer f.Close()
-	h := md5.New()
+	defer func() { _ = f.Close() }()
+	h := md5.New() // #nosec G401 -- not a security hash: this reproduces the ETag S3 publishes
 	if _, err := io.Copy(h, f); err != nil {
 		return "", err
 	}
@@ -294,7 +295,7 @@ func (c *Client) RunUpload(ctx context.Context, bucket string, actions []Action,
 				return err
 			}
 			err = c.Put(ctx, URI{Bucket: bucket, Key: a.Key}, f, ContentType(a.LocalPath))
-			f.Close()
+			_ = f.Close()
 			if err != nil {
 				return fmt.Errorf("uploading %s: %w", a.Key, err)
 			}
@@ -337,6 +338,9 @@ func (c *Client) RunDownload(ctx context.Context, bucket string, actions []Actio
 		if a.Kind != Transfer {
 			continue
 		}
+		// #nosec G301 -- these are the user's own downloaded files; 0755 is what
+		// `mkdir -p` gives them, and 0750 would surprise anyone serving a
+		// synced directory from another account.
 		if err := os.MkdirAll(filepath.Dir(a.LocalPath), 0o755); err != nil {
 			return err
 		}

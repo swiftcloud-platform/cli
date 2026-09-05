@@ -12,7 +12,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/aws"
 	awshttp "github.com/aws/aws-sdk-go-v2/aws/transport/http"
 	"github.com/aws/aws-sdk-go-v2/credentials"
-	"github.com/aws/aws-sdk-go-v2/feature/s3/manager"
+	"github.com/aws/aws-sdk-go-v2/feature/s3/manager" //nolint:staticcheck // deprecated upstream; replacement is pre-1.0, see the file comment
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/aws/aws-sdk-go-v2/service/s3/types"
 	"github.com/aws/smithy-go"
@@ -80,7 +80,7 @@ type Options struct {
 type Client struct {
 	api      *s3.Client
 	presign  *s3.PresignClient
-	uploader *manager.Uploader
+	uploader *manager.Uploader //nolint:staticcheck // see the file comment
 	endpoint string
 }
 
@@ -107,7 +107,7 @@ func New(o Options) (*Client, error) {
 	return &Client{
 		api:     api,
 		presign: s3.NewPresignClient(api),
-		uploader: manager.NewUploader(api, func(u *manager.Uploader) {
+		uploader: manager.NewUploader(api, func(u *manager.Uploader) { //nolint:staticcheck // see the file comment
 			u.PartSize = PartSize
 			if o.PartSize > 0 {
 				u.PartSize = o.PartSize
@@ -261,7 +261,7 @@ func (c *Client) Get(ctx context.Context, u URI, w io.Writer) (int64, error) {
 	if err != nil {
 		return 0, classify(err)
 	}
-	defer out.Body.Close()
+	defer func() { _ = out.Body.Close() }()
 	return io.Copy(w, out.Body)
 }
 
@@ -273,7 +273,7 @@ func (c *Client) Put(ctx context.Context, u URI, body io.Reader, contentType str
 	if contentType != "" {
 		in.ContentType = aws.String(contentType)
 	}
-	_, err := c.uploader.Upload(ctx, in)
+	_, err := c.uploader.Upload(ctx, in) //nolint:staticcheck // see the file comment
 	return classify(err)
 }
 
