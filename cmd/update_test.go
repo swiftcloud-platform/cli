@@ -242,7 +242,11 @@ func TestReplaceBinary_KeepsThePermissionsAndSwapsAtomically(t *testing.T) {
 		t.Fatal(err)
 	}
 	// The replacement must be executable even though it was written 0600.
-	if info.Mode().Perm() != 0o755 {
+	// Windows has no POSIX mode bits: Go reports a synthetic 0666/0444 there
+	// whatever mode was requested, and the file is protected by the ACLs it
+	// inherits from a per-user directory instead. The check is meaningful only
+	// where the mode is real.
+	if runtime.GOOS != "windows" && info.Mode().Perm() != 0o755 {
 		t.Errorf("permissions = %o, want 755 (the old binary's)", info.Mode().Perm())
 	}
 }
@@ -381,7 +385,7 @@ func TestInstallUpdate_GoodDownloadReplacesTheBinary(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if info.Mode().Perm() != 0o755 {
+	if runtime.GOOS != "windows" && info.Mode().Perm() != 0o755 {
 		t.Errorf("permissions = %o, want the old binary's 755", info.Mode().Perm())
 	}
 }

@@ -3,6 +3,7 @@ package config
 import (
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 )
@@ -149,7 +150,11 @@ func TestSaveLoad_RoundTripWithOwnerOnlyPermissions(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if perm := st.Mode().Perm(); perm != 0o600 {
+	// Windows has no POSIX mode bits: Go reports a synthetic 0666/0444 there
+	// whatever mode was requested, and the file is protected by the ACLs it
+	// inherits from a per-user directory instead. The check is meaningful only
+	// where the mode is real.
+	if perm := st.Mode().Perm(); runtime.GOOS != "windows" && perm != 0o600 {
 		t.Errorf("config must be owner-only, got %o", perm)
 	}
 	out, err := Load(path)
