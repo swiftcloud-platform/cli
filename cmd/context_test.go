@@ -3,6 +3,7 @@ package cmd
 import (
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 )
@@ -45,8 +46,15 @@ func TestContext_SetUseListCurrent(t *testing.T) {
 	}
 	// The file is owner-only and lives where config.Dir says.
 	st, err := os.Stat(filepath.Join(dir, "config.yaml"))
-	if err != nil || st.Mode().Perm() != 0o600 {
-		t.Errorf("config.yaml perms: %v %v", st, err)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Windows has no POSIX mode bits: Go reports a synthetic 0666/0444 there
+	// whatever mode was requested, and the file is protected by the ACLs it
+	// inherits from a per-user directory instead. The check is meaningful only
+	// where the mode is real.
+	if runtime.GOOS != "windows" && st.Mode().Perm() != 0o600 {
+		t.Errorf("config.yaml perms = %o, want 600", st.Mode().Perm())
 	}
 }
 

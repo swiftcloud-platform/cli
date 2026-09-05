@@ -4,6 +4,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -22,12 +23,18 @@ func TestStore_RoundTrip_OwnerOnlyPermissions(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if st.Mode().Perm() != 0o600 {
-		t.Errorf("credential file must be 0600, got %o", st.Mode().Perm())
-	}
-	dst, _ := os.Stat(filepath.Dir(in.Path))
-	if dst.Mode().Perm() != 0o700 {
-		t.Errorf("tokens dir must be 0700, got %o", dst.Mode().Perm())
+	// Windows has no POSIX mode bits: Go reports a synthetic 0666/0444 there
+	// whatever mode was requested, and the file is protected by the ACLs it
+	// inherits from a per-user directory instead. The check is meaningful only
+	// where the mode is real.
+	if runtime.GOOS != "windows" {
+		if st.Mode().Perm() != 0o600 {
+			t.Errorf("credential file must be 0600, got %o", st.Mode().Perm())
+		}
+		dst, _ := os.Stat(filepath.Dir(in.Path))
+		if dst.Mode().Perm() != 0o700 {
+			t.Errorf("tokens dir must be 0700, got %o", dst.Mode().Perm())
+		}
 	}
 	out, err := s.Load(api)
 	if err != nil {
