@@ -303,7 +303,7 @@ func TestDBBackupEnable_UnsupportedEngine_Exit2(t *testing.T) {
 
 func TestDBBackupEnable_BadRetentionNeverReachesThePlatform(t *testing.T) {
 	dbSetup(t, map[string]http.HandlerFunc{
-		"/api/v1/orgs/acme/databases/orders/backups/enable": func(w http.ResponseWriter, _ *http.Request) {
+		"/api/v1/orgs/acme/databases/orders/backups/enable": func(_ http.ResponseWriter, _ *http.Request) {
 			t.Error("the platform was called with a retention the CLI should have refused")
 		},
 	})

@@ -662,7 +662,7 @@ var dbLogsCmd = &cobra.Command{
 		if err != nil {
 			return reachErr(err)
 		}
-		defer res.Body.Close()
+		defer func() { _ = res.Body.Close() }()
 		if res.StatusCode != 200 {
 			body, _ := io.ReadAll(io.LimitReader(res.Body, 64<<10))
 			return apiErr(res.StatusCode, body)

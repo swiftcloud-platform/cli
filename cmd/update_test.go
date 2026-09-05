@@ -52,8 +52,9 @@ type stringWriter struct{ b *strings.Builder }
 func (w *stringWriter) Write(p []byte) (int, error) { return w.b.Write(p) }
 
 // fakeGitHub serves release metadata, an archive and a checksums.txt.
-func fakeGitHub(t *testing.T, tag string, archive []byte, sum string) *httptest.Server {
+func fakeGitHub(t *testing.T, archive []byte, sum string) *httptest.Server {
 	t.Helper()
+	const tag = "v9.9.9"
 	assetName := fmt.Sprintf("cloud_%s_%s_%s.tar.gz", strings.TrimPrefix(tag, "v"), runtime.GOOS, runtime.GOARCH)
 	mux := http.NewServeMux()
 	var base string
@@ -248,7 +249,7 @@ func TestReplaceBinary_KeepsThePermissionsAndSwapsAtomically(t *testing.T) {
 
 func TestUpdate_CheckReportsWithoutChangingAnything(t *testing.T) {
 	archive := tarGzWith(t, "cloud", "new binary")
-	srv := fakeGitHub(t, "v9.9.9", archive, sha256Hex(archive))
+	srv := fakeGitHub(t, archive, sha256Hex(archive))
 	updateAPIURL = srv.URL + "/releases/latest"
 	t.Cleanup(func() { updateAPIURL = updateAPI })
 	t.Setenv("CLOUD_CONFIG_DIR", t.TempDir())
@@ -260,7 +261,7 @@ func TestUpdate_CheckReportsWithoutChangingAnything(t *testing.T) {
 
 func TestUpdate_JSONReportsBothVersions(t *testing.T) {
 	archive := tarGzWith(t, "cloud", "new binary")
-	srv := fakeGitHub(t, "v9.9.9", archive, sha256Hex(archive))
+	srv := fakeGitHub(t, archive, sha256Hex(archive))
 	updateAPIURL = srv.URL + "/releases/latest"
 	t.Cleanup(func() { updateAPIURL = updateAPI })
 	t.Setenv("CLOUD_CONFIG_DIR", t.TempDir())
@@ -278,7 +279,7 @@ func TestUpdate_JSONReportsBothVersions(t *testing.T) {
 // overwrite whatever the developer just built.
 func TestUpdate_RefusesToReplaceADevBuild(t *testing.T) {
 	archive := tarGzWith(t, "cloud", "new binary")
-	srv := fakeGitHub(t, "v9.9.9", archive, sha256Hex(archive))
+	srv := fakeGitHub(t, archive, sha256Hex(archive))
 	updateAPIURL = srv.URL + "/releases/latest"
 	t.Cleanup(func() { updateAPIURL = updateAPI })
 	t.Setenv("CLOUD_CONFIG_DIR", t.TempDir())
@@ -319,7 +320,7 @@ func TestInstallUpdate_TamperedDownloadIsRefusedAndNothingChanges(t *testing.T) 
 	}
 	archive := tarGzWith(t, "cloud", "malicious binary")
 	// The release publishes a checksum for entirely different bytes.
-	srv := fakeGitHub(t, "v9.9.9", archive, sha256Hex([]byte("the bytes we expected")))
+	srv := fakeGitHub(t, archive, sha256Hex([]byte("the bytes we expected")))
 	assetName := fmt.Sprintf("cloud_9.9.9_%s_%s.tar.gz", runtime.GOOS, runtime.GOARCH)
 
 	dir := t.TempDir()
@@ -357,7 +358,7 @@ func TestInstallUpdate_GoodDownloadReplacesTheBinary(t *testing.T) {
 		t.Skip("tar.gz path is for linux and darwin")
 	}
 	archive := tarGzWith(t, "cloud", "the new binary")
-	srv := fakeGitHub(t, "v9.9.9", archive, sha256Hex(archive))
+	srv := fakeGitHub(t, archive, sha256Hex(archive))
 	assetName := fmt.Sprintf("cloud_9.9.9_%s_%s.tar.gz", runtime.GOOS, runtime.GOARCH)
 
 	dir := t.TempDir()

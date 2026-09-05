@@ -679,11 +679,12 @@ func copyLocalToRemote(cmd *cobra.Command, src, dst string) error {
 	if u.IsPrefix() {
 		key = u.Join(filepath.Base(src)).Key
 	}
+	// #nosec G304 -- src is the file the user asked to upload.
 	f, err := os.Open(src)
 	if err != nil {
 		return err
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 	if err := b.Client.Put(cmd.Context(), s3pkg.URI{Bucket: b.Physical, Key: key}, f, s3pkg.ContentType(src)); err != nil {
 		return storageErr(err)
 	}
@@ -846,7 +847,7 @@ func runPlan(cmd *cobra.Command, b *bucket, plan []s3pkg.Action, upload bool) er
 	}
 	var progress s3pkg.Progress
 	if !flagQuiet {
-		progress = func(a s3pkg.Action, files, done int64) {
+		progress = func(a s3pkg.Action, _, _ int64) {
 			if a.Kind == s3pkg.Transfer {
 				fmt.Fprintf(errOut, "  %s (%s)\n", a.Key, humanBytes(a.Size))
 			}

@@ -69,7 +69,7 @@ does not disturb your production session — and vice versa.`,
 			return nil
 		}
 
-		authBase, err := auth.AuthBaseFromAPI(cfg.APIURL)
+		authBase, err := auth.BaseFromAPI(cfg.APIURL)
 		if err != nil {
 			return &UsageError{err}
 		}
@@ -144,6 +144,9 @@ func whoAmI(ctx context.Context, apiURL, token string) (*api.Me, error) {
 // openBrowser is best-effort; the URL is always printed as well.
 func openBrowser(url string) {
 	var c *exec.Cmd
+	// #nosec G204 -- the URL is an argument, not a shell string: exec.Command
+	// does not interpret it, so there is nothing to inject into, and it comes
+	// from the platform's own device-code response.
 	switch runtime.GOOS {
 	case "darwin":
 		c = exec.Command("open", url)

@@ -18,6 +18,7 @@ import (
 // Format is the requested rendering.
 type Format string
 
+// The output formats every command accepts through --output.
 const (
 	Table Format = "table"
 	JSON  Format = "json"
@@ -44,7 +45,8 @@ type Printer struct {
 	Quiet  bool
 }
 
-// Row is one table line; Columns give the header order.
+// Tabular is anything printable as a table: Columns gives the header order,
+// Rows one line each, and IDs the identifiers --quiet prints.
 type Tabular interface {
 	Columns() []string
 	Rows() [][]string

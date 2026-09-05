@@ -27,6 +27,8 @@ import (
 // how expiry is described.
 type Kind string
 
+// The kinds of credential the CLI can hold: a session from `cloud login`, a
+// long-lived API token from the dashboard, or one supplied as CLOUD_TOKEN.
 const (
 	KindSession  Kind = "session"
 	KindAPIToken Kind = "api-token"
@@ -81,6 +83,8 @@ func (e *NotLoggedInError) Error() string {
 	return msg
 }
 
+// Is lets errors.Is match this against ErrNotLoggedIn, so callers can test for
+// "not signed in" without knowing which host the credential was missing for.
 func (e *NotLoggedInError) Is(target error) bool { return target == ErrNotLoggedIn }
 func (e *NotLoggedInError) Unwrap() error        { return ErrNotLoggedIn }
 
@@ -112,6 +116,8 @@ func (s *Store) Load(apiURL string) (*Credential, error) {
 	if err != nil {
 		return nil, err
 	}
+	// #nosec G304 -- p is built by path(), from the config directory and a
+	// sanitised host key; it is this program's own file, not user input.
 	data, err := os.ReadFile(p)
 	if errors.Is(err, os.ErrNotExist) {
 		return nil, &NotLoggedInError{APIURL: apiURL, OtherHosts: s.Hosts()}

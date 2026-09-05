@@ -138,7 +138,7 @@ func TestLive_PresignedURLWorksForAKeyWithSlashes(t *testing.T) {
 	if err != nil {
 		t.Fatalf("fetching the presigned URL: %v", err)
 	}
-	defer res.Body.Close()
+	defer func() { _ = res.Body.Close() }()
 	got, _ := io.ReadAll(io.LimitReader(res.Body, 1<<20))
 	if res.StatusCode != http.StatusOK {
 		t.Fatalf("presigned GET returned %d: %s", res.StatusCode, strings.TrimSpace(string(got)))
@@ -166,7 +166,7 @@ func TestLive_PresignedPutAccepts(t *testing.T) {
 	if err != nil {
 		t.Fatalf("putting to the presigned URL: %v", err)
 	}
-	defer res.Body.Close()
+	defer func() { _ = res.Body.Close() }()
 	if res.StatusCode/100 != 2 {
 		body, _ := io.ReadAll(io.LimitReader(res.Body, 1<<20))
 		t.Fatalf("presigned PUT returned %d: %s", res.StatusCode, strings.TrimSpace(string(body)))

@@ -12,5 +12,27 @@ linters:
   settings:
     misspell:
       locale: UK
+      # The platform's JSON spells these the American way, and the generated
+      # client mirrors it. `me.Organizations` is an API field name, not prose,
+      # and renaming it would break the wire format.
+      ignore-rules:
+        - organization
+        - organizations
+    errcheck:
+      # Writing to a terminal is not a checkable operation: if stderr is gone
+      # there is nothing useful left to do about it, and `_ =` on every
+      # diagnostic line would bury the code it explains.
+      exclude-functions:
+        - fmt.Fprint
+        - fmt.Fprintf
+        - fmt.Fprintln
+        - (*github.com/spf13/cobra.Command).MarkFlagRequired
+  exclusions:
+    rules:
+      # Test fixtures are meant to look like credentials, write files the test
+      # then reads, and make temporary directories. gosec's warnings about all
+      # three are true and irrelevant inside a test.
+      - path: _test\.go
+        linters: [gosec]
 formatters:
   enable: [gofmt, goimports]
