@@ -217,7 +217,10 @@ type App struct {
 
 	// EnvVars Values are returned; this is configuration, not a secret store.
 	EnvVars map[string]string `json:"envVars"`
-	Id      string            `json:"id"`
+
+	// ErrorMessage Why the app is in its current state, when the state alone is not actionable. Set when `status` is `failed`, null otherwise. Mirrors the same field on databases.
+	ErrorMessage string `json:"errorMessage"`
+	Id           string `json:"id"`
 
 	// Image Container image reference, e.g. ghcr.io/acme/web:1.4.2
 	Image string `json:"image"`

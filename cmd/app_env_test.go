@@ -373,3 +373,44 @@ func TestAppLogs_LinesGoToStdoutOnly(t *testing.T) {
 		t.Errorf("a stream with output must not claim it was empty:\n%s", errBuf.String())
 	}
 }
+
+// A status alone is not actionable: when the platform says why, the CLI must
+// show it. `cloud db get` has always done this; apps only gained the field.
+func TestAppGet_ShowsTheFailureReason(t *testing.T) {
+	mux := http.NewServeMux()
+	mux.HandleFunc("/api/v1/me", func(w http.ResponseWriter, _ *http.Request) {
+		fmt.Fprint(w, `{"user":{"id":"u1","email":"a@b.c"},"organizations":[{"slug":"acme","role":"owner"}],"auth":{"kind":"session"}}`)
+	})
+	mux.HandleFunc("/api/v1/orgs/acme/apps/broken", func(w http.ResponseWriter, _ *http.Request) {
+		fmt.Fprint(w, `{"id":"a1","name":"broken","organizationId":"o1","region":"zm-lsk-1","regionId":"r1","image":"ghcr.io/x/y:v1","description":"","status":"failed","errorMessage":"RevisionFailed: container image not found","url":"","containerPort":8080,"replicasMin":0,"replicasMax":3,"size":"app-1","envVars":{},"registryAuth":null,"createdAt":"2026-09-01T00:00:00Z","updatedAt":"2026-09-01T00:00:00Z"}`)
+	})
+	mux.HandleFunc("/api/v1/orgs/acme/apps/fine", func(w http.ResponseWriter, _ *http.Request) {
+		fmt.Fprint(w, `{"id":"a2","name":"fine","organizationId":"o1","region":"zm-lsk-1","regionId":"r1","image":"ghcr.io/x/y:v1","description":"","status":"ready","errorMessage":"","url":"https://fine.example","containerPort":8080,"replicasMin":0,"replicasMax":3,"size":"app-1","envVars":{},"registryAuth":null,"createdAt":"2026-09-01T00:00:00Z","updatedAt":"2026-09-01T00:00:00Z"}`)
+	})
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("content-type", "application/json")
+		mux.ServeHTTP(w, r)
+	}))
+	t.Cleanup(srv.Close)
+	t.Setenv("CLOUD_CONFIG_DIR", t.TempDir())
+	t.Setenv("CLOUD_API_URL", srv.URL+"/api/v1")
+	t.Setenv("CLOUD_ORG", "acme")
+	t.Setenv("CLOUD_TOKEN", "owner-token")
+
+	out, err := run(t, "app", "get", "broken")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(out, "RevisionFailed: container image not found") {
+		t.Errorf("a failed app must say why:\n%s", out)
+	}
+
+	// And a healthy app must not grow an empty Reason line.
+	out, err = run(t, "app", "get", "fine")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(out, "Reason") {
+		t.Errorf("a healthy app should have no Reason line:\n%s", out)
+	}
+}

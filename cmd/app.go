@@ -240,6 +240,11 @@ var appGetCmd = &cobra.Command{
 		out := cmd.OutOrStdout()
 		fmt.Fprintf(out, "Name         %s\nStatus       %s\nURL          %s\nImage        %s\nRegion       %s\nPort         %d\nReplicas     %d–%d\nSize         %s\n",
 			a.Name, a.Status, orDash(a.Url), a.Image, orDash(a.Region), a.ContainerPort, a.ReplicasMin, a.ReplicasMax, orDash(a.Size))
+		// A status alone is not actionable. The platform sets errorMessage
+		// when it knows why, so print it directly under the status it explains.
+		if a.ErrorMessage != "" {
+			fmt.Fprintf(out, "Reason       %s\n", a.ErrorMessage)
+		}
 		if a.Description != "" {
 			fmt.Fprintf(out, "Description  %s\n", a.Description)
 		}

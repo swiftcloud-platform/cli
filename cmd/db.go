@@ -262,7 +262,7 @@ func waitForDatabase(cmd *cobra.Command, c *api.ClientWithResponses, org, name s
 		last = res.JSON200
 		done, failed := terminalStatus(last.Status)
 		if failed {
-			return last.Status, false, &wait.ErrFailed{Status: last.Status}
+			return last.Status, false, &wait.ErrFailed{Status: last.Status, Reason: last.ErrorMessage}
 		}
 		return last.Status, done, nil
 	}
