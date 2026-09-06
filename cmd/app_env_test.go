@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -297,5 +298,78 @@ func TestMaskValue(t *testing.T) {
 		if got := maskValue(in); got != want {
 			t.Errorf("maskValue(%q) = %q, want %q", in, got, want)
 		}
+	}
+}
+
+// An empty log stream must say so. Silence is indistinguishable from "the app
+// is quiet", and it is the reported symptom that made a real deployment
+// undebuggable.
+func TestAppLogs_EmptyStreamExplainsItself(t *testing.T) {
+	mux := http.NewServeMux()
+	mux.HandleFunc("/api/v1/me", func(w http.ResponseWriter, _ *http.Request) {
+		fmt.Fprint(w, `{"user":{"id":"u1","email":"a@b.c"},"organizations":[{"slug":"acme","role":"owner"}],"auth":{"kind":"session"}}`)
+	})
+	mux.HandleFunc("/api/v1/orgs/acme/apps/notifie/logs", func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("content-type", "text/plain")
+		w.WriteHeader(http.StatusOK) // 200 with no body at all
+	})
+	srv := httptest.NewServer(mux)
+	t.Cleanup(srv.Close)
+	t.Setenv("CLOUD_CONFIG_DIR", t.TempDir())
+	t.Setenv("CLOUD_API_URL", srv.URL+"/api/v1")
+	t.Setenv("CLOUD_ORG", "acme")
+	t.Setenv("CLOUD_TOKEN", "owner-token")
+
+	var errBuf bytes.Buffer
+	resetFlags(rootCmd)
+	rootCmd.SetIn(strings.NewReader(""))
+	var out bytes.Buffer
+	rootCmd.SetOut(&out)
+	rootCmd.SetErr(&errBuf)
+	rootCmd.SetArgs([]string{"app", "logs", "notifie"})
+	if err := rootCmd.Execute(); err != nil {
+		t.Fatal(err)
+	}
+	if out.String() != "" {
+		t.Errorf("stdout should stay clean for pipes, got %q", out.String())
+	}
+	msg := errBuf.String()
+	for _, want := range []string{"No log lines returned", "scaled to zero", "-f"} {
+		if !strings.Contains(msg, want) {
+			t.Errorf("the explanation should mention %q:\n%s", want, msg)
+		}
+	}
+}
+
+// Log lines themselves go to stdout and nothing else does, so `| grep` works.
+func TestAppLogs_LinesGoToStdoutOnly(t *testing.T) {
+	mux := http.NewServeMux()
+	mux.HandleFunc("/api/v1/me", func(w http.ResponseWriter, _ *http.Request) {
+		fmt.Fprint(w, `{"user":{"id":"u1","email":"a@b.c"},"organizations":[{"slug":"acme","role":"owner"}],"auth":{"kind":"session"}}`)
+	})
+	mux.HandleFunc("/api/v1/orgs/acme/apps/notifie/logs", func(w http.ResponseWriter, _ *http.Request) {
+		fmt.Fprint(w, "line one\nline two\n")
+	})
+	srv := httptest.NewServer(mux)
+	t.Cleanup(srv.Close)
+	t.Setenv("CLOUD_CONFIG_DIR", t.TempDir())
+	t.Setenv("CLOUD_API_URL", srv.URL+"/api/v1")
+	t.Setenv("CLOUD_ORG", "acme")
+	t.Setenv("CLOUD_TOKEN", "owner-token")
+
+	var out, errBuf bytes.Buffer
+	resetFlags(rootCmd)
+	rootCmd.SetIn(strings.NewReader(""))
+	rootCmd.SetOut(&out)
+	rootCmd.SetErr(&errBuf)
+	rootCmd.SetArgs([]string{"app", "logs", "notifie"})
+	if err := rootCmd.Execute(); err != nil {
+		t.Fatal(err)
+	}
+	if out.String() != "line one\nline two\n" {
+		t.Errorf("stdout = %q", out.String())
+	}
+	if strings.Contains(errBuf.String(), "No log lines") {
+		t.Errorf("a stream with output must not claim it was empty:\n%s", errBuf.String())
 	}
 }

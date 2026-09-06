@@ -1,7 +1,6 @@
 package cmd
 
 import (
-	"bufio"
 	"errors"
 	"fmt"
 	"io"
@@ -395,14 +394,12 @@ var appLogsCmd = &cobra.Command{
 			body, _ := io.ReadAll(io.LimitReader(res.Body, 64<<10))
 			return apiErr(res.StatusCode, body)
 		}
-		sc := bufio.NewScanner(res.Body)
-		sc.Buffer(make([]byte, 0, 64<<10), 1<<20)
-		out := cmd.OutOrStdout()
-		for sc.Scan() {
-			fmt.Fprintln(out, sc.Text())
-		}
-		if err := sc.Err(); err != nil && !errors.Is(err, io.EOF) && cmd.Context().Err() == nil {
+		lines, err := streamLines(cmd, res.Body)
+		if err != nil {
 			return err
+		}
+		if lines == 0 {
+			reportNoLogs(cmd, "app", args[0], logsFollow)
 		}
 		return nil
 	},
