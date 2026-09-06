@@ -365,11 +365,8 @@ func waitForBucket(cmd *cobra.Command, c *api.ClientWithResponses, org, name str
 		last = b
 		done, failed := terminalStatus(b.Status)
 		if failed {
-			// Same error type as apps and databases, so a caller can inspect it
-			// the same way. Reason stays empty until the platform carries
-			// errorMessage on buckets — the last resource without it; apps
-			// gained it in 46e076f and databases have always had it.
-			return last, &wait.ErrFailed{Status: b.Status}
+			// Same error type, and now the same reason, as apps and databases.
+			return last, &wait.ErrFailed{Status: b.Status, Reason: b.ErrorMessage}
 		}
 		if done {
 			return last, nil
@@ -413,6 +410,9 @@ var bucketGetCmd = &cobra.Command{
 		b, err := decoded(res.JSON200)
 		if err != nil {
 			return err
+		}
+		if !flagQuiet && printer.Format == output.Table && b.ErrorMessage != "" {
+			fmt.Fprintf(cmd.ErrOrStderr(), "%s\n", b.ErrorMessage)
 		}
 		return printer.Print(bucketRows{*b})
 	},

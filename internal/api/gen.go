@@ -358,7 +358,10 @@ type Bucket struct {
 
 	// Endpoint Public S3 endpoint for the region (path-style). Null when the region has none configured.
 	Endpoint string `json:"endpoint"`
-	Id       string `json:"id"`
+
+	// ErrorMessage Why the last operation on this bucket failed — set when a delete fails, cleared when one succeeds. Null on a healthy bucket. Mirrors the same field on apps and databases.
+	ErrorMessage string `json:"errorMessage"`
+	Id           string `json:"id"`
 
 	// Name Unique within the organisation, 3–63 characters, S3 naming rules.
 	Name           string `json:"name"`

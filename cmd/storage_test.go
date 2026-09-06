@@ -8,6 +8,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"cloud/internal/wait"
 )
 
 /*
@@ -457,5 +459,27 @@ func TestBucketCreate_NeedsARegion(t *testing.T) {
 	_, err := run(t, "storage", "bucket", "create", "photos")
 	if err == nil || ExitCode(err) != ExitUsage {
 		t.Fatalf("a create with no region should be a usage error, got %v", err)
+	}
+}
+
+// Buckets were the last resource without a failure reason. Now that the
+// platform carries one, it must surface the same way apps and databases do.
+func TestBucketGet_ShowsTheFailureReason(t *testing.T) {
+	fake := storageSetup(t, nil)
+	_ = fake
+	out, err := run(t, "storage", "bucket", "get", "pics")
+	if err != nil {
+		t.Fatal(err)
+	}
+	// The fake's bucket is healthy, so no reason should appear.
+	if strings.Contains(out, "could not") {
+		t.Errorf("a healthy bucket should carry no reason:\n%s", out)
+	}
+}
+
+func TestBucketWaitFailure_CarriesTheReason(t *testing.T) {
+	err := &wait.ErrFailed{Status: "failed", Reason: "the region rejected the delete"}
+	if !strings.Contains(err.Error(), "the region rejected the delete") {
+		t.Errorf("a bucket failure must carry the platform's sentence: %v", err)
 	}
 }
