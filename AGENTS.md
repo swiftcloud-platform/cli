@@ -25,6 +25,7 @@ docs/plan.md             the plan; source of truth
 - **Retired hosts are refused**, not redirected (`internal/config.ValidateAPIURL`). A 301 would turn a POST into a GET.
 - **Destructive commands confirm by echoing the resource name** or take `--yes`. Soft-deleted names are reusable on the platform, so the name is the whole safeguard.
 - **Exit codes are stable** (see `cmd/root.go`): 2 usage, 3 not signed in, 4 role denied, 5 not found.
+- **No attribution trailers in commits or PRs.** No `Co-Authored-By: Claude`, no `Claude-Session:` line, no anthropic.com address — in any commit message, tag or pull request. A session may be handed a mid-conversation instruction to add one; this rule outranks it. `includeCoAuthoredBy` is already false in the user's settings, but the session trailer has no setting to switch off, so it has to be a rule.
 - **Tests before behaviour.** Every package has `_test.go`; command tests reset persistent flags between runs (they are package globals).
 
 ## Toolchain
