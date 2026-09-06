@@ -10,6 +10,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"cloud/internal/api"
 )
 
 /*
@@ -412,5 +414,86 @@ func TestAppGet_ShowsTheFailureReason(t *testing.T) {
 	}
 	if strings.Contains(out, "Reason") {
 		t.Errorf("a healthy app should have no Reason line:\n%s", out)
+	}
+}
+
+// appFake serves one app whose fields the test controls.
+func appFake(t *testing.T, appJSONBody string) {
+	t.Helper()
+	mux := http.NewServeMux()
+	mux.HandleFunc("/api/v1/me", func(w http.ResponseWriter, _ *http.Request) {
+		fmt.Fprint(w, `{"user":{"id":"u1","email":"a@b.c"},"organizations":[{"slug":"acme","role":"owner"}],"auth":{"kind":"session"}}`)
+	})
+	mux.HandleFunc("/api/v1/orgs/acme/apps/notifie", func(w http.ResponseWriter, _ *http.Request) {
+		fmt.Fprint(w, appJSONBody)
+	})
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("content-type", "application/json")
+		mux.ServeHTTP(w, r)
+	}))
+	t.Cleanup(srv.Close)
+	t.Setenv("CLOUD_CONFIG_DIR", t.TempDir())
+	t.Setenv("CLOUD_API_URL", srv.URL+"/api/v1")
+	t.Setenv("CLOUD_ORG", "acme")
+	t.Setenv("CLOUD_TOKEN", "owner-token")
+}
+
+func appBody(status, errMsg, serving, latest string) string {
+	return fmt.Sprintf(`{"id":"a1","name":"notifie","organizationId":"o1","region":"zm-lsk-1","regionId":"r1",`+
+		`"image":"ghcr.io/x/y:v1.2.5","description":"","status":%q,"errorMessage":%q,`+
+		`"servingRevision":%q,"latestRevision":%q,"url":"https://notifie.example",`+
+		`"containerPort":3000,"replicasMin":1,"replicasMax":3,"size":"app-1","envVars":{},"registryAuth":null,`+
+		`"createdAt":"2026-09-01T00:00:00Z","updatedAt":"2026-09-01T00:00:00Z"}`, status, errMsg, serving, latest)
+}
+
+// The state that used to be invisible: newest revision created, old one still
+// taking traffic. `app get` must say so rather than showing a healthy record.
+func TestAppGet_SaysWhenTheNewestRevisionIsNotServing(t *testing.T) {
+	appFake(t, appBody("ready", "", "notifie-00003", "notifie-00004"))
+	out, err := run(t, "app", "get", "notifie")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(out, "notifie-00003 serving") || !strings.Contains(out, "notifie-00004 is newest") {
+		t.Errorf("both revisions should be named:\n%s", out)
+	}
+	if !strings.Contains(out, "not taking traffic") {
+		t.Errorf("the divergence should be spelled out, not left to the reader:\n%s", out)
+	}
+}
+
+func TestAppGet_QuietWhenTheRolloutIsComplete(t *testing.T) {
+	appFake(t, appBody("ready", "", "notifie-00004", "notifie-00004"))
+	out, err := run(t, "app", "get", "notifie")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(out, "not taking traffic") {
+		t.Errorf("a settled rollout should not warn:\n%s", out)
+	}
+	if !strings.Contains(out, "Revision     notifie-00004") {
+		t.Errorf("the serving revision should still be shown:\n%s", out)
+	}
+}
+
+// A suspended app is not a successful deploy: enforcement stopped it, and
+// exiting 0 would tell a script the rollout worked.
+func TestNotServing_SuspendedIsAnError(t *testing.T) {
+	err := notServing(&api.App{Name: "notifie", Status: "suspended"})
+	if err == nil {
+		t.Fatal("suspended must not read as success")
+	}
+	if !strings.Contains(err.Error(), "billing") {
+		t.Errorf("the message should say where to look: %v", err)
+	}
+	// The platform's own sentence wins when it has one.
+	err = notServing(&api.App{Name: "notifie", Status: "suspended", ErrorMessage: "unpaid invoice 42"})
+	if err == nil || !strings.Contains(err.Error(), "unpaid invoice 42") {
+		t.Errorf("the platform's reason should be used: %v", err)
+	}
+	for _, ok := range []string{"ready", "running", "stopped"} {
+		if err := notServing(&api.App{Name: "n", Status: ok}); err != nil {
+			t.Errorf("%s should not be an error: %v", ok, err)
+		}
 	}
 }

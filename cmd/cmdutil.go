@@ -192,10 +192,44 @@ func waitForApp(cmd *cobra.Command, c *api.ClientWithResponses, org, name string
 		OnStatus: func(s string) {
 			if !flagQuiet {
 				fmt.Fprintf(cmd.ErrOrStderr(), "  %s\n", s)
+				// While a rollout is in flight the newest revision is not yet
+				// the one serving. Saying which is more use than a spinner.
+				if last != nil && last.LatestRevision != "" && last.ServingRevision != last.LatestRevision {
+					fmt.Fprintf(cmd.ErrOrStderr(), "    rolling out %s (%s still serving)\n",
+						last.LatestRevision, orDash(last.ServingRevision))
+				}
 			}
 		},
 	})
-	return last, err
+	if err != nil {
+		return last, err
+	}
+	return last, notServing(last)
+}
+
+// notServing turns a terminal-but-not-running state into an error.
+//
+// `stopped` and `suspended` are terminal without being failures, so a wait
+// returned success for them — and the caller then printed the app's URL, which
+// answers nothing. Suspension in particular is enforcement acting on the
+// account, never an outcome anyone asked a deploy for, so it must not exit 0.
+func notServing(a *api.App) error {
+	if a == nil {
+		return nil
+	}
+	switch a.Status {
+	case "suspended":
+		msg := "suspended — the platform stopped it; check the organisation's billing status"
+		if a.ErrorMessage != "" {
+			msg = "suspended — " + a.ErrorMessage
+		}
+		return fmt.Errorf("%s is %s", a.Name, msg)
+	case "stopped":
+		// Legitimate: deploying to a stopped app leaves it stopped. Say so
+		// rather than printing a URL that will not answer.
+		return nil
+	}
+	return nil
 }
 
 // deref returns "" for a nil string pointer (generated optional fields).

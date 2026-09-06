@@ -245,6 +245,16 @@ var appGetCmd = &cobra.Command{
 		if a.ErrorMessage != "" {
 			fmt.Fprintf(out, "Reason       %s\n", a.ErrorMessage)
 		}
+		// The image field is what was asked for; the serving revision is what
+		// answers requests. They diverge while a rollout is in flight, and stay
+		// diverged when the newest revision never became ready — which is the
+		// state that used to be invisible.
+		if a.LatestRevision != "" && a.ServingRevision != a.LatestRevision {
+			fmt.Fprintf(out, "Revision     %s serving, %s is newest\n", orDash(a.ServingRevision), a.LatestRevision)
+			fmt.Fprintln(out, "             the newest revision is not taking traffic")
+		} else if a.ServingRevision != "" {
+			fmt.Fprintf(out, "Revision     %s\n", a.ServingRevision)
+		}
 		if a.Description != "" {
 			fmt.Fprintf(out, "Description  %s\n", a.Description)
 		}
@@ -302,9 +312,7 @@ the CLI polls until the app is running again or the rollout fails.`,
 			}
 		}
 		if printer.Format == output.Table {
-			if !flagQuiet && app.Url != "" {
-				fmt.Fprintln(cmd.OutOrStdout(), app.Url)
-			}
+			printAppURL(cmd, app)
 			return nil
 		}
 		return printer.Print(appRows{*app})
@@ -620,4 +628,24 @@ func init() {
 	appDomainCmd.AddCommand(appDomainListCmd, appDomainAddCmd, appDomainRemoveCmd)
 	appCmd.AddCommand(appListCmd, appCreateCmd, appGetCmd, appDeployCmd, appScaleCmd, appLogsCmd, appDeleteCmd, appDomainCmd)
 	rootCmd.AddCommand(appCmd)
+}
+
+// printAppURL prints where the app answers — but only when something is
+// answering. A URL printed for a stopped app is an invitation to a connection
+// refused, and the status is the more useful thing to say instead.
+func printAppURL(cmd *cobra.Command, app *api.App) {
+	if flagQuiet {
+		return
+	}
+	switch app.Status {
+	case "ready", "running":
+		if app.Url != "" {
+			fmt.Fprintln(cmd.OutOrStdout(), app.Url)
+		}
+	default:
+		fmt.Fprintf(cmd.ErrOrStderr(), "%s is %s and is not serving; no URL to give you yet.\n", app.Name, app.Status)
+		if app.ErrorMessage != "" {
+			fmt.Fprintf(cmd.ErrOrStderr(), "%s\n", app.ErrorMessage)
+		}
+	}
 }

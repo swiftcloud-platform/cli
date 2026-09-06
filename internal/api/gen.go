@@ -225,6 +225,9 @@ type App struct {
 	// Image Container image reference, e.g. ghcr.io/acme/web:1.4.2
 	Image string `json:"image"`
 
+	// LatestRevision The newest revision Knative has created for this app.
+	LatestRevision string `json:"latestRevision"`
+
 	// Name Unique within the organisation. Lowercase letters, digits and hyphens.
 	Name           string `json:"name"`
 	OrganizationId string `json:"organizationId"`
@@ -238,9 +241,12 @@ type App struct {
 		Server   string `json:"server"`
 		Username string `json:"username"`
 	} `json:"registryAuth"`
-	ReplicasMax int    `json:"replicasMax"`
-	ReplicasMin int    `json:"replicasMin"`
-	Size        string `json:"size"`
+	ReplicasMax int `json:"replicasMax"`
+	ReplicasMin int `json:"replicasMin"`
+
+	// ServingRevision The revision actually taking traffic. While a rollout is in flight this lags `latestRevision`; if it stays behind, the newest revision never became ready and the previous image is still serving.
+	ServingRevision string `json:"servingRevision"`
+	Size            string `json:"size"`
 
 	// Status deploying | ready | stopped | suspended | failed | delete_failed | deleting. `ready` is the healthy state. Advanced by the platform worker; poll until terminal (ready, stopped, suspended, failed, delete_failed).
 	Status    string    `json:"status"`
