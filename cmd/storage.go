@@ -16,6 +16,7 @@ import (
 	"cloud/internal/api"
 	"cloud/internal/output"
 	s3pkg "cloud/internal/s3"
+	"cloud/internal/wait"
 )
 
 /*
@@ -364,7 +365,11 @@ func waitForBucket(cmd *cobra.Command, c *api.ClientWithResponses, org, name str
 		last = b
 		done, failed := terminalStatus(b.Status)
 		if failed {
-			return last, fmt.Errorf("bucket %s: %s", b.Name, b.Status)
+			// Same error type as apps and databases, so a caller can inspect it
+			// the same way. Reason stays empty until the platform carries
+			// errorMessage on buckets — the last resource without it; apps
+			// gained it in 46e076f and databases have always had it.
+			return last, &wait.ErrFailed{Status: b.Status}
 		}
 		if done {
 			return last, nil
