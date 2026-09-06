@@ -1,0 +1,301 @@
+package cmd
+
+import (
+	"encoding/json"
+	"fmt"
+	"net/http"
+	"net/http/httptest"
+	"os"
+	"path/filepath"
+	"strings"
+	"testing"
+)
+
+/*
+`app env` and `app update`.
+
+The property worth guarding hardest is that a write preserves what it did not
+mention: the platform replaces the whole map, so a merge bug here silently
+deletes a variable someone's app needs.
+*/
+
+// envFake serves one app whose env vars it remembers across a PATCH.
+type envFake struct {
+	vars    map[string]string
+	patched []map[string]string // every envVars map the CLI sent
+	last    map[string]any      // the last PATCH body, whole
+}
+
+func newEnvFake(t *testing.T, vars map[string]string) *envFake {
+	t.Helper()
+	f := &envFake{vars: vars}
+	mux := http.NewServeMux()
+	mux.HandleFunc("/api/v1/me", func(w http.ResponseWriter, _ *http.Request) {
+		fmt.Fprint(w, `{"user":{"id":"u1","email":"a@b.c"},"organizations":[{"slug":"acme","role":"owner"}],"auth":{"kind":"session"}}`)
+	})
+	mux.HandleFunc("/api/v1/orgs/acme/apps/notifie", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodPatch {
+			var body map[string]any
+			_ = json.NewDecoder(r.Body).Decode(&body)
+			f.last = body
+			if ev, ok := body["envVars"].(map[string]any); ok {
+				got := map[string]string{}
+				for k, v := range ev {
+					got[k], _ = v.(string)
+				}
+				f.patched = append(f.patched, got)
+				f.vars = got
+			}
+		}
+		env, _ := json.Marshal(f.vars)
+		fmt.Fprintf(w, `{"id":"a1","name":"notifie","organizationId":"o1","region":"zm-lsk-1","regionId":"r1","image":"ghcr.io/x/notifie:v1","description":"","status":"ready","url":"https://notifie.example","containerPort":8080,"replicasMin":0,"replicasMax":3,"size":"app-1","envVars":%s,"registryAuth":null,"createdAt":"2026-09-01T00:00:00Z","updatedAt":"2026-09-01T00:00:00Z"}`, env)
+	})
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("content-type", "application/json")
+		mux.ServeHTTP(w, r)
+	}))
+	t.Cleanup(srv.Close)
+	t.Setenv("CLOUD_CONFIG_DIR", t.TempDir())
+	t.Setenv("CLOUD_API_URL", srv.URL+"/api/v1")
+	t.Setenv("CLOUD_ORG", "acme")
+	t.Setenv("CLOUD_TOKEN", "owner-token")
+	return f
+}
+
+func TestAppEnvList_MasksValuesByDefault(t *testing.T) {
+	newEnvFake(t, map[string]string{"SENDGRID_KEY": "SG.averylongsecretvalue", "TZ": "UTC"})
+	out, err := run(t, "app", "env", "list", "notifie")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(out, "averylongsecret") {
+		t.Errorf("the value leaked into a masked listing:\n%s", out)
+	}
+	if !strings.Contains(out, "SENDGRID_KEY") || !strings.Contains(out, "•") {
+		t.Errorf("expected the name and a mask:\n%s", out)
+	}
+	// A short value must not be partly revealed.
+	if strings.Contains(out, "UTC") {
+		t.Errorf("a short value should be hidden entirely:\n%s", out)
+	}
+}
+
+func TestAppEnvList_ShowValuesAndJSON(t *testing.T) {
+	newEnvFake(t, map[string]string{"SENDGRID_KEY": "SG.averylongsecretvalue"})
+	out, err := run(t, "app", "env", "list", "notifie", "--show-values")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(out, "SG.averylongsecretvalue") {
+		t.Errorf("--show-values should print the value:\n%s", out)
+	}
+	out, err = run(t, "app", "env", "list", "notifie", "-o", "json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(out, "SG.averylongsecretvalue") {
+		t.Errorf("json output is for machines and should carry the value:\n%s", out)
+	}
+}
+
+// The whole point of the read-modify-write: setting one variable must not
+// delete the others, because the platform replaces the entire map.
+func TestAppEnvSet_PreservesTheVariablesItDidNotMention(t *testing.T) {
+	f := newEnvFake(t, map[string]string{"KEEP": "yes", "ALSO": "kept"})
+	if _, err := run(t, "app", "env", "set", "notifie", "NEW=1"); err != nil {
+		t.Fatal(err)
+	}
+	if len(f.patched) != 1 {
+		t.Fatalf("expected one PATCH, got %d", len(f.patched))
+	}
+	got := f.patched[0]
+	for k, want := range map[string]string{"KEEP": "yes", "ALSO": "kept", "NEW": "1"} {
+		if got[k] != want {
+			t.Errorf("after set, %s = %q, want %q (full map: %v)", k, got[k], want, got)
+		}
+	}
+	if len(got) != 3 {
+		t.Errorf("map has %d entries, want 3: %v", len(got), got)
+	}
+}
+
+func TestAppEnvSet_OverwritesAndTakesSeveral(t *testing.T) {
+	f := newEnvFake(t, map[string]string{"LOG_LEVEL": "info"})
+	if _, err := run(t, "app", "env", "set", "notifie", "LOG_LEVEL=debug", "TZ=Africa/Lusaka"); err != nil {
+		t.Fatal(err)
+	}
+	got := f.patched[0]
+	if got["LOG_LEVEL"] != "debug" || got["TZ"] != "Africa/Lusaka" {
+		t.Errorf("unexpected map: %v", got)
+	}
+}
+
+// A secret must be settable without appearing in argv.
+func TestAppEnvSet_FromStdinKeepsTheValueOutOfArgv(t *testing.T) {
+	f := newEnvFake(t, map[string]string{})
+	testStdin = strings.NewReader("SG.thesecret\n")
+	if _, err := run(t, "app", "env", "set", "notifie", "--from-stdin", "SENDGRID_KEY"); err != nil {
+		t.Fatal(err)
+	}
+	// The trailing newline a file or here-doc adds must not become part of it.
+	if got := f.patched[0]["SENDGRID_KEY"]; got != "SG.thesecret" {
+		t.Errorf("value = %q, want the trimmed secret", got)
+	}
+}
+
+func TestAppEnvSet_EnvFile(t *testing.T) {
+	f := newEnvFake(t, map[string]string{"OLD": "1"})
+	dir := t.TempDir()
+	path := filepath.Join(dir, ".env")
+	body := "# a comment\n\nexport SENDGRID_KEY=\"SG.fromfile\"\nTZ='Africa/Lusaka'\nEMPTY=\n"
+	if err := os.WriteFile(path, []byte(body), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := run(t, "app", "env", "set", "notifie", "--env-file", path); err != nil {
+		t.Fatal(err)
+	}
+	got := f.patched[0]
+	for k, want := range map[string]string{"SENDGRID_KEY": "SG.fromfile", "TZ": "Africa/Lusaka", "EMPTY": "", "OLD": "1"} {
+		if got[k] != want {
+			t.Errorf("%s = %q, want %q", k, got[k], want)
+		}
+	}
+}
+
+func TestAppEnvSet_RejectsRubbish(t *testing.T) {
+	f := newEnvFake(t, map[string]string{})
+	for _, args := range [][]string{
+		{"app", "env", "set", "notifie", "NOTAPAIR"},
+		{"app", "env", "set", "notifie", "=novalue"},
+		{"app", "env", "set", "notifie"}, // nothing to set
+	} {
+		if _, err := run(t, args...); err == nil || ExitCode(err) != ExitUsage {
+			t.Errorf("%v should be a usage error, got %v", args[3:], err)
+		}
+	}
+	if len(f.patched) != 0 {
+		t.Errorf("nothing should have been written, got %v", f.patched)
+	}
+}
+
+func TestAppEnvUnset(t *testing.T) {
+	f := newEnvFake(t, map[string]string{"GONE": "x", "KEEP": "y"})
+	if _, err := run(t, "app", "env", "unset", "notifie", "GONE"); err != nil {
+		t.Fatal(err)
+	}
+	got := f.patched[0]
+	if _, still := got["GONE"]; still {
+		t.Errorf("GONE was not removed: %v", got)
+	}
+	if got["KEEP"] != "y" {
+		t.Errorf("KEEP was lost: %v", got)
+	}
+}
+
+// Removing a name that is not there is a typo, not a no-op.
+func TestAppEnvUnset_UnknownNameIsAnError(t *testing.T) {
+	f := newEnvFake(t, map[string]string{"KEEP": "y"})
+	_, err := run(t, "app", "env", "unset", "notifie", "NOSUCH")
+	if err == nil || ExitCode(err) != ExitUsage {
+		t.Fatalf("expected a usage error, got %v", err)
+	}
+	if len(f.patched) != 0 {
+		t.Errorf("nothing should have been written, got %v", f.patched)
+	}
+}
+
+func TestAppUpdate_PortAndDescription(t *testing.T) {
+	f := newEnvFake(t, map[string]string{})
+	if _, err := run(t, "app", "update", "notifie", "--port", "3000"); err != nil {
+		t.Fatal(err)
+	}
+	if f.last["containerPort"] != float64(3000) {
+		t.Errorf("containerPort = %v", f.last["containerPort"])
+	}
+	// A field not passed must not appear in the patch at all, or it would
+	// overwrite the stored value with a zero.
+	if _, present := f.last["envVars"]; present {
+		t.Errorf("update sent envVars it was not asked to change: %v", f.last)
+	}
+	if _, present := f.last["description"]; present {
+		t.Errorf("update sent an unmentioned description: %v", f.last)
+	}
+}
+
+func TestAppUpdate_NothingToChange(t *testing.T) {
+	newEnvFake(t, map[string]string{})
+	_, err := run(t, "app", "update", "notifie")
+	if err == nil || ExitCode(err) != ExitUsage {
+		t.Fatalf("an update with no flags should be a usage error, got %v", err)
+	}
+}
+
+func TestAppUpdate_RegistryFlagsMustComeTogether(t *testing.T) {
+	newEnvFake(t, map[string]string{})
+	_, err := run(t, "app", "update", "notifie", "--registry-server", "ghcr.io")
+	if err == nil || ExitCode(err) != ExitUsage {
+		t.Fatalf("partial registry flags should be refused, got %v", err)
+	}
+	_, err = run(t, "app", "update", "notifie", "--clear-registry", "--registry-server", "ghcr.io")
+	if err == nil || ExitCode(err) != ExitUsage {
+		t.Fatalf("--clear-registry with other registry flags should be refused, got %v", err)
+	}
+}
+
+func TestAppUpdate_ClearRegistrySendsNull(t *testing.T) {
+	f := newEnvFake(t, map[string]string{})
+	if _, err := run(t, "app", "update", "notifie", "--clear-registry"); err != nil {
+		t.Fatal(err)
+	}
+	v, present := f.last["registryAuth"]
+	if !present || v != nil {
+		t.Errorf("expected an explicit null registryAuth, got %#v (present=%v)", v, present)
+	}
+}
+
+func TestAppUpdate_RotatesRegistryCredentialsFromStdin(t *testing.T) {
+	f := newEnvFake(t, map[string]string{})
+	testStdin = strings.NewReader("ghp_newtoken\n")
+	_, err := run(t, "app", "update", "notifie",
+		"--registry-server", "ghcr.io", "--registry-username", "deploy", "--registry-password-stdin")
+	if err != nil {
+		t.Fatal(err)
+	}
+	ra, ok := f.last["registryAuth"].(map[string]any)
+	if !ok {
+		t.Fatalf("registryAuth = %#v", f.last["registryAuth"])
+	}
+	if ra["password"] != "ghp_newtoken" || ra["server"] != "ghcr.io" || ra["username"] != "deploy" {
+		t.Errorf("unexpected credentials: %v", ra)
+	}
+}
+
+func TestParseEnvFile(t *testing.T) {
+	in := "# comment\n\nA=1\nexport B=2\nC=\"quoted\"\nD='single'\nE=has=equals\nF=\n"
+	got, err := parseEnvFile(strings.NewReader(in))
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := map[string]string{"A": "1", "B": "2", "C": "quoted", "D": "single", "E": "has=equals", "F": ""}
+	for k, v := range want {
+		if got[k] != v {
+			t.Errorf("%s = %q, want %q", k, got[k], v)
+		}
+	}
+	if _, err := parseEnvFile(strings.NewReader("NOT A PAIR\n")); err == nil {
+		t.Error("a line that is not KEY=VALUE must be an error")
+	}
+}
+
+func TestMaskValue(t *testing.T) {
+	for in, want := range map[string]string{
+		"":          "",
+		"abc":       "•••",
+		"12345678":  "••••••••",
+		"123456789": "12•••••89",
+	} {
+		if got := maskValue(in); got != want {
+			t.Errorf("maskValue(%q) = %q, want %q", in, got, want)
+		}
+	}
+}
