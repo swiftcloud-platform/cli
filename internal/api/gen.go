@@ -291,6 +291,9 @@ type AppCreate struct {
 
 // AppDeploy defines model for AppDeploy.
 type AppDeploy struct {
+	// Force Roll a new revision even if the image and settings are unchanged — for a rebuilt image pushed under the same tag.
+	Force *bool `json:"force,omitempty"`
+
 	// Image Container image reference, e.g. ghcr.io/acme/web:1.4.2
 	Image string `json:"image"`
 }

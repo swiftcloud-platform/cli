@@ -149,7 +149,12 @@ func patchEnvVars(cmd *cobra.Command, c *api.ClientWithResponses, org, app strin
 			// a message that concluded "the rollout did not start" from that
 			// would be the same mistake, made by us, in the opposite
 			// direction. Report the record and let time settle it.
-			fmt.Fprintf(w, "No new revision recorded yet (still %s) — the record can lag the cluster by a couple of minutes. Re-check with `cloud app get %s`; if it has not advanced after that, the rollout did not start.\n", a.LatestRevision, a.Name)
+			if a.ErrorMessage != "" {
+				// The platform knows why — most often "nothing to roll out".
+				fmt.Fprintf(w, "%s\n", a.ErrorMessage)
+			} else {
+				fmt.Fprintf(w, "No new revision recorded yet (still %s) — the record can lag the cluster by a couple of minutes. Re-check with `cloud app get %s`; if it has not advanced after that, the rollout did not start.\n", a.LatestRevision, a.Name)
+			}
 		}
 		return nil
 	}

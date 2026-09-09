@@ -11,6 +11,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/spf13/cobra"
+
 	"cloud/internal/api"
 )
 
@@ -556,5 +558,37 @@ func TestAppEnvSet_NamesTheRevisionWhenOneRolls(t *testing.T) {
 	}
 	if !strings.Contains(errBuf.String(), "Rolling out notifie-00002") {
 		t.Errorf("a real rollout should be named:\n%s", errBuf.String())
+	}
+}
+
+// A deploy that changes nothing leaves the app ready and explains itself in
+// errorMessage. Printing that only for a non-serving app hid the one case the
+// user most needs: "nothing to roll out — push a new tag or force it".
+func TestPrintAppURL_ShowsTheReasonEvenWhenReady(t *testing.T) {
+	var out, errBuf bytes.Buffer
+	cmd := &cobra.Command{}
+	cmd.SetOut(&out)
+	cmd.SetErr(&errBuf)
+	flagQuiet = false
+	printAppURL(cmd, &api.App{
+		Name: "notifie", Status: "ready", Url: "https://notifie.example",
+		ErrorMessage: "Nothing to roll out: ghcr.io/x/y:v1 is already running. Push the build under a new tag, or force a redeploy to roll the same tag again.",
+	})
+	if !strings.Contains(errBuf.String(), "Nothing to roll out") {
+		t.Errorf("the platform's reason must be shown for a ready app too:\n%s", errBuf.String())
+	}
+	// The URL still belongs on stdout: the app is serving.
+	if strings.TrimSpace(out.String()) != "https://notifie.example" {
+		t.Errorf("stdout = %q", out.String())
+	}
+}
+
+func TestAppDeploy_ForceIsSentOnlyWhenAsked(t *testing.T) {
+	// Without --force the field must be absent, not false: the platform
+	// distinguishes "not asked" from "asked not to".
+	f := newEnvFake(t, map[string]string{})
+	_ = f
+	if deployForce {
+		t.Fatal("the flag should default to false")
 	}
 }

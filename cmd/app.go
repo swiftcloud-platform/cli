@@ -269,7 +269,10 @@ var appGetCmd = &cobra.Command{
 	},
 }
 
-var deployImage string
+var (
+	deployImage string
+	deployForce bool
+)
 
 var appDeployCmd = &cobra.Command{
 	Use:   "deploy <name> --image <ref>",
@@ -277,11 +280,19 @@ var appDeployCmd = &cobra.Command{
 	Long: `Roll out a new image for an existing app. Nothing else about the app
 changes — port, replica range, environment and domains are kept.
 
+Deploying the tag an app already runs does nothing: the platform has nothing
+to change, so no revision is created. That is right for an unchanged image and
+wrong for a rebuilt one pushed under the same tag — for that, --force rolls a
+revision anyway and re-resolves the tag to whatever it points at now.
+
 Without --wait the command returns as soon as the rollout is accepted; with it,
 the CLI polls until the app is running again or the rollout fails.`,
 	Example: `  cloud app deploy demo --image nginx:1.27
   cloud app deploy api --image ghcr.io/acme/api:1.5 --wait
-  cloud app deploy api --image ghcr.io/acme/api:1.5 --wait --timeout 3m`,
+  cloud app deploy api --image ghcr.io/acme/api:1.5 --wait --timeout 3m
+
+  # rebuilt and pushed under the same tag — without --force this does nothing
+  cloud app deploy api --image ghcr.io/acme/api:latest --force --wait`,
 	Args: cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		org, err := requireOrg()
@@ -292,7 +303,11 @@ the CLI polls until the app is running again or the rollout fails.`,
 		if err != nil {
 			return err
 		}
-		res, err := c.PostOrgsOrgAppsAppDeployWithResponse(cmd.Context(), org, args[0], api.PostOrgsOrgAppsAppDeployJSONRequestBody{Image: deployImage})
+		body := api.PostOrgsOrgAppsAppDeployJSONRequestBody{Image: deployImage}
+		if deployForce {
+			body.Force = &deployForce
+		}
+		res, err := c.PostOrgsOrgAppsAppDeployWithResponse(cmd.Context(), org, args[0], body)
 		if err != nil {
 			return reachErr(err)
 		}
@@ -610,6 +625,7 @@ func init() {
 	_ = appCreateCmd.MarkFlagRequired("image")
 
 	appDeployCmd.Flags().StringVar(&deployImage, "image", "", "new image reference (required)")
+	appDeployCmd.Flags().BoolVar(&deployForce, "force", false, "roll a new revision even if nothing changed (a rebuilt image under the same tag)")
 	_ = appDeployCmd.MarkFlagRequired("image")
 
 	appScaleCmd.Flags().IntVar(&scaleMin, "min", 0, "minimum replicas")
@@ -637,6 +653,12 @@ func printAppURL(cmd *cobra.Command, app *api.App) {
 	if flagQuiet {
 		return
 	}
+	// A deploy that changed nothing leaves the app ready and puts the reason in
+	// errorMessage, so printing it only for a non-serving app would hide
+	// exactly the case the user needs to hear about.
+	if app.ErrorMessage != "" {
+		fmt.Fprintf(cmd.ErrOrStderr(), "%s\n", app.ErrorMessage)
+	}
 	switch app.Status {
 	case "ready", "running":
 		if app.Url != "" {
@@ -644,8 +666,5 @@ func printAppURL(cmd *cobra.Command, app *api.App) {
 		}
 	default:
 		fmt.Fprintf(cmd.ErrOrStderr(), "%s is %s and is not serving; no URL to give you yet.\n", app.Name, app.Status)
-		if app.ErrorMessage != "" {
-			fmt.Fprintf(cmd.ErrOrStderr(), "%s\n", app.ErrorMessage)
-		}
 	}
 }
