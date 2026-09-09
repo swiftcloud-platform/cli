@@ -390,6 +390,7 @@ adds a cold start to the next request.`,
 
 var logsFollow bool
 var logsTail int
+var logsSince time.Duration
 
 var appLogsCmd = &cobra.Command{
 	Use:   "logs <name>",
@@ -397,6 +398,7 @@ var appLogsCmd = &cobra.Command{
 	Example: `  cloud app logs demo
   cloud app logs demo -f               # keep streaming until Ctrl-C
   cloud app logs demo --tail 1000
+  cloud app logs demo --since 10m       # only the last ten minutes
   cloud app logs demo --tail 2000 | grep -i error`,
 	Args: cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
@@ -408,7 +410,11 @@ var appLogsCmd = &cobra.Command{
 		if err != nil {
 			return err
 		}
-		params := &api.GetOrgsOrgAppsAppLogsParams{Tail: &logsTail}
+		since, err := sinceSeconds("since", logsSince)
+		if err != nil {
+			return err
+		}
+		params := &api.GetOrgsOrgAppsAppLogsParams{Tail: &logsTail, Since: since}
 		if logsFollow {
 			params.Follow = &logsFollow
 		}
@@ -633,6 +639,7 @@ func init() {
 
 	appLogsCmd.Flags().BoolVarP(&logsFollow, "follow", "f", false, "keep streaming")
 	appLogsCmd.Flags().IntVar(&logsTail, "tail", 200, "number of recent lines")
+	appLogsCmd.Flags().DurationVar(&logsSince, "since", 0, "only logs from the last duration, e.g. 10m or 2h (max 30 days)")
 
 	appDeleteCmd.Flags().BoolVarP(&deleteYes, "yes", "y", false, "skip the confirmation (scripts)")
 

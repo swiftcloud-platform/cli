@@ -41,6 +41,7 @@ var (
 	dbCredFormat    string
 	dbLogsFollow    bool
 	dbLogsTail      int
+	dbLogsSince     time.Duration
 	dbBackupKeep    string
 	dbRestoreTo     string
 	dbRestoreAt     string
@@ -641,6 +642,7 @@ var dbLogsCmd = &cobra.Command{
 	Example: `  cloud db logs orders
   cloud db logs orders -f              # keep streaming until Ctrl-C
   cloud db logs orders --tail 1000
+  cloud db logs orders --since 1h        # only the last hour
   cloud db logs orders --tail 2000 | grep -i error`,
 	Args: cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
@@ -652,7 +654,11 @@ var dbLogsCmd = &cobra.Command{
 		if err != nil {
 			return err
 		}
-		params := &api.GetOrgsOrgDatabasesDbLogsParams{Tail: &dbLogsTail}
+		since, err := sinceSeconds("since", dbLogsSince)
+		if err != nil {
+			return err
+		}
+		params := &api.GetOrgsOrgDatabasesDbLogsParams{Tail: &dbLogsTail, Since: since}
 		if dbLogsFollow {
 			params.Follow = &dbLogsFollow
 		}
@@ -878,6 +884,7 @@ func init() {
 
 	dbLogsCmd.Flags().BoolVarP(&dbLogsFollow, "follow", "f", false, "keep streaming")
 	dbLogsCmd.Flags().IntVar(&dbLogsTail, "tail", 200, "number of recent lines")
+	dbLogsCmd.Flags().DurationVar(&dbLogsSince, "since", 0, "only logs from the last duration, e.g. 10m or 2h (max 30 days)")
 
 	dbBackupEnableCmd.Flags().StringVar(&dbBackupKeep, "retention", "", "how long to keep backups: 7d, 2w, 1m (default: the platform's own)")
 

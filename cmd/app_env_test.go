@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/spf13/cobra"
 
@@ -590,5 +591,53 @@ func TestAppDeploy_ForceIsSentOnlyWhenAsked(t *testing.T) {
 	_ = f
 	if deployForce {
 		t.Fatal("the flag should default to false")
+	}
+}
+
+func TestSinceSeconds(t *testing.T) {
+	// Unset means unset: no parameter, so the platform's own default applies.
+	if v, err := sinceSeconds("since", 0); err != nil || v != nil {
+		t.Errorf("zero should send nothing: %v %v", v, err)
+	}
+	if v, err := sinceSeconds("since", 10*time.Minute); err != nil || v == nil || *v != 600 {
+		t.Errorf("10m should be 600s: %v %v", v, err)
+	}
+	// The platform ignores a non-positive value and caps at 30 days. Passing
+	// either silently would misreport what was asked for.
+	if _, err := sinceSeconds("since", -5*time.Minute); err == nil || ExitCode(err) != ExitUsage {
+		t.Errorf("a negative window should be refused, got %v", err)
+	}
+	if _, err := sinceSeconds("since", 31*24*time.Hour); err == nil || ExitCode(err) != ExitUsage {
+		t.Errorf("beyond the platform cap should be refused, got %v", err)
+	}
+	// Sub-second rounds up rather than to zero, which would mean "unset".
+	if v, err := sinceSeconds("since", 500*time.Millisecond); err != nil || v == nil || *v != 1 {
+		t.Errorf("a sub-second window should not become unset: %v %v", v, err)
+	}
+}
+
+// The parameter must actually reach the wire, not just parse.
+func TestAppLogs_SinceReachesTheQuery(t *testing.T) {
+	var gotQuery string
+	mux := http.NewServeMux()
+	mux.HandleFunc("/api/v1/me", func(w http.ResponseWriter, _ *http.Request) {
+		fmt.Fprint(w, `{"user":{"id":"u1","email":"a@b.c"},"organizations":[{"slug":"acme","role":"owner"}],"auth":{"kind":"session"}}`)
+	})
+	mux.HandleFunc("/api/v1/orgs/acme/apps/notifie/logs", func(w http.ResponseWriter, r *http.Request) {
+		gotQuery = r.URL.RawQuery
+		fmt.Fprint(w, "a line\n")
+	})
+	srv := httptest.NewServer(mux)
+	t.Cleanup(srv.Close)
+	t.Setenv("CLOUD_CONFIG_DIR", t.TempDir())
+	t.Setenv("CLOUD_API_URL", srv.URL+"/api/v1")
+	t.Setenv("CLOUD_ORG", "acme")
+	t.Setenv("CLOUD_TOKEN", "owner-token")
+
+	if _, err := run(t, "app", "logs", "notifie", "--since", "10m"); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(gotQuery, "since=600") {
+		t.Errorf("query = %q, want since=600", gotQuery)
 	}
 }

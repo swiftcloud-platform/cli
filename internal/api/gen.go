@@ -721,6 +721,9 @@ type GetOrgsOrgAppsAppLogsParams struct {
 
 	// Follow Keep the stream open
 	Follow *bool `form:"follow,omitempty" json:"follow,omitempty"`
+
+	// Since Only logs from the last N seconds. Ignored when 0 or less; capped at 30 days. Applied before tail.
+	Since *int `form:"since,omitempty" json:"since,omitempty"`
 }
 
 // GetOrgsOrgBucketsBucketVersionsParams defines parameters for GetOrgsOrgBucketsBucketVersions.
@@ -736,6 +739,9 @@ type GetOrgsOrgDatabasesDbLogsParams struct {
 
 	// Follow Keep the stream open
 	Follow *bool `form:"follow,omitempty" json:"follow,omitempty"`
+
+	// Since Only logs from the last N seconds. Ignored when 0 or less; capped at 30 days. Applied before tail.
+	Since *int `form:"since,omitempty" json:"since,omitempty"`
 }
 
 // PostOrgsOrgAppsJSONRequestBody defines body for PostOrgsOrgApps for application/json ContentType.
@@ -2543,6 +2549,18 @@ func NewGetOrgsOrgAppsAppLogsRequest(server string, org string, app string, para
 
 		}
 
+		if params.Since != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "since", *params.Since, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "integer", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
 		if encoded := queryValues.Encode(); encoded != "" {
 			rawQueryFragments = append(rawQueryFragments, encoded)
 		}
@@ -3384,6 +3402,18 @@ func NewGetOrgsOrgDatabasesDbLogsRequest(server string, org string, db string, p
 		if params.Follow != nil {
 
 			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "follow", *params.Follow, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "boolean", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.Since != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "since", *params.Since, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "integer", Format: ""}); err != nil {
 				return nil, err
 			} else {
 				for _, qp := range strings.Split(queryFrag, "&") {

@@ -106,7 +106,7 @@ cloud app   env     list <name> [--show-values]      values masked unless asked 
 cloud app   env     set  <name> KEY=VALUE… [--env-file f] [--from-stdin NAME]
 cloud app   env     unset <name> KEY…
 cloud app   scale   <name> --min N --max N
-cloud app   logs    <name> [-f] [--tail N]             (--since awaits platform support)
+cloud app   logs    <name> [-f] [--tail N] [--since 10m]
 cloud app   delete  <name> [--yes]
 cloud app   domain  add <name> <hostname>              prints the CNAME target for the app's region
 cloud app   domain  list <name>
