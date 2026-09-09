@@ -23,9 +23,12 @@ The client.
 
 Two SDK choices are worth stating, because both look wrong at a glance:
 
-  - Region is always "us-east-1". SeaweedFS ignores the region but SigV4 does
-    not: the string is part of the signature, so client and server must agree
-    on one, and this is the value the platform's storage layer signs with.
+  - The signing region is the platform's own region name, e.g.
+    zm-lusaka-central-1, taken from the bucket's credentials. SigV4 signs the
+    region string, so client and server must agree on it; the storage layer
+    accepts any value in the scope, so the platform's name is used in
+    preference to the us-east-1 placeholder it used to require. Options.Region
+    falls back to us-east-1 when the platform does not say.
   - Addressing is path-style (endpoint/bucket/key). Virtual-host style would
     require a wildcard DNS record and a wildcard certificate per region for
     buckets whose names are not known in advance.
@@ -67,6 +70,10 @@ type Options struct {
 	SecretKey string
 	// HTTPClient is injectable for tests; nil means the SDK's default.
 	HTTPClient *http.Client
+	// Region is the SigV4 signing region: the platform's region name, as the
+	// bucket's credentials report it. Empty falls back to us-east-1, which is
+	// what the platform used to mandate and what older configs still carry.
+	Region string
 	// PartSize and Concurrency override the defaults below. Zero means the
 	// default. They exist because the multipart path is otherwise only
 	// exercisable by moving 64 MiB or more, which a constrained machine
@@ -93,8 +100,12 @@ func New(o Options) (*Client, error) {
 	if o.AccessKey == "" || o.SecretKey == "" {
 		return nil, errors.New("no bucket credentials")
 	}
+	region := o.Region
+	if region == "" {
+		region = "us-east-1"
+	}
 	cfg := aws.Config{
-		Region:      "us-east-1",
+		Region:      region,
 		Credentials: credentials.NewStaticCredentialsProvider(o.AccessKey, o.SecretKey, ""),
 	}
 	if o.HTTPClient != nil {

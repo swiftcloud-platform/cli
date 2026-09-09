@@ -154,7 +154,10 @@ type bucket struct {
 	Ref      string
 	Physical string
 	Endpoint string
-	Client   *s3pkg.Client
+	// Region is the platform's region name, which is also the SigV4 signing
+	// region — not the us-east-1 placeholder the platform once required.
+	Region string
+	Client *s3pkg.Client
 }
 
 // resolveBucket turns a bucket reference — display name, physical name or id —
@@ -187,11 +190,13 @@ func resolveBucket(ctx context.Context, ref string) (*bucket, error) {
 		Endpoint:  cred.Endpoint,
 		AccessKey: cred.AccessKeyId,
 		SecretKey: cred.SecretAccessKey,
+		Region:    cred.Region,
 	})
 	if err != nil {
 		return nil, err
 	}
-	return &bucket{Ref: ref, Physical: cred.BucketName, Endpoint: cred.Endpoint, Client: client}, nil
+	return &bucket{Ref: ref, Physical: cred.BucketName, Endpoint: cred.Endpoint,
+		Region: cred.Region, Client: client}, nil
 }
 
 // parseRemote parses an s3:// argument and resolves its bucket.
@@ -461,8 +466,10 @@ var bucketCredentialsCmd = &cobra.Command{
 can use. Requires write-level permission.
 
 The credential is the organisation's own S3 identity for the region: it can
-reach this organisation's buckets and nothing else. Use path-style addressing
-and signing region us-east-1 — every format below already sets both.`,
+reach this organisation's buckets and nothing else. Use path-style addressing,
+and sign with the platform's region name — every format below already sets
+both. Older configurations signing with us-east-1 keep working; the storage
+layer accepts either.`,
 	Example: `  cloud storage bucket credentials photos
   eval "$(cloud storage bucket credentials photos --format env)" && aws s3 ls
   cloud storage bucket credentials photos --format aws-profile >> ~/.aws/credentials
@@ -505,14 +512,21 @@ and signing region us-east-1 — every format below already sets both.`,
 // metacharacter survives being eval'd.
 func renderBucketCredential(c api.BucketCredentials, ref, format string) (string, error) {
 	profile := "cloud-" + ref
+	// The platform's own region name is the signing region. us-east-1 is only
+	// a fallback for a platform that does not report one — it was the required
+	// value before, and configurations carrying it still work.
+	region := c.Region
+	if region == "" {
+		region = "us-east-1"
+	}
 	switch format {
 	case "env":
 		var b strings.Builder
 		for _, kv := range [][2]string{
 			{"AWS_ACCESS_KEY_ID", c.AccessKeyId},
 			{"AWS_SECRET_ACCESS_KEY", c.SecretAccessKey},
-			{"AWS_DEFAULT_REGION", "us-east-1"},
-			{"AWS_REGION", "us-east-1"},
+			{"AWS_DEFAULT_REGION", region},
+			{"AWS_REGION", region},
 			{"AWS_ENDPOINT_URL_S3", c.Endpoint},
 		} {
 			fmt.Fprintf(&b, "%s='%s'\n", kv[0], shellEscape(kv[1]))
@@ -524,10 +538,10 @@ func renderBucketCredential(c api.BucketCredentials, ref, format string) (string
 		return fmt.Sprintf(`[%s]
 aws_access_key_id = %s
 aws_secret_access_key = %s
-region = us-east-1
+region = %s
 endpoint_url = %s
 # bucket: %s
-`, profile, c.AccessKeyId, c.SecretAccessKey, c.Endpoint, c.BucketName), nil
+`, profile, c.AccessKeyId, c.SecretAccessKey, region, c.Endpoint, c.BucketName), nil
 	case "rclone":
 		return fmt.Sprintf(`[%s]
 type = s3
@@ -535,10 +549,10 @@ provider = Other
 access_key_id = %s
 secret_access_key = %s
 endpoint = %s
-region = us-east-1
+region = %s
 force_path_style = true
 # bucket: %s
-`, profile, c.AccessKeyId, c.SecretAccessKey, c.Endpoint, c.BucketName), nil
+`, profile, c.AccessKeyId, c.SecretAccessKey, c.Endpoint, region, c.BucketName), nil
 	default:
 		return "", &UsageError{fmt.Errorf("--format %q is not env, aws-profile or rclone", format)}
 	}

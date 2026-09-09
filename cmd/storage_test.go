@@ -417,7 +417,9 @@ func TestBucketCredentials_Formats(t *testing.T) {
 	if !strings.Contains(env, `AWS_SECRET_ACCESS_KEY='s3cr3t'\''with'\''quotes'`) {
 		t.Errorf("secret is not safely quoted:\n%s", env)
 	}
-	for _, want := range []string{"AWS_ACCESS_KEY_ID='AKIAFAKE'", "AWS_REGION='us-east-1'", "AWS_ENDPOINT_URL_S3='http://127.0.0.1"} {
+	// The signing region is the platform's own region name, not a placeholder:
+	// this is what Arthur saw wrong in a presigned URL.
+	for _, want := range []string{"AWS_ACCESS_KEY_ID='AKIAFAKE'", "AWS_REGION='zm-lusaka-central-1'", "AWS_ENDPOINT_URL_S3='http://127.0.0.1"} {
 		if !strings.Contains(env, want) {
 			t.Errorf("env output missing %s:\n%s", want, env)
 		}
@@ -427,7 +429,7 @@ func TestBucketCredentials_Formats(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !strings.HasPrefix(prof, "[cloud-pics]") || !strings.Contains(prof, "region = us-east-1") {
+	if !strings.HasPrefix(prof, "[cloud-pics]") || !strings.Contains(prof, "region = zm-lusaka-central-1") {
 		t.Errorf("aws-profile output:\n%s", prof)
 	}
 
@@ -438,6 +440,9 @@ func TestBucketCredentials_Formats(t *testing.T) {
 	// Path-style is not optional against this storage layer.
 	if !strings.Contains(rc, "force_path_style = true") || !strings.Contains(rc, "type = s3") {
 		t.Errorf("rclone output:\n%s", rc)
+	}
+	if !strings.Contains(rc, "region = zm-lusaka-central-1") {
+		t.Errorf("rclone output should carry the platform region:\n%s", rc)
 	}
 
 	if _, err := run(t, "storage", "bucket", "credentials", "pics", "--format", "yaml"); err == nil {

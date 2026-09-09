@@ -301,9 +301,9 @@ func TestPresign_IsLocalAndSigned(t *testing.T) {
 	if !strings.Contains(raw, "/demo/a%20b.txt") {
 		t.Errorf("the space in the key should be percent-encoded: %s", raw)
 	}
-	// The region in the credential scope must be the one the platform signs with.
+	// With no Region given, the placeholder is the fallback.
 	if !strings.Contains(q.Get("X-Amz-Credential"), "us-east-1") {
-		t.Errorf("credential scope should name us-east-1: %s", q.Get("X-Amz-Credential"))
+		t.Errorf("an unset region should fall back to us-east-1: %s", q.Get("X-Amz-Credential"))
 	}
 }
 
@@ -315,5 +315,37 @@ func TestPresignPut_IsAPutURL(t *testing.T) {
 	}
 	if !strings.Contains(raw, "X-Amz-Signature") {
 		t.Errorf("not signed: %s", raw)
+	}
+}
+
+// The signing region is the platform's own region name. It reached a customer
+// as a visible "us-east-1" inside a presigned URL, which is what prompted the
+// change; the placeholder survives only as a fallback.
+func TestNew_SignsWithThePlatformRegion(t *testing.T) {
+	fake := &fakeS3{t: t}
+	srv := httptest.NewServer(fake)
+	t.Cleanup(srv.Close)
+
+	c, err := New(Options{
+		Endpoint: srv.URL, AccessKey: "AK", SecretKey: "SK",
+		Region: "zm-lsk-1", HTTPClient: srv.Client(),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	raw, err := c.Presign(context.Background(), URI{Bucket: "demo", Key: "a.txt"}, time.Minute)
+	if err != nil {
+		t.Fatal(err)
+	}
+	u, err := url.Parse(raw)
+	if err != nil {
+		t.Fatal(err)
+	}
+	cred := u.Query().Get("X-Amz-Credential")
+	if !strings.Contains(cred, "zm-lsk-1") {
+		t.Errorf("credential scope should name the platform region: %s", cred)
+	}
+	if strings.Contains(cred, "us-east-1") {
+		t.Errorf("the placeholder must not appear when a region is given: %s", cred)
 	}
 }
