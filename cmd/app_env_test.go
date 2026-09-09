@@ -529,7 +529,7 @@ func TestAppEnvSet_DoesNotClaimARolloutItCannotSee(t *testing.T) {
 	if strings.Contains(msg, "Rolling out") {
 		t.Errorf("no revision changed, so nothing should claim one is rolling:\n%s", msg)
 	}
-	for _, want := range []string{"No new revision yet", "notifie-00001", "did not start"} {
+	for _, want := range []string{"No new revision recorded yet", "notifie-00001", "can lag the cluster"} {
 		if !strings.Contains(msg, want) {
 			t.Errorf("expected the message to say what was observed (%q):\n%s", want, msg)
 		}

@@ -143,7 +143,13 @@ func patchEnvVars(cmd *cobra.Command, c *api.ClientWithResponses, org, app strin
 		case a.LatestRevision != priorRevision:
 			fmt.Fprintf(w, "Rolling out %s.\n", a.LatestRevision)
 		default:
-			fmt.Fprintf(w, "No new revision yet (still %s). Variables apply on the next one — if `cloud app get %s` still shows this revision in a minute, the rollout did not start.\n", a.LatestRevision, a.Name)
+			// Careful here: the record can lag the cluster. The platform used
+			// to write the revision columns only on its two-minute sync, so a
+			// revision that had already rolled still read as the old one — and
+			// a message that concluded "the rollout did not start" from that
+			// would be the same mistake, made by us, in the opposite
+			// direction. Report the record and let time settle it.
+			fmt.Fprintf(w, "No new revision recorded yet (still %s) — the record can lag the cluster by a couple of minutes. Re-check with `cloud app get %s`; if it has not advanced after that, the rollout did not start.\n", a.LatestRevision, a.Name)
 		}
 		return nil
 	}
