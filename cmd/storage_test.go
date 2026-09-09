@@ -662,3 +662,27 @@ func TestBucketKeys_RevokeNeedsConfirmation(t *testing.T) {
 		t.Fatalf("revoking without --yes and without a terminal should be refused, got %v", err)
 	}
 }
+
+// While a hostname is pending, the platform's message is the only thing that
+// says what to do next, so it belongs in the table rather than in a footnote.
+func TestBucketDomainRows_ShowsTheNextStep(t *testing.T) {
+	rows := bucketDomainRows{
+		{Domain: "assets.example.com", Status: "pending", Tls: "pending",
+			Message: "Point a CNAME record for assets.example.com at pbvt.s3.zm-lsk-1.cloud.co.zm."},
+		{Domain: "cdn.example.com", Status: "active", Tls: "active", Message: ""},
+	}.Rows()
+	if !strings.Contains(rows[0][3], "Point a CNAME") {
+		t.Errorf("a pending domain must show what to do: %v", rows[0])
+	}
+	if rows[1][3] != "" {
+		t.Errorf("an active domain needs no next step: %v", rows[1])
+	}
+}
+
+func TestBucketDomains_RemoveNeedsConfirmation(t *testing.T) {
+	storageSetup(t, nil)
+	_, err := run(t, "storage", "bucket", "domains", "remove", "pics", "assets.example.com")
+	if err == nil || ExitCode(err) != ExitUsage {
+		t.Fatalf("removing a hostname without --yes should be refused, got %v", err)
+	}
+}

@@ -60,6 +60,7 @@ var (
 	presignVersionID   string
 	keyLabel           string
 	keyRevokeYes       bool
+	bucketDomainYes    bool
 )
 
 // ── table shapes ────────────────────────────────────────────────────────────
@@ -1152,7 +1153,11 @@ func init() {
 	bucketKeysRevokeCmd.Flags().BoolVarP(&keyRevokeYes, "yes", "y", false, "skip the confirmation (scripts)")
 	bucketKeysCmd.AddCommand(bucketKeysListCmd, bucketKeysAddCmd, bucketKeysRevokeCmd)
 
-	bucketCmd.AddCommand(bucketListCmd, bucketCreateCmd, bucketGetCmd, bucketDeleteCmd, bucketCredentialsCmd, bucketUpdateCmd, bucketKeysCmd)
+	bucketDomainsRemoveCmd.Flags().BoolVarP(&bucketDomainYes, "yes", "y", false, "skip the confirmation (scripts)")
+	bucketDomainsCmd.AddCommand(bucketDomainsListCmd, bucketDomainsAddCmd, bucketDomainsRemoveCmd)
+
+	bucketCmd.AddCommand(bucketListCmd, bucketCreateCmd, bucketGetCmd, bucketDeleteCmd, bucketCredentialsCmd,
+		bucketUpdateCmd, bucketKeysCmd, bucketDomainsCmd)
 	storageVersionsCmd.Flags().BoolVar(&lsHuman, "human", false, "print sizes as KiB/MiB/GiB")
 	// Not MarkFlagRequired: the command's own check names the command that
 	// lists the ids, which cobra's "required flag not set" cannot.
@@ -1684,6 +1689,174 @@ thing distinguishing the key you mean from the one your systems are using.`,
 		}
 		if !flagQuiet {
 			fmt.Fprintf(cmd.ErrOrStderr(), "Revoked %s. It stops working within about a minute.\n", args[1])
+		}
+		return nil
+	},
+}
+
+// ── custom hostnames on a bucket ────────────────────────────────────────────
+
+type bucketDomainRows []api.BucketDomain
+
+func (r bucketDomainRows) Columns() []string {
+	return []string{"DOMAIN", "STATUS", "TLS", "NEXT STEP"}
+}
+func (r bucketDomainRows) Rows() [][]string {
+	out := make([][]string, len(r))
+	for i, dm := range r {
+		// The message is the whole point while a domain is pending — it says
+		// what to do next — so it is a column rather than a footnote.
+		out[i] = []string{dm.Domain, dm.Status, dm.Tls, dm.Message}
+	}
+	return out
+}
+func (r bucketDomainRows) IDs() []string {
+	out := make([]string, len(r))
+	for i, dm := range r {
+		out[i] = dm.Domain
+	}
+	return out
+}
+
+var bucketDomainsCmd = &cobra.Command{
+	Use:   "domains",
+	Short: "Custom hostnames in front of a public bucket",
+	Long: `Serve a bucket's objects from your own hostname over https.
+
+The bucket, or a folder in it, must be public first: a custom hostname on a
+private bucket could only ever answer "access denied", so the platform refuses
+it rather than letting you build something that cannot work.
+
+Adding one prints the CNAME target to create. The platform re-checks every
+fifteen minutes, issues a certificate once DNS is correct, and "domains list"
+is how you watch that happen — the NEXT STEP column says what it is waiting
+for.`,
+	Example: `  cloud storage bucket domains add pics assets.example.com
+  cloud storage bucket domains list pics
+  cloud storage bucket domains remove pics assets.example.com`,
+}
+
+var bucketDomainsListCmd = &cobra.Command{
+	Use:   "list <bucket>",
+	Short: "List the hostnames on a bucket, and what each is waiting for",
+	Example: `  cloud storage bucket domains list pics
+  cloud storage bucket domains list pics -o json`,
+	Args: cobra.ExactArgs(1),
+	RunE: func(cmd *cobra.Command, args []string) error {
+		org, err := requireOrg()
+		if err != nil {
+			return err
+		}
+		c, _, err := apiClient()
+		if err != nil {
+			return err
+		}
+		res, err := c.GetOrgsOrgBucketsBucketDomainsWithResponse(cmd.Context(), org, args[0])
+		if err != nil {
+			return reachErr(err)
+		}
+		if err := apiErr(res.StatusCode(), res.Body); err != nil {
+			return err
+		}
+		list, err := decoded(res.JSON200)
+		if err != nil {
+			return err
+		}
+		if len(list.Items) == 0 && !flagQuiet && printer.Format == output.Table {
+			fmt.Fprintf(cmd.ErrOrStderr(), "No custom hostnames on %s.\n", args[0])
+			return nil
+		}
+		return printer.Print(bucketDomainRows(list.Items))
+	},
+}
+
+var bucketDomainsAddCmd = &cobra.Command{
+	Use:   "add <bucket> <hostname>",
+	Short: "Attach a custom hostname to a public bucket",
+	Long: `Attach your own hostname to a public bucket.
+
+The bucket must already be public, or have a public folder — see
+"cloud storage bucket update --public". A hostname on a private bucket would
+answer "access denied" to everyone, so the platform refuses it.
+
+This prints the CNAME target to create in your DNS. Nothing serves until that
+record resolves; the platform checks every fifteen minutes and issues the
+certificate itself once it does.`,
+	Example: `  cloud storage bucket domains add pics assets.example.com
+  cloud storage bucket domains list pics     # watch it progress`,
+	Args: cobra.ExactArgs(2),
+	RunE: func(cmd *cobra.Command, args []string) error {
+		org, err := requireOrg()
+		if err != nil {
+			return err
+		}
+		c, _, err := apiClient()
+		if err != nil {
+			return err
+		}
+		res, err := c.PostOrgsOrgBucketsBucketDomainsWithResponse(cmd.Context(), org, args[0],
+			api.PostOrgsOrgBucketsBucketDomainsJSONRequestBody{Domain: strings.ToLower(args[1])})
+		if err != nil {
+			return reachErr(err)
+		}
+		if err := apiErr(res.StatusCode(), res.Body); err != nil {
+			return err
+		}
+		dm, err := decoded(res.JSON201)
+		if err != nil {
+			return err
+		}
+		if printer.Format != output.Table {
+			return printer.Print(dm)
+		}
+		if !flagQuiet {
+			w := cmd.ErrOrStderr()
+			fmt.Fprintf(w, "Attached %s to %s.\n", dm.Domain, args[0])
+			if dm.Target != "" {
+				fmt.Fprintf(w, "Create a CNAME record: %s → %s\n", dm.Domain, dm.Target)
+			}
+			if dm.Message != "" {
+				fmt.Fprintf(w, "%s\n", dm.Message)
+			}
+			fmt.Fprintf(w, "Watch it with `cloud storage bucket domains list %s`.\n", args[0])
+		}
+		return nil
+	},
+}
+
+var bucketDomainsRemoveCmd = &cobra.Command{
+	Use:   "remove <bucket> <hostname-or-id>",
+	Short: "Remove a custom hostname",
+	Long: `Detach a hostname from a bucket. Anything pointing at it stops
+resolving to your objects, so this asks you to confirm the name unless --yes.
+
+The bucket keeps serving on its own S3 hostname, and its objects are
+unchanged.`,
+	Example: `  cloud storage bucket domains remove pics assets.example.com
+  cloud storage bucket domains remove pics assets.example.com --yes`,
+	Args: cobra.ExactArgs(2),
+	RunE: func(cmd *cobra.Command, args []string) error {
+		org, err := requireOrg()
+		if err != nil {
+			return err
+		}
+		if err := confirm(cmd, bucketDomainYes, "hostname", args[1]); err != nil {
+			return err
+		}
+		c, _, err := apiClient()
+		if err != nil {
+			return err
+		}
+		res, err := c.DeleteOrgsOrgBucketsBucketDomainsWithResponse(cmd.Context(), org, args[0],
+			api.DeleteOrgsOrgBucketsBucketDomainsJSONRequestBody{DomainId: args[1]})
+		if err != nil {
+			return reachErr(err)
+		}
+		if err := apiErr(res.StatusCode(), res.Body); err != nil {
+			return err
+		}
+		if !flagQuiet {
+			fmt.Fprintf(cmd.ErrOrStderr(), "Removed %s from %s.\n", args[1], args[0])
 		}
 		return nil
 	},

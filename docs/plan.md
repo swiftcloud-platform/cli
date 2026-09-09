@@ -129,6 +129,9 @@ cloud storage bucket create <name> [--region]
 cloud storage bucket get    <name>
 cloud storage bucket delete <name> [--yes]             purges objects; confirm echoes the name
 cloud storage bucket credentials <name> --format env|aws-profile|rclone
+cloud storage bucket domains list <bucket>           custom hostnames, and what each awaits
+cloud storage bucket domains add  <bucket> <hostname>    public bucket only; prints the CNAME target
+cloud storage bucket domains remove <bucket> <hostname> [--yes]
 cloud storage bucket keys list <bucket>              the organisation's active key pairs
 cloud storage bucket keys add  <bucket> [--label l]  secret shown once; two active at most
 cloud storage bucket keys revoke <bucket> <key-id> [--yes]   never the last one
