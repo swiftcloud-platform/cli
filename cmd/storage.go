@@ -51,6 +51,11 @@ var (
 	presignExpires     time.Duration
 	presignMethod      string
 	presignViaAPIFlag  bool
+	bucketVersioning   string
+	bucketPublic       string
+	bucketAddPrefix    []string
+	bucketDelPrefix    []string
+	bucketUpdateYes    bool
 )
 
 // ── table shapes ────────────────────────────────────────────────────────────
@@ -416,8 +421,11 @@ var bucketGetCmd = &cobra.Command{
 		if err != nil {
 			return err
 		}
-		if !flagQuiet && printer.Format == output.Table && b.ErrorMessage != "" {
-			fmt.Fprintf(cmd.ErrOrStderr(), "%s\n", b.ErrorMessage)
+		if !flagQuiet && printer.Format == output.Table {
+			if b.ErrorMessage != "" {
+				fmt.Fprintf(cmd.ErrOrStderr(), "%s\n", b.ErrorMessage)
+			}
+			printBucketAccess(cmd, b)
 		}
 		return printer.Print(bucketRows{*b})
 	},
@@ -1096,8 +1104,216 @@ func init() {
 	storagePresignCmd.Flags().StringVar(&presignMethod, "method", "get", "get for downloading, put for uploading")
 	storagePresignCmd.Flags().BoolVar(&presignViaAPIFlag, "platform", false, "have the platform mint the URL instead of signing locally")
 
-	bucketCmd.AddCommand(bucketListCmd, bucketCreateCmd, bucketGetCmd, bucketDeleteCmd, bucketCredentialsCmd)
+	bucketUpdateCmd.Flags().StringVar(&bucketVersioning, "versioning", "", "on or off")
+	bucketUpdateCmd.Flags().StringVar(&bucketPublic, "public", "", "on or off — every object readable by anyone")
+	bucketUpdateCmd.Flags().StringArrayVar(&bucketAddPrefix, "public-prefix", nil, "open one folder to the public (repeatable)")
+	bucketUpdateCmd.Flags().StringArrayVar(&bucketDelPrefix, "remove-public-prefix", nil, "close a folder again (repeatable)")
+	bucketUpdateCmd.Flags().BoolVarP(&bucketUpdateYes, "yes", "y", false, "skip the confirmation when opening access (scripts)")
+
+	bucketCmd.AddCommand(bucketListCmd, bucketCreateCmd, bucketGetCmd, bucketDeleteCmd, bucketCredentialsCmd, bucketUpdateCmd)
 	storageCmd.AddCommand(bucketCmd, storageLsCmd, storageCpCmd, storageSyncCmd, storageMvCmd,
 		storageRmCmd, storageCatCmd, storageStatCmd, storagePresignCmd)
 	rootCmd.AddCommand(storageCmd)
+}
+
+// printBucketAccess reports what is public and what is versioned. Both are
+// states a person needs to be able to see without reading JSON, and public
+// access especially: a bucket that anyone on the internet can read should
+// never be a surprise discovered later.
+func printBucketAccess(cmd *cobra.Command, b *api.Bucket) {
+	w := cmd.ErrOrStderr()
+	versioning := "off"
+	if b.Versioning {
+		versioning = "on"
+	}
+	fmt.Fprintf(w, "Versioning   %s\n", versioning)
+	switch {
+	case b.PublicAccess:
+		fmt.Fprintln(w, "Public       yes — every object is readable by anyone on the internet")
+	case len(b.PublicPrefixes) > 0:
+		fmt.Fprintf(w, "Public       no, except these folders: %s\n", strings.Join(b.PublicPrefixes, ", "))
+	default:
+		fmt.Fprintln(w, "Public       no")
+	}
+}
+
+// onOff parses a flag that may only be on or off, so that --public maybe is a
+// usage error rather than a silent no-op.
+func onOff(flag, value string) (bool, error) {
+	switch strings.ToLower(value) {
+	case "on", "true", "yes":
+		return true, nil
+	case "off", "false", "no":
+		return false, nil
+	}
+	return false, &UsageError{fmt.Errorf("--%s %q is not on or off", flag, value)}
+}
+
+var bucketUpdateCmd = &cobra.Command{
+	Use:   "update <name>",
+	Short: "Change versioning or public access on a bucket",
+	Long: `Turn object versioning on or off, and choose what the public can read.
+
+--public on makes every object in the bucket readable by anyone on the
+internet; the bucket still cannot be listed, but any object whose key someone
+knows or guesses is fetchable. --public-prefix opens one folder while the rest
+of the bucket stays private, which is usually what a website or an asset
+folder wants.
+
+Both prefix flags are repeatable, and they are applied to the folders the
+bucket already has, so adding one does not remove the others.
+
+Anything that opens access asks you to confirm, because it takes effect
+immediately and cannot be undone for anyone who has already fetched the
+object. Use --yes in scripts.
+
+The platform proves a public rule before recording it: it writes a probe
+object, fetches it without credentials and deletes it. If your region cannot
+honour the rule, the change is refused and the reason says so.`,
+	Example: `  cloud storage bucket update photos --versioning on
+  cloud storage bucket update photos --public-prefix site --public-prefix assets
+  cloud storage bucket update photos --remove-public-prefix assets
+  cloud storage bucket update photos --public on --yes
+  cloud storage bucket update photos --public off`,
+	Args: cobra.ExactArgs(1),
+	RunE: func(cmd *cobra.Command, args []string) error {
+		org, err := requireOrg()
+		if err != nil {
+			return err
+		}
+		c, _, err := apiClient()
+		if err != nil {
+			return err
+		}
+		body := api.PatchOrgsOrgBucketsBucketJSONRequestBody{}
+		changed := false
+		if cmd.Flags().Changed("versioning") {
+			on, err := onOff("versioning", bucketVersioning)
+			if err != nil {
+				return err
+			}
+			body.Versioning = &on
+			changed = true
+		}
+		opens := false
+		if cmd.Flags().Changed("public") {
+			on, err := onOff("public", bucketPublic)
+			if err != nil {
+				return err
+			}
+			body.PublicAccess = &on
+			changed = true
+			opens = opens || on
+		}
+
+		// The prefix list is replaced wholesale by the API, so build the new
+		// one from what the bucket has now rather than from nothing.
+		if len(bucketAddPrefix) > 0 || len(bucketDelPrefix) > 0 {
+			cur, err := bucketPublicPrefixes(cmd.Context(), c, org, args[0])
+			if err != nil {
+				return err
+			}
+			next, added := mergePrefixes(cur, bucketAddPrefix, bucketDelPrefix)
+			body.PublicPrefixes = &next
+			changed = true
+			opens = opens || added
+		}
+		if !changed {
+			return &UsageError{errors.New("nothing to change — pass --versioning, --public, --public-prefix or --remove-public-prefix")}
+		}
+
+		if opens && !bucketUpdateYes {
+			if err := confirmOpening(cmd, args[0], body); err != nil {
+				return err
+			}
+		}
+
+		res, err := c.PatchOrgsOrgBucketsBucketWithResponse(cmd.Context(), org, args[0], body)
+		if err != nil {
+			return reachErr(err)
+		}
+		if err := apiErr(res.StatusCode(), res.Body); err != nil {
+			return err
+		}
+		b, err := decoded(res.JSON200)
+		if err != nil {
+			return err
+		}
+		if !flagQuiet && printer.Format == output.Table {
+			fmt.Fprintf(cmd.ErrOrStderr(), "Updated %s.\n", b.Name)
+			printBucketAccess(cmd, b)
+			return nil
+		}
+		return printer.Print(bucketRows{*b})
+	},
+}
+
+// bucketPublicPrefixes reads the folders currently open, because the API
+// replaces the whole list and the CLI must not silently drop the others.
+func bucketPublicPrefixes(ctx context.Context, c *api.ClientWithResponses, org, ref string) ([]string, error) {
+	res, err := c.GetOrgsOrgBucketsBucketWithResponse(ctx, org, ref)
+	if err != nil {
+		return nil, reachErr(err)
+	}
+	if err := apiErr(res.StatusCode(), res.Body); err != nil {
+		return nil, err
+	}
+	b, err := decoded(res.JSON200)
+	if err != nil {
+		return nil, err
+	}
+	return append([]string(nil), b.PublicPrefixes...), nil
+}
+
+// mergePrefixes applies additions and removals to the current list, and
+// reports whether anything new was opened. Prefixes are compared with their
+// slashes trimmed, the way the platform stores them, so "site" and "/site/"
+// are the same folder.
+func mergePrefixes(current, add, remove []string) ([]string, bool) {
+	trim := func(s string) string { return strings.Trim(strings.TrimSpace(s), "/") }
+	have := make([]string, 0, len(current)+len(add))
+	seen := map[string]bool{}
+	for _, p := range current {
+		t := trim(p)
+		if t != "" && !seen[t] {
+			seen[t] = true
+			have = append(have, t)
+		}
+	}
+	opened := false
+	for _, p := range add {
+		t := trim(p)
+		if t == "" || seen[t] {
+			continue
+		}
+		seen[t] = true
+		have = append(have, t)
+		opened = true
+	}
+	drop := map[string]bool{}
+	for _, p := range remove {
+		drop[trim(p)] = true
+	}
+	out := make([]string, 0, len(have))
+	for _, p := range have {
+		if !drop[p] {
+			out = append(out, p)
+		}
+	}
+	return out, opened
+}
+
+// confirmOpening spells out what becomes public before it does.
+func confirmOpening(cmd *cobra.Command, name string, body api.PatchOrgsOrgBucketsBucketJSONRequestBody) error {
+	w := cmd.ErrOrStderr()
+	if body.PublicAccess != nil && *body.PublicAccess {
+		fmt.Fprintf(w, "Every object in %s becomes readable by anyone on the internet, immediately.\n", name)
+	}
+	if body.PublicPrefixes != nil && len(*body.PublicPrefixes) > 0 {
+		for _, p := range *body.PublicPrefixes {
+			fmt.Fprintf(w, "Everything under %s/ becomes readable by anyone on the internet, immediately.\n", p)
+		}
+	}
+	fmt.Fprintln(w, "Anyone who fetches an object while it is public keeps their copy; closing access later does not undo that.")
+	return confirm(cmd, false, "bucket", name)
 }

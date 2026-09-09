@@ -488,3 +488,79 @@ func TestBucketWaitFailure_CarriesTheReason(t *testing.T) {
 		t.Errorf("a bucket failure must carry the platform's sentence: %v", err)
 	}
 }
+
+func TestMergePrefixes(t *testing.T) {
+	for _, tc := range []struct {
+		name          string
+		cur, add, rem []string
+		want          []string
+		opened        bool
+	}{
+		{"add to empty", nil, []string{"site"}, nil, []string{"site"}, true},
+		{"add keeps existing", []string{"a"}, []string{"b"}, nil, []string{"a", "b"}, true},
+		{"remove leaves the rest", []string{"a", "b"}, nil, []string{"a"}, []string{"b"}, false},
+		{"slashes are the same folder", []string{"site"}, []string{"/site/"}, nil, []string{"site"}, false},
+		{"remove tolerates slashes", []string{"site"}, nil, []string{"/site/"}, []string{}, false},
+		{"re-adding an existing one opens nothing", []string{"a"}, []string{"a"}, nil, []string{"a"}, false},
+		{"add and remove together", []string{"a"}, []string{"b"}, []string{"a"}, []string{"b"}, true},
+	} {
+		got, opened := mergePrefixes(tc.cur, tc.add, tc.rem)
+		if strings.Join(got, ",") != strings.Join(tc.want, ",") {
+			t.Errorf("%s: got %v, want %v", tc.name, got, tc.want)
+		}
+		if opened != tc.opened {
+			t.Errorf("%s: opened = %v, want %v", tc.name, opened, tc.opened)
+		}
+	}
+}
+
+func TestOnOff(t *testing.T) {
+	for _, yes := range []string{"on", "ON", "true", "yes"} {
+		if v, err := onOff("public", yes); err != nil || !v {
+			t.Errorf("%q should parse as on: %v %v", yes, v, err)
+		}
+	}
+	for _, no := range []string{"off", "false", "no"} {
+		if v, err := onOff("public", no); err != nil || v {
+			t.Errorf("%q should parse as off: %v %v", no, v, err)
+		}
+	}
+	// A typo must not silently mean "off".
+	if _, err := onOff("public", "maybe"); err == nil || ExitCode(err) != ExitUsage {
+		t.Errorf("an unrecognised value must be a usage error, got %v", err)
+	}
+}
+
+// Opening access is irreversible for anyone who already fetched the object, so
+// it must not happen without confirmation when there is no terminal to ask.
+func TestBucketUpdate_OpeningAccessNeedsConfirmation(t *testing.T) {
+	storageSetup(t, nil)
+	for _, args := range [][]string{
+		{"storage", "bucket", "update", "pics", "--public", "on"},
+		{"storage", "bucket", "update", "pics", "--public-prefix", "site"},
+	} {
+		_, err := run(t, args...)
+		if err == nil || ExitCode(err) != ExitUsage {
+			t.Errorf("%v should refuse without --yes, got %v", args[3:], err)
+		}
+	}
+}
+
+// Closing access, and versioning, are not dangerous and must not prompt.
+func TestBucketUpdate_ClosingAccessDoesNotPrompt(t *testing.T) {
+	storageSetup(t, nil)
+	if _, err := run(t, "storage", "bucket", "update", "pics", "--public", "off"); err != nil {
+		t.Errorf("closing access should not need confirmation: %v", err)
+	}
+	if _, err := run(t, "storage", "bucket", "update", "pics", "--versioning", "on"); err != nil {
+		t.Errorf("versioning should not need confirmation: %v", err)
+	}
+}
+
+func TestBucketUpdate_NothingToChange(t *testing.T) {
+	storageSetup(t, nil)
+	_, err := run(t, "storage", "bucket", "update", "pics")
+	if err == nil || ExitCode(err) != ExitUsage {
+		t.Fatalf("an update with no flags should be a usage error, got %v", err)
+	}
+}

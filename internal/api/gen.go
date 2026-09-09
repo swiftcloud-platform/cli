@@ -372,6 +372,9 @@ type Bucket struct {
 	OrganizationId string `json:"organizationId"`
 	PublicAccess   bool   `json:"publicAccess"`
 
+	// PublicPrefixes Folders anyone may read, when the bucket itself is private
+	PublicPrefixes []string `json:"publicPrefixes"`
+
 	// Region Region name
 	Region   string `json:"region"`
 	RegionId string `json:"regionId"`
@@ -429,6 +432,18 @@ type BucketCredentials struct {
 // BucketList defines model for BucketList.
 type BucketList struct {
 	Items []Bucket `json:"items"`
+}
+
+// BucketUpdate defines model for BucketUpdate.
+type BucketUpdate struct {
+	// PublicAccess Make every object in the bucket readable by anyone (GetObject only; the bucket cannot be listed)
+	PublicAccess *bool `json:"publicAccess,omitempty"`
+
+	// PublicPrefixes Folders readable by anyone while the rest of the bucket stays private. Replaces the current list.
+	PublicPrefixes *[]string `json:"publicPrefixes,omitempty"`
+
+	// Versioning Enable or suspend object versioning
+	Versioning *bool `json:"versioning,omitempty"`
 }
 
 // Credentials defines model for Credentials.
@@ -705,6 +720,9 @@ type PostOrgsOrgAppsAppDomainsJSONRequestBody = DomainAdd
 // PostOrgsOrgBucketsJSONRequestBody defines body for PostOrgsOrgBuckets for application/json ContentType.
 type PostOrgsOrgBucketsJSONRequestBody = BucketCreate
 
+// PatchOrgsOrgBucketsBucketJSONRequestBody defines body for PatchOrgsOrgBucketsBucket for application/json ContentType.
+type PatchOrgsOrgBucketsBucketJSONRequestBody = BucketUpdate
+
 // PostOrgsOrgBucketsBucketPresignJSONRequestBody defines body for PostOrgsOrgBucketsBucketPresign for application/json ContentType.
 type PostOrgsOrgBucketsBucketPresignJSONRequestBody = PresignRequest
 
@@ -930,6 +948,20 @@ type ClientInterface interface {
 	//
 	// Corresponds with GET /orgs/{org}/buckets/{bucket} (the `GetOrgsOrgBucketsBucket` operationId).
 	GetOrgsOrgBucketsBucket(ctx context.Context, org string, bucket string, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// PatchOrgsOrgBucketsBucketWithBody Change a bucket's versioning or public access
+	//
+	// Takes any type of body and a specified content type.
+	//
+	// Corresponds with PATCH /orgs/{org}/buckets/{bucket} (the `PatchOrgsOrgBucketsBucket` operationId).
+	PatchOrgsOrgBucketsBucketWithBody(ctx context.Context, org string, bucket string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// PatchOrgsOrgBucketsBucket Change a bucket's versioning or public access
+	//
+	// Takes a body of the `application/json` content type.
+	//
+	// Corresponds with PATCH /orgs/{org}/buckets/{bucket} (the `PatchOrgsOrgBucketsBucket` operationId).
+	PatchOrgsOrgBucketsBucket(ctx context.Context, org string, bucket string, body PatchOrgsOrgBucketsBucketJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// GetOrgsOrgBucketsBucketCredentials S3 credentials with endpoint and physical bucket name (write-level; never cached)
 	//
@@ -1418,6 +1450,40 @@ func (c *Client) DeleteOrgsOrgBucketsBucket(ctx context.Context, org string, buc
 // Corresponds with GET /orgs/{org}/buckets/{bucket} (the `GetOrgsOrgBucketsBucket` operationId).
 func (c *Client) GetOrgsOrgBucketsBucket(ctx context.Context, org string, bucket string, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewGetOrgsOrgBucketsBucketRequest(c.Server, org, bucket)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// PatchOrgsOrgBucketsBucketWithBody Change a bucket's versioning or public access
+//
+// Takes any type of body and a specified content type.
+//
+// Corresponds with PATCH /orgs/{org}/buckets/{bucket} (the `PatchOrgsOrgBucketsBucket` operationId).
+func (c *Client) PatchOrgsOrgBucketsBucketWithBody(ctx context.Context, org string, bucket string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewPatchOrgsOrgBucketsBucketRequestWithBody(c.Server, org, bucket, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// PatchOrgsOrgBucketsBucket Change a bucket's versioning or public access
+//
+// Takes a body of the `application/json` content type.
+//
+// Corresponds with PATCH /orgs/{org}/buckets/{bucket} (the `PatchOrgsOrgBucketsBucket` operationId).
+func (c *Client) PatchOrgsOrgBucketsBucket(ctx context.Context, org string, bucket string, body PatchOrgsOrgBucketsBucketJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewPatchOrgsOrgBucketsBucketRequest(c.Server, org, bucket, body)
 	if err != nil {
 		return nil, err
 	}
@@ -2550,6 +2616,60 @@ func NewGetOrgsOrgBucketsBucketRequest(server string, org string, bucket string)
 	return req, nil
 }
 
+// NewPatchOrgsOrgBucketsBucketRequest calls the generic PatchOrgsOrgBucketsBucket builder with application/json body
+func NewPatchOrgsOrgBucketsBucketRequest(server string, org string, bucket string, body PatchOrgsOrgBucketsBucketJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewPatchOrgsOrgBucketsBucketRequestWithBody(server, org, bucket, "application/json", bodyReader)
+}
+
+// NewPatchOrgsOrgBucketsBucketRequestWithBody constructs an http.Request for the PatchOrgsOrgBucketsBucket method, with any body, and a specified content type
+func NewPatchOrgsOrgBucketsBucketRequestWithBody(server string, org string, bucket string, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "org", org, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam1 string
+
+	pathParam1, err = runtime.StyleParamWithOptions("simple", false, "bucket", bucket, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/orgs/%s/buckets/%s", pathParam0, pathParam1)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodPatch, queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
+
+	return req, nil
+}
+
 // NewGetOrgsOrgBucketsBucketCredentialsRequest constructs an http.Request for the GetOrgsOrgBucketsBucketCredentials method
 func NewGetOrgsOrgBucketsBucketCredentialsRequest(server string, org string, bucket string) (*http.Request, error) {
 	var err error
@@ -3480,6 +3600,20 @@ type ClientWithResponsesInterface interface {
 	//
 	// Corresponds with GET /orgs/{org}/buckets/{bucket} (the `GetOrgsOrgBucketsBucket` operationId).
 	GetOrgsOrgBucketsBucketWithResponse(ctx context.Context, org string, bucket string, reqEditors ...RequestEditorFn) (*GetOrgsOrgBucketsBucketResponse, error)
+
+	// PatchOrgsOrgBucketsBucketWithBodyWithResponse Change a bucket's versioning or public access
+	//
+	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with PATCH /orgs/{org}/buckets/{bucket} (the `PatchOrgsOrgBucketsBucket` operationId).
+	PatchOrgsOrgBucketsBucketWithBodyWithResponse(ctx context.Context, org string, bucket string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*PatchOrgsOrgBucketsBucketResponse, error)
+
+	// PatchOrgsOrgBucketsBucketWithResponse Change a bucket's versioning or public access
+	//
+	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with PATCH /orgs/{org}/buckets/{bucket} (the `PatchOrgsOrgBucketsBucket` operationId).
+	PatchOrgsOrgBucketsBucketWithResponse(ctx context.Context, org string, bucket string, body PatchOrgsOrgBucketsBucketJSONRequestBody, reqEditors ...RequestEditorFn) (*PatchOrgsOrgBucketsBucketResponse, error)
 
 	// GetOrgsOrgBucketsBucketCredentialsWithResponse S3 credentials with endpoint and physical bucket name (write-level; never cached)
 	//
@@ -4920,6 +5054,82 @@ func (r GetOrgsOrgBucketsBucketResponse) StatusCode() int {
 
 // ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
 func (r GetOrgsOrgBucketsBucketResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type PatchOrgsOrgBucketsBucketResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *Bucket
+	// ApplicationproblemJSON400 the response for an HTTP 400 `application/problem+json` response
+	ApplicationproblemJSON400 *Problem
+	// ApplicationproblemJSON401 the response for an HTTP 401 `application/problem+json` response
+	ApplicationproblemJSON401 *Problem
+	// ApplicationproblemJSON403 the response for an HTTP 403 `application/problem+json` response
+	ApplicationproblemJSON403 *Problem
+	// ApplicationproblemJSON404 the response for an HTTP 404 `application/problem+json` response
+	ApplicationproblemJSON404 *Problem
+	// ApplicationproblemJSON409 the response for an HTTP 409 `application/problem+json` response
+	ApplicationproblemJSON409 *Problem
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r PatchOrgsOrgBucketsBucketResponse) GetJSON200() *Bucket {
+	return r.JSON200
+}
+
+// GetApplicationproblemJSON400 returns the response for an HTTP 400 `application/problem+json` response
+func (r PatchOrgsOrgBucketsBucketResponse) GetApplicationproblemJSON400() *Problem {
+	return r.ApplicationproblemJSON400
+}
+
+// GetApplicationproblemJSON401 returns the response for an HTTP 401 `application/problem+json` response
+func (r PatchOrgsOrgBucketsBucketResponse) GetApplicationproblemJSON401() *Problem {
+	return r.ApplicationproblemJSON401
+}
+
+// GetApplicationproblemJSON403 returns the response for an HTTP 403 `application/problem+json` response
+func (r PatchOrgsOrgBucketsBucketResponse) GetApplicationproblemJSON403() *Problem {
+	return r.ApplicationproblemJSON403
+}
+
+// GetApplicationproblemJSON404 returns the response for an HTTP 404 `application/problem+json` response
+func (r PatchOrgsOrgBucketsBucketResponse) GetApplicationproblemJSON404() *Problem {
+	return r.ApplicationproblemJSON404
+}
+
+// GetApplicationproblemJSON409 returns the response for an HTTP 409 `application/problem+json` response
+func (r PatchOrgsOrgBucketsBucketResponse) GetApplicationproblemJSON409() *Problem {
+	return r.ApplicationproblemJSON409
+}
+
+// GetBody returns the raw response body bytes
+func (r PatchOrgsOrgBucketsBucketResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r PatchOrgsOrgBucketsBucketResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r PatchOrgsOrgBucketsBucketResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r PatchOrgsOrgBucketsBucketResponse) ContentType() string {
 	if r.HTTPResponse != nil {
 		return r.HTTPResponse.Header.Get("Content-Type")
 	}
@@ -6377,6 +6587,32 @@ func (c *ClientWithResponses) GetOrgsOrgBucketsBucketWithResponse(ctx context.Co
 	return ParseGetOrgsOrgBucketsBucketResponse(rsp)
 }
 
+// PatchOrgsOrgBucketsBucketWithBodyWithResponse Change a bucket's versioning or public access
+//
+// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with PATCH /orgs/{org}/buckets/{bucket} (the `PatchOrgsOrgBucketsBucket` operationId).
+func (c *ClientWithResponses) PatchOrgsOrgBucketsBucketWithBodyWithResponse(ctx context.Context, org string, bucket string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*PatchOrgsOrgBucketsBucketResponse, error) {
+	rsp, err := c.PatchOrgsOrgBucketsBucketWithBody(ctx, org, bucket, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParsePatchOrgsOrgBucketsBucketResponse(rsp)
+}
+
+// PatchOrgsOrgBucketsBucketWithResponse Change a bucket's versioning or public access
+//
+// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with PATCH /orgs/{org}/buckets/{bucket} (the `PatchOrgsOrgBucketsBucket` operationId).
+func (c *ClientWithResponses) PatchOrgsOrgBucketsBucketWithResponse(ctx context.Context, org string, bucket string, body PatchOrgsOrgBucketsBucketJSONRequestBody, reqEditors ...RequestEditorFn) (*PatchOrgsOrgBucketsBucketResponse, error) {
+	rsp, err := c.PatchOrgsOrgBucketsBucket(ctx, org, bucket, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParsePatchOrgsOrgBucketsBucketResponse(rsp)
+}
+
 // GetOrgsOrgBucketsBucketCredentialsWithResponse S3 credentials with endpoint and physical bucket name (write-level; never cached)
 //
 // Returns a wrapper object for the known response body format(s).
@@ -7659,6 +7895,67 @@ func ParseGetOrgsOrgBucketsBucketResponse(rsp *http.Response) (*GetOrgsOrgBucket
 			return nil, err
 		}
 		response.ApplicationproblemJSON404 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParsePatchOrgsOrgBucketsBucketResponse parses an HTTP response from a PatchOrgsOrgBucketsBucketWithResponse call
+func ParsePatchOrgsOrgBucketsBucketResponse(rsp *http.Response) (*PatchOrgsOrgBucketsBucketResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &PatchOrgsOrgBucketsBucketResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest Bucket
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON409 = &dest
 
 	}
 
