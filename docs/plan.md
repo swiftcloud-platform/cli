@@ -93,19 +93,26 @@ cloud logout
 cloud whoami                       user, organisation, region, token kind and expiry
 cloud org   list | use <slug>
 cloud region list
+cloud context list | current | use <name> | set <name> [--api-url --org --region] | delete <name>
 
 cloud app   list
 cloud app   create  <name> --image <ref> [--port 8080] [--min 0 --max 3] [--size <tier>]
                     [--registry-server --registry-username --registry-password-stdin] [--wait]
 cloud app   get     <name>
-cloud app   deploy  <name> --image <ref> [--wait]      new image → new revision
+cloud app   deploy  <name> --image <ref> [--force] [--wait]   new image → new revision
+                    --force rolls one even when nothing changed (rebuilt image, same tag)
+cloud app   update  <name> [--port N] [--description] [--registry-*] [--clear-registry]
+cloud app   env     list <name> [--show-values]      values masked unless asked for
+cloud app   env     set  <name> KEY=VALUE… [--env-file f] [--from-stdin NAME]
+cloud app   env     unset <name> KEY…
 cloud app   scale   <name> --min N --max N
-cloud app   logs    <name> [-f] [--since 10m]
+cloud app   logs    <name> [-f] [--tail N]             (--since awaits platform support)
 cloud app   delete  <name> [--yes]
 cloud app   domain  add <name> <hostname>              prints the CNAME target for the app's region
 cloud app   domain  list <name>
 cloud app   domain  remove <name> <hostname>
 
+cloud db    engines                                  what --engine and --version accept
 cloud db    list
 cloud db    create  <name> --engine postgresql|mariadb [--size <tier>] [--wait]
 cloud db    get     <name>
@@ -122,15 +129,22 @@ cloud storage bucket create <name> [--region]
 cloud storage bucket get    <name>
 cloud storage bucket delete <name> [--yes]             purges objects; confirm echoes the name
 cloud storage bucket credentials <name> --format env|aws-profile|rclone
+cloud storage bucket update <name> [--versioning on|off] [--public on|off]
+                    [--public-prefix p] [--remove-public-prefix p] [--yes]
+                    opening access confirms first; prefixes merge with the current list
 
 cloud storage ls   [s3://bucket[/prefix]] [--recursive] [--human]   no argument lists buckets
-cloud storage cp   <src> <dst> [--recursive]        local↔s3://, s3://↔s3://; multipart, parallel, progress bar
+cloud storage cp   <src> <dst> [--recursive]        local↔s3://, s3://↔s3://; multipart, parallel
+                    a source of "-" reads stdin
 cloud storage sync <src> <dst> [--delete] [--dry-run]              size+ETag comparison, resumable
 cloud storage mv   <src> <dst>
 cloud storage rm   s3://bucket/key [--recursive] [--yes]
 cloud storage cat  s3://bucket/key                  stream to stdout; `cp - s3://…` reads stdin
 cloud storage stat s3://bucket/key                  size, ETag, content-type, last modified
-cloud storage presign s3://bucket/key [--method GET|PUT] [--expires 1h]   signed locally, no API call
+cloud storage presign s3://bucket/key [--method get|put] [--expires 1h] [--platform] [--version-id id]
+                    signed locally by default, no API call; --version-id needs --platform
+cloud storage versions s3://bucket/key              every version held, newest first
+cloud storage restore  s3://bucket/key --version-id <id>   copy one back; nothing is lost
 
 cloud completion bash|zsh|fish|powershell
 cloud version

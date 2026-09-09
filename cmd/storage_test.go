@@ -612,3 +612,29 @@ func TestVersionRows_DeleteMarkerHasNoSize(t *testing.T) {
 		t.Errorf("only the latest should be marked: %v %v", rows[0], rows[1])
 	}
 }
+
+// "cp - s3://…" reads stdin, so a pipeline needs no temporary file.
+func TestCp_ReadsStdin(t *testing.T) {
+	fake := storageSetup(t, nil)
+	testStdin = strings.NewReader("streamed body")
+	if _, err := run(t, "storage", "cp", "-", "s3://pics/from-stdin.txt"); err != nil {
+		t.Fatal(err)
+	}
+	if len(fake.puts) != 1 || fake.puts[0] != "from-stdin.txt" {
+		t.Errorf("puts = %v", fake.puts)
+	}
+}
+
+// There is no file name to borrow from stdin, so a prefix destination is a
+// mistake rather than something to guess at.
+func TestCp_StdinNeedsAKey(t *testing.T) {
+	fake := storageSetup(t, nil)
+	testStdin = strings.NewReader("body")
+	_, err := run(t, "storage", "cp", "-", "s3://pics/")
+	if err == nil || ExitCode(err) != ExitUsage {
+		t.Fatalf("a prefix destination should be a usage error, got %v", err)
+	}
+	if len(fake.puts) != 0 {
+		t.Errorf("nothing should have been written: %v", fake.puts)
+	}
+}

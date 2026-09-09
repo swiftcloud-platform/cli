@@ -655,7 +655,8 @@ locations in storage. Exactly one of the two arguments may be local.
 
 A destination ending in "/" — or naming a bucket — keeps the source's file
 name; otherwise the destination is the key to write. --recursive copies a
-whole directory or prefix.
+whole directory or prefix. A source of "-" reads stdin, which needs a
+destination key since there is no file name to borrow.
 
 A copy within one bucket is done by the storage layer, so the bytes never come
 down to this machine. Between two buckets they are streamed through it, since
@@ -664,7 +665,10 @@ each bucket is reached with its own credential.`,
   cloud storage cp ./site s3://pics/site --recursive
   cloud storage cp s3://pics/photo.jpg ./photo.jpg
   cloud storage cp s3://pics/2026/ ./backup --recursive
-  cloud storage cp s3://pics/a.jpg s3://pics/b.jpg`,
+  cloud storage cp s3://pics/a.jpg s3://pics/b.jpg
+
+  # "-" reads stdin, so nothing needs a temporary file first
+  pg_dump mydb | gzip | cloud storage cp - s3://backups/mydb.sql.gz`,
 	Args: cobra.ExactArgs(2),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		src, dst := args[0], args[1]
@@ -686,6 +690,23 @@ func copyLocalToRemote(cmd *cobra.Command, src, dst string) error {
 	if err != nil {
 		return err
 	}
+
+	// "-" means stdin, so a command can pipe into storage without a temporary
+	// file: pg_dump … | cloud storage cp - s3://backups/db.sql. There is no
+	// file name to fall back on, so the destination must name the key.
+	if src == "-" {
+		if u.IsPrefix() {
+			return &UsageError{errors.New("reading from stdin needs a destination key, not a prefix — say s3://bucket/name rather than s3://bucket/")}
+		}
+		if err := b.Client.Put(cmd.Context(), s3pkg.URI{Bucket: b.Physical, Key: u.Key}, cmd.InOrStdin(), ""); err != nil {
+			return storageErr(err)
+		}
+		if !flagQuiet {
+			fmt.Fprintf(cmd.ErrOrStderr(), "Uploaded stdin → s3://%s/%s\n", b.Ref, u.Key)
+		}
+		return nil
+	}
+
 	info, err := os.Stat(src)
 	if err != nil {
 		return err
