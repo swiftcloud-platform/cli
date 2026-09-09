@@ -93,17 +93,17 @@ func maskValue(v string) string {
 
 // appEnvVars fetches an app's current variables, which every write needs
 // first because the platform replaces the whole map.
-func appEnvVars(ctx context.Context, c *api.ClientWithResponses, org, app string) (map[string]string, error) {
+func appEnvVars(ctx context.Context, c *api.ClientWithResponses, org, app string) (map[string]string, string, error) {
 	res, err := c.GetOrgsOrgAppsAppWithResponse(ctx, org, app)
 	if err != nil {
-		return nil, reachErr(err)
+		return nil, "", reachErr(err)
 	}
 	if err := apiErr(res.StatusCode(), res.Body); err != nil {
-		return nil, err
+		return nil, "", err
 	}
 	a, err := decoded(res.JSON200)
 	if err != nil {
-		return nil, err
+		return nil, "", err
 	}
 	// Copied rather than returned directly: callers mutate it before writing
 	// the whole map back, and the response's map should not be the thing they
@@ -112,11 +112,11 @@ func appEnvVars(ctx context.Context, c *api.ClientWithResponses, org, app string
 	for k, v := range a.EnvVars {
 		vars[k] = v
 	}
-	return vars, nil
+	return vars, a.LatestRevision, nil
 }
 
 // patchEnvVars writes the whole map back and reports the redeploy.
-func patchEnvVars(cmd *cobra.Command, c *api.ClientWithResponses, org, app string, vars map[string]string) error {
+func patchEnvVars(cmd *cobra.Command, c *api.ClientWithResponses, org, app string, vars map[string]string, priorRevision string) error {
 	body := api.PatchOrgsOrgAppsAppJSONRequestBody{EnvVars: &vars}
 	res, err := c.PatchOrgsOrgAppsAppWithResponse(cmd.Context(), org, app, body)
 	if err != nil {
@@ -130,8 +130,21 @@ func patchEnvVars(cmd *cobra.Command, c *api.ClientWithResponses, org, app strin
 		return err
 	}
 	if !flagQuiet && printer.Format == output.Table {
-		fmt.Fprintf(cmd.ErrOrStderr(), "%s now has %d variable(s); a new revision is rolling out.\n", a.Name, len(vars))
-		fmt.Fprintf(cmd.ErrOrStderr(), "Watch it with `cloud app get %s`.\n", a.Name)
+		w := cmd.ErrOrStderr()
+		fmt.Fprintf(w, "%s now records %d variable(s).\n", a.Name, len(vars))
+		// Saying "a new revision is rolling out" was asserting an outcome we
+		// had not observed — and when the platform silently created no
+		// revision, that sentence was the only thing standing between an
+		// operator and the belief that their change had applied. Report what
+		// the record actually shows instead.
+		switch {
+		case a.LatestRevision == "":
+			fmt.Fprintf(w, "The platform applies variables by rolling a new revision; check it took with `cloud app get %s`.\n", a.Name)
+		case a.LatestRevision != priorRevision:
+			fmt.Fprintf(w, "Rolling out %s.\n", a.LatestRevision)
+		default:
+			fmt.Fprintf(w, "No new revision yet (still %s). Variables apply on the next one — if `cloud app get %s` still shows this revision in a minute, the rollout did not start.\n", a.LatestRevision, a.Name)
+		}
 		return nil
 	}
 	return printer.Print(envRows{vars: vars, show: envShowValues})
@@ -203,7 +216,7 @@ in full, since that output is meant for another program.`,
 		if err != nil {
 			return err
 		}
-		vars, err := appEnvVars(cmd.Context(), c, org, args[0])
+		vars, _, err := appEnvVars(cmd.Context(), c, org, args[0])
 		if err != nil {
 			return err
 		}
@@ -287,14 +300,14 @@ Setting a variable redeploys the app.`,
 		if err != nil {
 			return err
 		}
-		vars, err := appEnvVars(cmd.Context(), c, org, app)
+		vars, prior, err := appEnvVars(cmd.Context(), c, org, app)
 		if err != nil {
 			return err
 		}
 		for k, v := range incoming {
 			vars[k] = v
 		}
-		return patchEnvVars(cmd, c, org, app, vars)
+		return patchEnvVars(cmd, c, org, app, vars, prior)
 	},
 }
 
@@ -319,7 +332,7 @@ success is indistinguishable from a typo in the name.`,
 		if err != nil {
 			return err
 		}
-		vars, err := appEnvVars(cmd.Context(), c, org, app)
+		vars, prior, err := appEnvVars(cmd.Context(), c, org, app)
 		if err != nil {
 			return err
 		}
@@ -334,7 +347,7 @@ success is indistinguishable from a typo in the name.`,
 		if len(missing) > 0 {
 			return &UsageError{fmt.Errorf("%s has no variable named %s", app, strings.Join(missing, ", "))}
 		}
-		return patchEnvVars(cmd, c, org, app, vars)
+		return patchEnvVars(cmd, c, org, app, vars, prior)
 	},
 }
 
@@ -421,7 +434,7 @@ update, so a different size still means creating a new app.`,
 			return err
 		}
 		if !flagQuiet && printer.Format == output.Table {
-			fmt.Fprintf(cmd.ErrOrStderr(), "Updated %s — a new revision is rolling out.\n", a.Name)
+			fmt.Fprintf(cmd.ErrOrStderr(), "Updated %s. The platform applies changes by rolling a new revision; check it took with `cloud app get %s`.\n", a.Name, a.Name)
 			return nil
 		}
 		return printer.Print(appRows{*a})
@@ -449,7 +462,7 @@ func clearRegistry(cmd *cobra.Command, org, app string) error {
 		return err
 	}
 	if !flagQuiet && printer.Format == output.Table {
-		fmt.Fprintf(cmd.ErrOrStderr(), "Removed the registry credentials from %s — a new revision is rolling out.\n", a.Name)
+		fmt.Fprintf(cmd.ErrOrStderr(), "Removed the registry credentials from %s. Check the rollout with `cloud app get %s`.\n", a.Name, a.Name)
 		return nil
 	}
 	return printer.Print(appRows{*a})

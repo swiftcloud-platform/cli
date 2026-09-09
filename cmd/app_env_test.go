@@ -24,14 +24,21 @@ deletes a variable someone's app needs.
 
 // envFake serves one app whose env vars it remembers across a PATCH.
 type envFake struct {
-	vars    map[string]string
-	patched []map[string]string // every envVars map the CLI sent
-	last    map[string]any      // the last PATCH body, whole
+	vars map[string]string
+	// serving and latest are what the fake reports; a write that creates no
+	// revision leaves them equal, which is the bug the message must not hide.
+	serving string
+	latest  string
+	// advanceTo, when set, is the revision the fake starts serving as `latest`
+	// once a PATCH lands — what a platform that really rolls one would do.
+	advanceTo string
+	patched   []map[string]string // every envVars map the CLI sent
+	last      map[string]any      // the last PATCH body, whole
 }
 
 func newEnvFake(t *testing.T, vars map[string]string) *envFake {
 	t.Helper()
-	f := &envFake{vars: vars}
+	f := &envFake{vars: vars, serving: "notifie-00001", latest: "notifie-00001"}
 	mux := http.NewServeMux()
 	mux.HandleFunc("/api/v1/me", func(w http.ResponseWriter, _ *http.Request) {
 		fmt.Fprint(w, `{"user":{"id":"u1","email":"a@b.c"},"organizations":[{"slug":"acme","role":"owner"}],"auth":{"kind":"session"}}`)
@@ -41,6 +48,9 @@ func newEnvFake(t *testing.T, vars map[string]string) *envFake {
 			var body map[string]any
 			_ = json.NewDecoder(r.Body).Decode(&body)
 			f.last = body
+			if f.advanceTo != "" {
+				f.latest = f.advanceTo
+			}
 			if ev, ok := body["envVars"].(map[string]any); ok {
 				got := map[string]string{}
 				for k, v := range ev {
@@ -51,7 +61,7 @@ func newEnvFake(t *testing.T, vars map[string]string) *envFake {
 			}
 		}
 		env, _ := json.Marshal(f.vars)
-		fmt.Fprintf(w, `{"id":"a1","name":"notifie","organizationId":"o1","region":"zm-lsk-1","regionId":"r1","image":"ghcr.io/x/notifie:v1","description":"","status":"ready","url":"https://notifie.example","containerPort":8080,"replicasMin":0,"replicasMax":3,"size":"app-1","envVars":%s,"registryAuth":null,"createdAt":"2026-09-01T00:00:00Z","updatedAt":"2026-09-01T00:00:00Z"}`, env)
+		fmt.Fprintf(w, `{"id":"a1","name":"notifie","organizationId":"o1","region":"zm-lsk-1","regionId":"r1","image":"ghcr.io/x/notifie:v1","description":"","status":"ready","errorMessage":null,"servingRevision":%q,"latestRevision":%q,"url":"https://notifie.example","containerPort":8080,"replicasMin":0,"replicasMax":3,"size":"app-1","envVars":%s,"registryAuth":null,"createdAt":"2026-09-01T00:00:00Z","updatedAt":"2026-09-01T00:00:00Z"}`, f.serving, f.latest, env)
 	})
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("content-type", "application/json")
@@ -495,5 +505,56 @@ func TestNotServing_SuspendedIsAnError(t *testing.T) {
 		if err := notServing(&api.App{Name: "n", Status: ok}); err != nil {
 			t.Errorf("%s should not be an error: %v", ok, err)
 		}
+	}
+}
+
+// The CLI used to say "a new revision is rolling out" after every env write,
+// whether or not one was. When the platform silently created none, that
+// sentence was all that stood between an operator and believing their change
+// had applied — the same class of lie as the empty log stream.
+func TestAppEnvSet_DoesNotClaimARolloutItCannotSee(t *testing.T) {
+	f := newEnvFake(t, map[string]string{"A": "1"})
+	// The platform reports the same revision after the write: nothing rolled.
+	var errBuf bytes.Buffer
+	resetFlags(rootCmd)
+	rootCmd.SetIn(strings.NewReader(""))
+	var out bytes.Buffer
+	rootCmd.SetOut(&out)
+	rootCmd.SetErr(&errBuf)
+	rootCmd.SetArgs([]string{"app", "env", "set", "notifie", "B=2"})
+	if err := rootCmd.Execute(); err != nil {
+		t.Fatal(err)
+	}
+	msg := errBuf.String()
+	if strings.Contains(msg, "Rolling out") {
+		t.Errorf("no revision changed, so nothing should claim one is rolling:\n%s", msg)
+	}
+	for _, want := range []string{"No new revision yet", "notifie-00001", "did not start"} {
+		if !strings.Contains(msg, want) {
+			t.Errorf("expected the message to say what was observed (%q):\n%s", want, msg)
+		}
+	}
+	if len(f.patched) != 1 {
+		t.Errorf("the write itself should still have happened: %v", f.patched)
+	}
+}
+
+// And when a revision really does appear, say so by name.
+func TestAppEnvSet_NamesTheRevisionWhenOneRolls(t *testing.T) {
+	f := newEnvFake(t, map[string]string{"A": "1"})
+	// A platform that really rolls a revision reports a new one after the write.
+	f.advanceTo = "notifie-00002"
+	var errBuf bytes.Buffer
+	resetFlags(rootCmd)
+	rootCmd.SetIn(strings.NewReader(""))
+	var out bytes.Buffer
+	rootCmd.SetOut(&out)
+	rootCmd.SetErr(&errBuf)
+	rootCmd.SetArgs([]string{"app", "env", "set", "notifie", "B=2"})
+	if err := rootCmd.Execute(); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(errBuf.String(), "Rolling out notifie-00002") {
+		t.Errorf("a real rollout should be named:\n%s", errBuf.String())
 	}
 }
