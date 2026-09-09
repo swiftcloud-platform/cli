@@ -58,6 +58,8 @@ var (
 	bucketUpdateYes    bool
 	restoreVersionID   string
 	presignVersionID   string
+	keyLabel           string
+	keyRevokeYes       bool
 )
 
 // ── table shapes ────────────────────────────────────────────────────────────
@@ -230,7 +232,10 @@ func storageErr(err error) error {
 	case errors.Is(err, s3pkg.ErrNotFound):
 		return &api.Error{Type: "not-found", Detail: err.Error()}
 	case errors.Is(err, s3pkg.ErrDenied):
-		return fmt.Errorf("the bucket credential was refused by the storage layer — it may have been rotated; try again, and check the bucket's status with `cloud storage bucket get`: %w", err)
+		// A write refused on a bucket that is over its limit looks identical
+		// to a bad credential, and the two want opposite responses: one is
+		// "delete something", the other "rotate your key".
+		return fmt.Errorf("the storage layer refused this — either the bucket is read-only because it is over its storage limit, or the credential is no longer valid. `cloud storage bucket get` shows which: %w", err)
 	}
 	return err
 }
@@ -1143,7 +1148,11 @@ func init() {
 	bucketUpdateCmd.Flags().StringArrayVar(&bucketDelPrefix, "remove-public-prefix", nil, "close a folder again (repeatable)")
 	bucketUpdateCmd.Flags().BoolVarP(&bucketUpdateYes, "yes", "y", false, "skip the confirmation when opening access (scripts)")
 
-	bucketCmd.AddCommand(bucketListCmd, bucketCreateCmd, bucketGetCmd, bucketDeleteCmd, bucketCredentialsCmd, bucketUpdateCmd)
+	bucketKeysAddCmd.Flags().StringVar(&keyLabel, "label", "", "a name to recognise this key by (max 60 characters)")
+	bucketKeysRevokeCmd.Flags().BoolVarP(&keyRevokeYes, "yes", "y", false, "skip the confirmation (scripts)")
+	bucketKeysCmd.AddCommand(bucketKeysListCmd, bucketKeysAddCmd, bucketKeysRevokeCmd)
+
+	bucketCmd.AddCommand(bucketListCmd, bucketCreateCmd, bucketGetCmd, bucketDeleteCmd, bucketCredentialsCmd, bucketUpdateCmd, bucketKeysCmd)
 	storageVersionsCmd.Flags().BoolVar(&lsHuman, "human", false, "print sizes as KiB/MiB/GiB")
 	// Not MarkFlagRequired: the command's own check names the command that
 	// lists the ids, which cobra's "required flag not set" cannot.
@@ -1166,6 +1175,9 @@ func printBucketAccess(cmd *cobra.Command, b *api.Bucket) {
 		versioning = "on"
 	}
 	fmt.Fprintf(w, "Versioning   %s\n", versioning)
+	if b.ReadOnly {
+		fmt.Fprintln(w, "Read-only    yes — over the storage limit, so its keys cannot write until usage drops")
+	}
 	switch {
 	case b.PublicAccess:
 		fmt.Fprintln(w, "Public       yes — every object is readable by anyone on the internet")
@@ -1496,6 +1508,182 @@ Find the version id with "cloud storage versions".`,
 		}
 		if !flagQuiet {
 			fmt.Fprintf(cmd.ErrOrStderr(), "Restored %s from version %s. That copy is now the current version, and the one it replaced is still in the history.\n", args[0], restoreVersionID)
+		}
+		return nil
+	},
+}
+
+// ── access keys ─────────────────────────────────────────────────────────────
+
+type keyRows []api.AccessKey
+
+func (r keyRows) Columns() []string { return []string{"ID", "ACCESS KEY", "LABEL", "CREATED"} }
+func (r keyRows) Rows() [][]string {
+	out := make([][]string, len(r))
+	for i, k := range r {
+		created := k.CreatedAt
+		if t, err := time.Parse(time.RFC3339, k.CreatedAt); err == nil {
+			created = t.Local().Format("2006-01-02 15:04")
+		}
+		out[i] = []string{k.Id, k.AccessKeyId, k.Label, created}
+	}
+	return out
+}
+func (r keyRows) IDs() []string {
+	out := make([]string, len(r))
+	for i, k := range r {
+		out[i] = k.Id
+	}
+	return out
+}
+
+var bucketKeysCmd = &cobra.Command{
+	Use:   "keys",
+	Short: "Access keys for the organisation's storage",
+	Long: `The key pairs that reach this organisation's buckets.
+
+They belong to the organisation, not to one bucket, so a key listed here works
+for every bucket the organisation owns. At most two can be active at once and
+at least one must remain, which is what makes rotation possible without an
+outage: add the second, move your systems over, then revoke the first.
+
+Changes take about a minute to reach the storage servers.`,
+	Example: `  cloud storage bucket keys list photos
+  cloud storage bucket keys add photos --label ci
+  cloud storage bucket keys revoke photos <id>`,
+}
+
+var bucketKeysListCmd = &cobra.Command{
+	Use:   "list <bucket>",
+	Short: "List the active access keys",
+	Long: `List the organisation's active key pairs. Secrets are not shown —
+they exist only in the response that created them.`,
+	Example: `  cloud storage bucket keys list photos
+  cloud storage bucket keys list photos -o json`,
+	Args: cobra.ExactArgs(1),
+	RunE: func(cmd *cobra.Command, args []string) error {
+		org, err := requireOrg()
+		if err != nil {
+			return err
+		}
+		c, _, err := apiClient()
+		if err != nil {
+			return err
+		}
+		res, err := c.GetOrgsOrgBucketsBucketKeysWithResponse(cmd.Context(), org, args[0])
+		if err != nil {
+			return reachErr(err)
+		}
+		if err := apiErr(res.StatusCode(), res.Body); err != nil {
+			return err
+		}
+		list, err := decoded(res.JSON200)
+		if err != nil {
+			return err
+		}
+		return printer.Print(keyRows(list.Items))
+	},
+}
+
+var bucketKeysAddCmd = &cobra.Command{
+	Use:   "add <bucket>",
+	Short: "Add an access key pair",
+	Long: `Create a second key pair so you can rotate without an outage: add
+this one, move your systems onto it, then revoke the old one.
+
+The secret is shown once, here, and the platform cannot show it again. Put it
+somewhere before you close the terminal.
+
+Two pairs may be active at a time, so adding a third is refused until one is
+revoked. The new key works within about a minute.`,
+	Example: `  cloud storage bucket keys add photos
+  cloud storage bucket keys add photos --label "ci deploy"
+  cloud storage bucket keys add photos -o json | jq -r .secretAccessKey`,
+	Args: cobra.ExactArgs(1),
+	RunE: func(cmd *cobra.Command, args []string) error {
+		org, err := requireOrg()
+		if err != nil {
+			return err
+		}
+		c, _, err := apiClient()
+		if err != nil {
+			return err
+		}
+		body := api.PostOrgsOrgBucketsBucketKeysJSONRequestBody{}
+		if keyLabel != "" {
+			body.Label = &keyLabel
+		}
+		res, err := c.PostOrgsOrgBucketsBucketKeysWithResponse(cmd.Context(), org, args[0], body)
+		if err != nil {
+			return reachErr(err)
+		}
+		if err := apiErr(res.StatusCode(), res.Body); err != nil {
+			return err
+		}
+		k, err := decoded(res.JSON201)
+		if err != nil {
+			return err
+		}
+		if printer.Format != output.Table {
+			return printer.Print(k)
+		}
+		// The secret goes to stdout so it can be captured; everything else is
+		// commentary and goes to stderr, so `… | tee key.txt` gets the key and
+		// not the prose.
+		out := cmd.OutOrStdout()
+		fmt.Fprintf(out, "%s\n%s\n", k.AccessKeyId, k.SecretAccessKey)
+		if !flagQuiet {
+			w := cmd.ErrOrStderr()
+			fmt.Fprintf(w, "\nKey %s added.\n", k.Id)
+			fmt.Fprintln(w, "The secret above is shown once and cannot be retrieved again.")
+			if k.Note != "" {
+				fmt.Fprintf(w, "%s\n", k.Note)
+			}
+		}
+		return nil
+	},
+}
+
+var bucketKeysRevokeCmd = &cobra.Command{
+	Use:   "revoke <bucket> <key-id>",
+	Short: "Revoke an access key pair",
+	Long: `Revoke a key pair. Anything still using it stops working within about
+a minute, so move your systems across before revoking.
+
+The last active key cannot be revoked — there would be no way to reach the
+bucket afterwards. Add a replacement first.
+
+You are asked to confirm by typing the key's id, because the id is the only
+thing distinguishing the key you mean from the one your systems are using.`,
+	Example: `  cloud storage bucket keys list photos
+  cloud storage bucket keys revoke photos ak_01H...
+  cloud storage bucket keys revoke photos ak_01H... --yes`,
+	Args: cobra.ExactArgs(2),
+	RunE: func(cmd *cobra.Command, args []string) error {
+		org, err := requireOrg()
+		if err != nil {
+			return err
+		}
+		if !keyRevokeYes {
+			fmt.Fprintf(cmd.ErrOrStderr(), "Anything still using key %s stops working within about a minute.\n", args[1])
+		}
+		if err := confirm(cmd, keyRevokeYes, "key", args[1]); err != nil {
+			return err
+		}
+		c, _, err := apiClient()
+		if err != nil {
+			return err
+		}
+		res, err := c.DeleteOrgsOrgBucketsBucketKeysWithResponse(cmd.Context(), org, args[0],
+			api.DeleteOrgsOrgBucketsBucketKeysJSONRequestBody{KeyId: args[1]})
+		if err != nil {
+			return reachErr(err)
+		}
+		if err := apiErr(res.StatusCode(), res.Body); err != nil {
+			return err
+		}
+		if !flagQuiet {
+			fmt.Fprintf(cmd.ErrOrStderr(), "Revoked %s. It stops working within about a minute.\n", args[1])
 		}
 		return nil
 	},

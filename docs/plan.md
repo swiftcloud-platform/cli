@@ -129,6 +129,9 @@ cloud storage bucket create <name> [--region]
 cloud storage bucket get    <name>
 cloud storage bucket delete <name> [--yes]             purges objects; confirm echoes the name
 cloud storage bucket credentials <name> --format env|aws-profile|rclone
+cloud storage bucket keys list <bucket>              the organisation's active key pairs
+cloud storage bucket keys add  <bucket> [--label l]  secret shown once; two active at most
+cloud storage bucket keys revoke <bucket> <key-id> [--yes]   never the last one
 cloud storage bucket update <name> [--versioning on|off] [--public on|off]
                     [--public-prefix p] [--remove-public-prefix p] [--yes]
                     opening access confirms first; prefixes merge with the current list

@@ -10,6 +10,8 @@ import (
 	"testing"
 
 	"cloud/internal/wait"
+
+	s3pkg "cloud/internal/s3"
 )
 
 /*
@@ -636,5 +638,27 @@ func TestCp_StdinNeedsAKey(t *testing.T) {
 	}
 	if len(fake.puts) != 0 {
 		t.Errorf("nothing should have been written: %v", fake.puts)
+	}
+}
+
+// Over-limit and bad-credential both surface as AccessDenied but want
+// opposite responses, so the message must name both possibilities.
+func TestStorageErr_DeniedNamesBothCauses(t *testing.T) {
+	err := storageErr(fmt.Errorf("wrapped: %w", s3pkg.ErrDenied))
+	if err == nil {
+		t.Fatal("expected an error")
+	}
+	for _, want := range []string{"read-only", "storage limit", "credential", "bucket get"} {
+		if !strings.Contains(err.Error(), want) {
+			t.Errorf("the message should mention %q: %v", want, err)
+		}
+	}
+}
+
+func TestBucketKeys_RevokeNeedsConfirmation(t *testing.T) {
+	storageSetup(t, nil)
+	_, err := run(t, "storage", "bucket", "keys", "revoke", "pics", "ak_123")
+	if err == nil || ExitCode(err) != ExitUsage {
+		t.Fatalf("revoking without --yes and without a terminal should be refused, got %v", err)
 	}
 }
