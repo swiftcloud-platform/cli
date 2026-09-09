@@ -15,16 +15,16 @@ import (
 // non-positive value and caps at 30 days, so a "--since -5m" that quietly
 // returned everything, or a "--since 90d" that quietly returned 30, would each
 // be a small lie about what was asked for.
-func sinceSeconds(flagName string, d time.Duration) (*int, error) {
+func sinceSeconds(d time.Duration) (*int, error) {
 	if d == 0 {
 		return nil, nil
 	}
 	if d < 0 {
-		return nil, &UsageError{fmt.Errorf("--%s must be positive, for example 10m", flagName)}
+		return nil, &UsageError{errors.New("--since must be positive, for example 10m")}
 	}
 	const maxWindow = 30 * 24 * time.Hour
 	if d > maxWindow {
-		return nil, &UsageError{fmt.Errorf("--%s is capped at 30 days by the platform; %s is longer", flagName, d)}
+		return nil, &UsageError{fmt.Errorf("--since is capped at 30 days by the platform; %s is longer", d)}
 	}
 	secs := int(d.Seconds())
 	if secs < 1 {

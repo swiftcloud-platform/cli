@@ -596,22 +596,22 @@ func TestAppDeploy_ForceIsSentOnlyWhenAsked(t *testing.T) {
 
 func TestSinceSeconds(t *testing.T) {
 	// Unset means unset: no parameter, so the platform's own default applies.
-	if v, err := sinceSeconds("since", 0); err != nil || v != nil {
+	if v, err := sinceSeconds(0); err != nil || v != nil {
 		t.Errorf("zero should send nothing: %v %v", v, err)
 	}
-	if v, err := sinceSeconds("since", 10*time.Minute); err != nil || v == nil || *v != 600 {
+	if v, err := sinceSeconds(10 * time.Minute); err != nil || v == nil || *v != 600 {
 		t.Errorf("10m should be 600s: %v %v", v, err)
 	}
 	// The platform ignores a non-positive value and caps at 30 days. Passing
 	// either silently would misreport what was asked for.
-	if _, err := sinceSeconds("since", -5*time.Minute); err == nil || ExitCode(err) != ExitUsage {
+	if _, err := sinceSeconds(-5 * time.Minute); err == nil || ExitCode(err) != ExitUsage {
 		t.Errorf("a negative window should be refused, got %v", err)
 	}
-	if _, err := sinceSeconds("since", 31*24*time.Hour); err == nil || ExitCode(err) != ExitUsage {
+	if _, err := sinceSeconds(31 * 24 * time.Hour); err == nil || ExitCode(err) != ExitUsage {
 		t.Errorf("beyond the platform cap should be refused, got %v", err)
 	}
 	// Sub-second rounds up rather than to zero, which would mean "unset".
-	if v, err := sinceSeconds("since", 500*time.Millisecond); err != nil || v == nil || *v != 1 {
+	if v, err := sinceSeconds(500 * time.Millisecond); err != nil || v == nil || *v != 1 {
 		t.Errorf("a sub-second window should not become unset: %v %v", v, err)
 	}
 }

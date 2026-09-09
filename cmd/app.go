@@ -410,7 +410,7 @@ var appLogsCmd = &cobra.Command{
 		if err != nil {
 			return err
 		}
-		since, err := sinceSeconds("since", logsSince)
+		since, err := sinceSeconds(logsSince)
 		if err != nil {
 			return err
 		}

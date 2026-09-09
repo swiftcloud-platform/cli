@@ -654,7 +654,7 @@ var dbLogsCmd = &cobra.Command{
 		if err != nil {
 			return err
 		}
-		since, err := sinceSeconds("since", dbLogsSince)
+		since, err := sinceSeconds(dbLogsSince)
 		if err != nil {
 			return err
 		}
