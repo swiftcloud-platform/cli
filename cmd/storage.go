@@ -56,6 +56,8 @@ var (
 	bucketAddPrefix    []string
 	bucketDelPrefix    []string
 	bucketUpdateYes    bool
+	restoreVersionID   string
+	presignVersionID   string
 )
 
 // ── table shapes ────────────────────────────────────────────────────────────
@@ -1024,6 +1026,12 @@ URL is ever refused by the storage layer.
 		if u.IsPrefix() {
 			return &UsageError{fmt.Errorf("%s names a bucket or prefix, not an object", args[0])}
 		}
+		// A version can only be addressed through the platform: signing one
+		// locally would need the versionId in the request, which this client
+		// does not construct.
+		if presignVersionID != "" && !presignViaAPIFlag {
+			return &UsageError{errors.New("--version-id needs --platform: a link to one specific version is minted by the platform, not signed locally")}
+		}
 		if presignViaAPIFlag {
 			return presignViaPlatform(cmd, u, method)
 		}
@@ -1061,8 +1069,11 @@ func presignViaPlatform(cmd *cobra.Command, u s3pkg.URI, method string) error {
 	}
 	seconds := int(presignExpires.Seconds())
 	m := api.PresignRequestMethod(strings.ToUpper(method))
-	res, err := c.PostOrgsOrgBucketsBucketPresignWithResponse(cmd.Context(), org, u.Bucket,
-		api.PostOrgsOrgBucketsBucketPresignJSONRequestBody{Key: u.Key, Method: &m, ExpiresIn: &seconds})
+	body := api.PostOrgsOrgBucketsBucketPresignJSONRequestBody{Key: u.Key, Method: &m, ExpiresIn: &seconds}
+	if presignVersionID != "" {
+		body.VersionId = &presignVersionID
+	}
+	res, err := c.PostOrgsOrgBucketsBucketPresignWithResponse(cmd.Context(), org, u.Bucket, body)
 	if err != nil {
 		return reachErr(err)
 	}
@@ -1103,6 +1114,7 @@ func init() {
 	storagePresignCmd.Flags().DurationVar(&presignExpires, "expires", time.Hour, "how long the URL stays valid (max 168h)")
 	storagePresignCmd.Flags().StringVar(&presignMethod, "method", "get", "get for downloading, put for uploading")
 	storagePresignCmd.Flags().BoolVar(&presignViaAPIFlag, "platform", false, "have the platform mint the URL instead of signing locally")
+	storagePresignCmd.Flags().StringVar(&presignVersionID, "version-id", "", "link to one specific version (needs --platform, GET only)")
 
 	bucketUpdateCmd.Flags().StringVar(&bucketVersioning, "versioning", "", "on or off")
 	bucketUpdateCmd.Flags().StringVar(&bucketPublic, "public", "", "on or off — every object readable by anyone")
@@ -1111,8 +1123,14 @@ func init() {
 	bucketUpdateCmd.Flags().BoolVarP(&bucketUpdateYes, "yes", "y", false, "skip the confirmation when opening access (scripts)")
 
 	bucketCmd.AddCommand(bucketListCmd, bucketCreateCmd, bucketGetCmd, bucketDeleteCmd, bucketCredentialsCmd, bucketUpdateCmd)
+	storageVersionsCmd.Flags().BoolVar(&lsHuman, "human", false, "print sizes as KiB/MiB/GiB")
+	// Not MarkFlagRequired: the command's own check names the command that
+	// lists the ids, which cobra's "required flag not set" cannot.
+	storageRestoreCmd.Flags().StringVar(&restoreVersionID, "version-id", "", "the version to put back (required; see `cloud storage versions`)")
+
 	storageCmd.AddCommand(bucketCmd, storageLsCmd, storageCpCmd, storageSyncCmd, storageMvCmd,
-		storageRmCmd, storageCatCmd, storageStatCmd, storagePresignCmd)
+		storageRmCmd, storageCatCmd, storageStatCmd, storagePresignCmd,
+		storageVersionsCmd, storageRestoreCmd)
 	rootCmd.AddCommand(storageCmd)
 }
 
@@ -1316,4 +1334,148 @@ func confirmOpening(cmd *cobra.Command, name string, body api.PatchOrgsOrgBucket
 	}
 	fmt.Fprintln(w, "Anyone who fetches an object while it is public keeps their copy; closing access later does not undo that.")
 	return confirm(cmd, false, "bucket", name)
+}
+
+// ── object versions ─────────────────────────────────────────────────────────
+
+type versionRows []api.ObjectVersion
+
+func (r versionRows) Columns() []string {
+	return []string{"VERSION", "MODIFIED", "SIZE", "LATEST", "STATE"}
+}
+func (r versionRows) Rows() [][]string {
+	out := make([][]string, len(r))
+	for i, v := range r {
+		modified := ""
+		if v.LastModified != "" {
+			if t, err := time.Parse(time.RFC3339, v.LastModified); err == nil {
+				modified = t.Local().Format("2006-01-02 15:04")
+			} else {
+				modified = v.LastModified
+			}
+		}
+		size, state := strconv.FormatInt(int64(v.Size), 10), "stored"
+		if v.DeleteMarker {
+			// A delete marker records that the key was deleted. It has no
+			// content, so a size would be a fiction.
+			size, state = "", "deleted"
+		} else if lsHuman {
+			size = humanBytes(int64(v.Size))
+		}
+		latest := ""
+		if v.IsLatest {
+			latest = "yes"
+		}
+		out[i] = []string{v.VersionId, modified, size, latest, state}
+	}
+	return out
+}
+func (r versionRows) IDs() []string {
+	out := make([]string, len(r))
+	for i, v := range r {
+		out[i] = v.VersionId
+	}
+	return out
+}
+
+var storageVersionsCmd = &cobra.Command{
+	Use:   "versions s3://bucket/key",
+	Short: "List an object's versions, newest first",
+	Long: `List every version the storage layer holds for one object.
+
+Versions exist only while versioning is on for the bucket — see
+"cloud storage bucket update <name> --versioning on". An object that was
+never versioned lists nothing, which is not an error.
+
+A row marked "deleted" is a delete marker: the record of the key being
+deleted, with no content behind it. The version beneath it still exists and
+can be restored.`,
+	Example: `  cloud storage versions s3://pics/site/index.html
+  cloud storage versions s3://pics/site/index.html --human
+  cloud storage versions s3://pics/photo.jpg -o json | jq -r '.versions[0].versionId'`,
+	Args: cobra.ExactArgs(1),
+	RunE: func(cmd *cobra.Command, args []string) error {
+		org, err := requireOrg()
+		if err != nil {
+			return err
+		}
+		u, err := s3pkg.ParseURI(args[0])
+		if err != nil {
+			return &UsageError{err}
+		}
+		if u.IsPrefix() {
+			return &UsageError{fmt.Errorf("%s names a bucket or prefix, not an object", args[0])}
+		}
+		c, _, err := apiClient()
+		if err != nil {
+			return err
+		}
+		res, err := c.GetOrgsOrgBucketsBucketVersionsWithResponse(cmd.Context(), org, u.Bucket,
+			&api.GetOrgsOrgBucketsBucketVersionsParams{Key: u.Key})
+		if err != nil {
+			return reachErr(err)
+		}
+		if err := apiErr(res.StatusCode(), res.Body); err != nil {
+			return err
+		}
+		list, err := decoded(res.JSON200)
+		if err != nil {
+			return err
+		}
+		if printer.Format != output.Table {
+			return printer.Print(list)
+		}
+		if len(list.Versions) == 0 && !flagQuiet {
+			fmt.Fprintf(cmd.ErrOrStderr(), "No versions for %s. Versioning must be on before a change keeps its predecessor: `cloud storage bucket update %s --versioning on`.\n", args[0], u.Bucket)
+			return nil
+		}
+		return printer.Print(versionRows(list.Versions))
+	},
+}
+
+var storageRestoreCmd = &cobra.Command{
+	Use:   "restore s3://bucket/key --version-id <id>",
+	Short: "Put a previous version back",
+	Long: `Copy a previous version back onto the key, making it current.
+
+Nothing is lost: the copy becomes a new version, so the version you restored
+from and the one you replaced both remain. Restoring is therefore safe to
+repeat, and reversible by restoring the other way.
+
+Find the version id with "cloud storage versions".`,
+	Example: `  cloud storage versions s3://pics/site/index.html
+  cloud storage restore s3://pics/site/index.html --version-id 3AbCdEf...`,
+	Args: cobra.ExactArgs(1),
+	RunE: func(cmd *cobra.Command, args []string) error {
+		org, err := requireOrg()
+		if err != nil {
+			return err
+		}
+		if restoreVersionID == "" {
+			return &UsageError{errors.New("--version-id is required; list them with `cloud storage versions <location>`")}
+		}
+		u, err := s3pkg.ParseURI(args[0])
+		if err != nil {
+			return &UsageError{err}
+		}
+		if u.IsPrefix() {
+			return &UsageError{fmt.Errorf("%s names a bucket or prefix, not an object", args[0])}
+		}
+		c, _, err := apiClient()
+		if err != nil {
+			return err
+		}
+		res, err := c.PostOrgsOrgBucketsBucketRestoreWithResponse(cmd.Context(), org, u.Bucket,
+			api.PostOrgsOrgBucketsBucketRestoreJSONRequestBody{Key: u.Key, VersionId: restoreVersionID})
+		if err != nil {
+			return reachErr(err)
+		}
+		if err := apiErr(res.StatusCode(), res.Body); err != nil {
+			return err
+		}
+		if !flagQuiet {
+			fmt.Fprintf(cmd.ErrOrStderr(), "Restored %s from version %s. That copy is now the current version, and the one it replaced is still in the history.\n", args[0], restoreVersionID)
+		}
+		return nil
+	},
 }

@@ -113,6 +113,19 @@ func ExitCode(err error) int {
 	if errors.As(err, &a) {
 		return ExitAuth
 	}
+	// Cobra's own complaints are usage mistakes and must exit 2 like ours.
+	// A missing required flag is reported by ValidateRequiredFlags as a plain
+	// error, so there is nothing to type-assert on; the message is stable and
+	// matching it beats letting `--image` missing exit 1 while `--engine`
+	// wrong exits 2.
+	if strings.HasPrefix(err.Error(), "required flag") ||
+		strings.HasPrefix(err.Error(), "unknown flag") ||
+		strings.HasPrefix(err.Error(), "unknown command") ||
+		strings.HasPrefix(err.Error(), "invalid argument") ||
+		strings.HasPrefix(err.Error(), "accepts ") ||
+		strings.HasPrefix(err.Error(), "unknown shorthand flag") {
+		return ExitUsage
+	}
 	var e *api.Error
 	if errors.As(err, &e) {
 		switch e.Type {

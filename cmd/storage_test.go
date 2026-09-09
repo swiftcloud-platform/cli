@@ -564,3 +564,51 @@ func TestBucketUpdate_NothingToChange(t *testing.T) {
 		t.Fatalf("an update with no flags should be a usage error, got %v", err)
 	}
 }
+
+func TestVersions_RefusesAPrefix(t *testing.T) {
+	storageSetup(t, nil)
+	for _, arg := range []string{"s3://pics", "s3://pics/dir/"} {
+		if _, err := run(t, "storage", "versions", arg); err == nil || ExitCode(err) != ExitUsage {
+			t.Errorf("%s names no object, should be a usage error: %v", arg, err)
+		}
+	}
+}
+
+func TestRestore_NeedsAVersionID(t *testing.T) {
+	storageSetup(t, nil)
+	_, err := run(t, "storage", "restore", "s3://pics/a.txt")
+	if err == nil || ExitCode(err) != ExitUsage {
+		t.Fatalf("restore without --version-id should be a usage error, got %v", err)
+	}
+}
+
+// A version-specific link cannot be signed locally, so asking for one without
+// --platform must say so rather than quietly returning a link to the current
+// object — which would look right and serve the wrong bytes.
+func TestPresign_VersionIDNeedsPlatform(t *testing.T) {
+	storageSetup(t, nil)
+	_, err := run(t, "storage", "presign", "s3://pics/a.txt", "--version-id", "abc123")
+	if err == nil || ExitCode(err) != ExitUsage {
+		t.Fatalf("expected a usage error, got %v", err)
+	}
+	if !strings.Contains(err.Error(), "--platform") {
+		t.Errorf("the message should say what to do: %v", err)
+	}
+}
+
+// A delete marker has no content, so it must not be rendered with a size.
+func TestVersionRows_DeleteMarkerHasNoSize(t *testing.T) {
+	rows := versionRows{
+		{VersionId: "v2", Size: 0, DeleteMarker: true, IsLatest: true, LastModified: "2026-09-09T10:00:00Z"},
+		{VersionId: "v1", Size: 1024, DeleteMarker: false, LastModified: "2026-09-08T10:00:00Z"},
+	}.Rows()
+	if rows[0][2] != "" || rows[0][4] != "deleted" {
+		t.Errorf("a delete marker should show no size and state deleted: %v", rows[0])
+	}
+	if rows[1][2] != "1024" || rows[1][4] != "stored" {
+		t.Errorf("a stored version should show its size: %v", rows[1])
+	}
+	if rows[0][3] != "yes" || rows[1][3] != "" {
+		t.Errorf("only the latest should be marked: %v %v", rows[0], rows[1])
+	}
+}

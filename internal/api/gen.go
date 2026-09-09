@@ -624,6 +624,24 @@ type Me struct {
 // MeAuthKind defines model for Me.Auth.Kind.
 type MeAuthKind string
 
+// ObjectVersion defines model for ObjectVersion.
+type ObjectVersion struct {
+	// DeleteMarker True when this entry records a deletion, not content
+	DeleteMarker bool   `json:"deleteMarker"`
+	Etag         string `json:"etag"`
+	IsLatest     bool   `json:"isLatest"`
+	Key          string `json:"key"`
+	LastModified string `json:"lastModified"`
+	Size         int    `json:"size"`
+	VersionId    string `json:"versionId"`
+}
+
+// ObjectVersionList defines model for ObjectVersionList.
+type ObjectVersionList struct {
+	Key      string          `json:"key"`
+	Versions []ObjectVersion `json:"versions"`
+}
+
 // Org defines model for Org.
 type Org struct {
 	Id   string  `json:"id"`
@@ -648,6 +666,9 @@ type PresignRequest struct {
 	// Key Object key
 	Key    string                `json:"key"`
 	Method *PresignRequestMethod `json:"method,omitempty"`
+
+	// VersionId Link to one specific version (GET only)
+	VersionId *string `json:"versionId,omitempty"`
 }
 
 // PresignRequestMethod defines model for PresignRequest.Method.
@@ -687,6 +708,12 @@ type RegionList struct {
 	Items []Region `json:"items"`
 }
 
+// RestoreRequest defines model for RestoreRequest.
+type RestoreRequest struct {
+	Key       string `json:"key"`
+	VersionId string `json:"versionId"`
+}
+
 // GetOrgsOrgAppsAppLogsParams defines parameters for GetOrgsOrgAppsAppLogs.
 type GetOrgsOrgAppsAppLogsParams struct {
 	// Tail Number of recent lines (default 200)
@@ -694,6 +721,12 @@ type GetOrgsOrgAppsAppLogsParams struct {
 
 	// Follow Keep the stream open
 	Follow *bool `form:"follow,omitempty" json:"follow,omitempty"`
+}
+
+// GetOrgsOrgBucketsBucketVersionsParams defines parameters for GetOrgsOrgBucketsBucketVersions.
+type GetOrgsOrgBucketsBucketVersionsParams struct {
+	// Key Object key
+	Key string `form:"key" json:"key"`
 }
 
 // GetOrgsOrgDatabasesDbLogsParams defines parameters for GetOrgsOrgDatabasesDbLogs.
@@ -725,6 +758,9 @@ type PatchOrgsOrgBucketsBucketJSONRequestBody = BucketUpdate
 
 // PostOrgsOrgBucketsBucketPresignJSONRequestBody defines body for PostOrgsOrgBucketsBucketPresign for application/json ContentType.
 type PostOrgsOrgBucketsBucketPresignJSONRequestBody = PresignRequest
+
+// PostOrgsOrgBucketsBucketRestoreJSONRequestBody defines body for PostOrgsOrgBucketsBucketRestore for application/json ContentType.
+type PostOrgsOrgBucketsBucketRestoreJSONRequestBody = RestoreRequest
 
 // PostOrgsOrgDatabasesJSONRequestBody defines body for PostOrgsOrgDatabases for application/json ContentType.
 type PostOrgsOrgDatabasesJSONRequestBody = DatabaseCreate
@@ -981,6 +1017,25 @@ type ClientInterface interface {
 	//
 	// Corresponds with POST /orgs/{org}/buckets/{bucket}/presign (the `PostOrgsOrgBucketsBucketPresign` operationId).
 	PostOrgsOrgBucketsBucketPresign(ctx context.Context, org string, bucket string, body PostOrgsOrgBucketsBucketPresignJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// PostOrgsOrgBucketsBucketRestoreWithBody Copy a previous version back onto the key
+	//
+	// Takes any type of body and a specified content type.
+	//
+	// Corresponds with POST /orgs/{org}/buckets/{bucket}/restore (the `PostOrgsOrgBucketsBucketRestore` operationId).
+	PostOrgsOrgBucketsBucketRestoreWithBody(ctx context.Context, org string, bucket string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// PostOrgsOrgBucketsBucketRestore Copy a previous version back onto the key
+	//
+	// Takes a body of the `application/json` content type.
+	//
+	// Corresponds with POST /orgs/{org}/buckets/{bucket}/restore (the `PostOrgsOrgBucketsBucketRestore` operationId).
+	PostOrgsOrgBucketsBucketRestore(ctx context.Context, org string, bucket string, body PostOrgsOrgBucketsBucketRestoreJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// GetOrgsOrgBucketsBucketVersions List an object's versions, newest first
+	//
+	// Corresponds with GET /orgs/{org}/buckets/{bucket}/versions (the `GetOrgsOrgBucketsBucketVersions` operationId).
+	GetOrgsOrgBucketsBucketVersions(ctx context.Context, org string, bucket string, params *GetOrgsOrgBucketsBucketVersionsParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// GetOrgsOrgDatabases List databases
 	//
@@ -1533,6 +1588,55 @@ func (c *Client) PostOrgsOrgBucketsBucketPresignWithBody(ctx context.Context, or
 // Corresponds with POST /orgs/{org}/buckets/{bucket}/presign (the `PostOrgsOrgBucketsBucketPresign` operationId).
 func (c *Client) PostOrgsOrgBucketsBucketPresign(ctx context.Context, org string, bucket string, body PostOrgsOrgBucketsBucketPresignJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewPostOrgsOrgBucketsBucketPresignRequest(c.Server, org, bucket, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// PostOrgsOrgBucketsBucketRestoreWithBody Copy a previous version back onto the key
+//
+// Takes any type of body and a specified content type.
+//
+// Corresponds with POST /orgs/{org}/buckets/{bucket}/restore (the `PostOrgsOrgBucketsBucketRestore` operationId).
+func (c *Client) PostOrgsOrgBucketsBucketRestoreWithBody(ctx context.Context, org string, bucket string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewPostOrgsOrgBucketsBucketRestoreRequestWithBody(c.Server, org, bucket, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// PostOrgsOrgBucketsBucketRestore Copy a previous version back onto the key
+//
+// Takes a body of the `application/json` content type.
+//
+// Corresponds with POST /orgs/{org}/buckets/{bucket}/restore (the `PostOrgsOrgBucketsBucketRestore` operationId).
+func (c *Client) PostOrgsOrgBucketsBucketRestore(ctx context.Context, org string, bucket string, body PostOrgsOrgBucketsBucketRestoreJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewPostOrgsOrgBucketsBucketRestoreRequest(c.Server, org, bucket, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// GetOrgsOrgBucketsBucketVersions List an object's versions, newest first
+//
+// Corresponds with GET /orgs/{org}/buckets/{bucket}/versions (the `GetOrgsOrgBucketsBucketVersions` operationId).
+func (c *Client) GetOrgsOrgBucketsBucketVersions(ctx context.Context, org string, bucket string, params *GetOrgsOrgBucketsBucketVersionsParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewGetOrgsOrgBucketsBucketVersionsRequest(c.Server, org, bucket, params)
 	if err != nil {
 		return nil, err
 	}
@@ -2765,6 +2869,124 @@ func NewPostOrgsOrgBucketsBucketPresignRequestWithBody(server string, org string
 	return req, nil
 }
 
+// NewPostOrgsOrgBucketsBucketRestoreRequest calls the generic PostOrgsOrgBucketsBucketRestore builder with application/json body
+func NewPostOrgsOrgBucketsBucketRestoreRequest(server string, org string, bucket string, body PostOrgsOrgBucketsBucketRestoreJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewPostOrgsOrgBucketsBucketRestoreRequestWithBody(server, org, bucket, "application/json", bodyReader)
+}
+
+// NewPostOrgsOrgBucketsBucketRestoreRequestWithBody constructs an http.Request for the PostOrgsOrgBucketsBucketRestore method, with any body, and a specified content type
+func NewPostOrgsOrgBucketsBucketRestoreRequestWithBody(server string, org string, bucket string, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "org", org, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam1 string
+
+	pathParam1, err = runtime.StyleParamWithOptions("simple", false, "bucket", bucket, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/orgs/%s/buckets/%s/restore", pathParam0, pathParam1)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodPost, queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
+
+	return req, nil
+}
+
+// NewGetOrgsOrgBucketsBucketVersionsRequest constructs an http.Request for the GetOrgsOrgBucketsBucketVersions method
+func NewGetOrgsOrgBucketsBucketVersionsRequest(server string, org string, bucket string, params *GetOrgsOrgBucketsBucketVersionsParams) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "org", org, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam1 string
+
+	pathParam1, err = runtime.StyleParamWithOptions("simple", false, "bucket", bucket, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/orgs/%s/buckets/%s/versions", pathParam0, pathParam1)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	if params != nil {
+		// queryValues collects non-styled parameters (passthrough, JSON)
+		// that are safe to round-trip through url.Values.Encode().
+		queryValues := queryURL.Query()
+		// rawQueryFragments collects pre-encoded query fragments from
+		// styled parameters, preserving literal commas as delimiters
+		// per the OpenAPI spec (e.g. "color=blue,black,brown").
+		var rawQueryFragments []string
+
+		if queryFrag, err := runtime.StyleParamWithOptions("form", true, "key", params.Key, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+			return nil, err
+		} else {
+			for _, qp := range strings.Split(queryFrag, "&") {
+				rawQueryFragments = append(rawQueryFragments, qp)
+			}
+		}
+
+		if encoded := queryValues.Encode(); encoded != "" {
+			rawQueryFragments = append(rawQueryFragments, encoded)
+		}
+		queryURL.RawQuery = strings.Join(rawQueryFragments, "&")
+	}
+
+	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
 // NewGetOrgsOrgDatabasesRequest constructs an http.Request for the GetOrgsOrgDatabases method
 func NewGetOrgsOrgDatabasesRequest(server string, org string) (*http.Request, error) {
 	var err error
@@ -3635,6 +3857,27 @@ type ClientWithResponsesInterface interface {
 	//
 	// Corresponds with POST /orgs/{org}/buckets/{bucket}/presign (the `PostOrgsOrgBucketsBucketPresign` operationId).
 	PostOrgsOrgBucketsBucketPresignWithResponse(ctx context.Context, org string, bucket string, body PostOrgsOrgBucketsBucketPresignJSONRequestBody, reqEditors ...RequestEditorFn) (*PostOrgsOrgBucketsBucketPresignResponse, error)
+
+	// PostOrgsOrgBucketsBucketRestoreWithBodyWithResponse Copy a previous version back onto the key
+	//
+	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with POST /orgs/{org}/buckets/{bucket}/restore (the `PostOrgsOrgBucketsBucketRestore` operationId).
+	PostOrgsOrgBucketsBucketRestoreWithBodyWithResponse(ctx context.Context, org string, bucket string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*PostOrgsOrgBucketsBucketRestoreResponse, error)
+
+	// PostOrgsOrgBucketsBucketRestoreWithResponse Copy a previous version back onto the key
+	//
+	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with POST /orgs/{org}/buckets/{bucket}/restore (the `PostOrgsOrgBucketsBucketRestore` operationId).
+	PostOrgsOrgBucketsBucketRestoreWithResponse(ctx context.Context, org string, bucket string, body PostOrgsOrgBucketsBucketRestoreJSONRequestBody, reqEditors ...RequestEditorFn) (*PostOrgsOrgBucketsBucketRestoreResponse, error)
+
+	// GetOrgsOrgBucketsBucketVersionsWithResponse List an object's versions, newest first
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with GET /orgs/{org}/buckets/{bucket}/versions (the `GetOrgsOrgBucketsBucketVersions` operationId).
+	GetOrgsOrgBucketsBucketVersionsWithResponse(ctx context.Context, org string, bucket string, params *GetOrgsOrgBucketsBucketVersionsParams, reqEditors ...RequestEditorFn) (*GetOrgsOrgBucketsBucketVersionsResponse, error)
 
 	// GetOrgsOrgDatabasesWithResponse List databases
 	//
@@ -5288,6 +5531,137 @@ func (r PostOrgsOrgBucketsBucketPresignResponse) ContentType() string {
 	return ""
 }
 
+type PostOrgsOrgBucketsBucketRestoreResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// ApplicationproblemJSON400 the response for an HTTP 400 `application/problem+json` response
+	ApplicationproblemJSON400 *Problem
+	// ApplicationproblemJSON401 the response for an HTTP 401 `application/problem+json` response
+	ApplicationproblemJSON401 *Problem
+	// ApplicationproblemJSON403 the response for an HTTP 403 `application/problem+json` response
+	ApplicationproblemJSON403 *Problem
+	// ApplicationproblemJSON404 the response for an HTTP 404 `application/problem+json` response
+	ApplicationproblemJSON404 *Problem
+}
+
+// GetApplicationproblemJSON400 returns the response for an HTTP 400 `application/problem+json` response
+func (r PostOrgsOrgBucketsBucketRestoreResponse) GetApplicationproblemJSON400() *Problem {
+	return r.ApplicationproblemJSON400
+}
+
+// GetApplicationproblemJSON401 returns the response for an HTTP 401 `application/problem+json` response
+func (r PostOrgsOrgBucketsBucketRestoreResponse) GetApplicationproblemJSON401() *Problem {
+	return r.ApplicationproblemJSON401
+}
+
+// GetApplicationproblemJSON403 returns the response for an HTTP 403 `application/problem+json` response
+func (r PostOrgsOrgBucketsBucketRestoreResponse) GetApplicationproblemJSON403() *Problem {
+	return r.ApplicationproblemJSON403
+}
+
+// GetApplicationproblemJSON404 returns the response for an HTTP 404 `application/problem+json` response
+func (r PostOrgsOrgBucketsBucketRestoreResponse) GetApplicationproblemJSON404() *Problem {
+	return r.ApplicationproblemJSON404
+}
+
+// GetBody returns the raw response body bytes
+func (r PostOrgsOrgBucketsBucketRestoreResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r PostOrgsOrgBucketsBucketRestoreResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r PostOrgsOrgBucketsBucketRestoreResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r PostOrgsOrgBucketsBucketRestoreResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type GetOrgsOrgBucketsBucketVersionsResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *ObjectVersionList
+	// ApplicationproblemJSON400 the response for an HTTP 400 `application/problem+json` response
+	ApplicationproblemJSON400 *Problem
+	// ApplicationproblemJSON401 the response for an HTTP 401 `application/problem+json` response
+	ApplicationproblemJSON401 *Problem
+	// ApplicationproblemJSON403 the response for an HTTP 403 `application/problem+json` response
+	ApplicationproblemJSON403 *Problem
+	// ApplicationproblemJSON404 the response for an HTTP 404 `application/problem+json` response
+	ApplicationproblemJSON404 *Problem
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r GetOrgsOrgBucketsBucketVersionsResponse) GetJSON200() *ObjectVersionList {
+	return r.JSON200
+}
+
+// GetApplicationproblemJSON400 returns the response for an HTTP 400 `application/problem+json` response
+func (r GetOrgsOrgBucketsBucketVersionsResponse) GetApplicationproblemJSON400() *Problem {
+	return r.ApplicationproblemJSON400
+}
+
+// GetApplicationproblemJSON401 returns the response for an HTTP 401 `application/problem+json` response
+func (r GetOrgsOrgBucketsBucketVersionsResponse) GetApplicationproblemJSON401() *Problem {
+	return r.ApplicationproblemJSON401
+}
+
+// GetApplicationproblemJSON403 returns the response for an HTTP 403 `application/problem+json` response
+func (r GetOrgsOrgBucketsBucketVersionsResponse) GetApplicationproblemJSON403() *Problem {
+	return r.ApplicationproblemJSON403
+}
+
+// GetApplicationproblemJSON404 returns the response for an HTTP 404 `application/problem+json` response
+func (r GetOrgsOrgBucketsBucketVersionsResponse) GetApplicationproblemJSON404() *Problem {
+	return r.ApplicationproblemJSON404
+}
+
+// GetBody returns the raw response body bytes
+func (r GetOrgsOrgBucketsBucketVersionsResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r GetOrgsOrgBucketsBucketVersionsResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r GetOrgsOrgBucketsBucketVersionsResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r GetOrgsOrgBucketsBucketVersionsResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
 type GetOrgsOrgDatabasesResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
@@ -6650,6 +7024,45 @@ func (c *ClientWithResponses) PostOrgsOrgBucketsBucketPresignWithResponse(ctx co
 		return nil, err
 	}
 	return ParsePostOrgsOrgBucketsBucketPresignResponse(rsp)
+}
+
+// PostOrgsOrgBucketsBucketRestoreWithBodyWithResponse Copy a previous version back onto the key
+//
+// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with POST /orgs/{org}/buckets/{bucket}/restore (the `PostOrgsOrgBucketsBucketRestore` operationId).
+func (c *ClientWithResponses) PostOrgsOrgBucketsBucketRestoreWithBodyWithResponse(ctx context.Context, org string, bucket string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*PostOrgsOrgBucketsBucketRestoreResponse, error) {
+	rsp, err := c.PostOrgsOrgBucketsBucketRestoreWithBody(ctx, org, bucket, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParsePostOrgsOrgBucketsBucketRestoreResponse(rsp)
+}
+
+// PostOrgsOrgBucketsBucketRestoreWithResponse Copy a previous version back onto the key
+//
+// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with POST /orgs/{org}/buckets/{bucket}/restore (the `PostOrgsOrgBucketsBucketRestore` operationId).
+func (c *ClientWithResponses) PostOrgsOrgBucketsBucketRestoreWithResponse(ctx context.Context, org string, bucket string, body PostOrgsOrgBucketsBucketRestoreJSONRequestBody, reqEditors ...RequestEditorFn) (*PostOrgsOrgBucketsBucketRestoreResponse, error) {
+	rsp, err := c.PostOrgsOrgBucketsBucketRestore(ctx, org, bucket, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParsePostOrgsOrgBucketsBucketRestoreResponse(rsp)
+}
+
+// GetOrgsOrgBucketsBucketVersionsWithResponse List an object's versions, newest first
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with GET /orgs/{org}/buckets/{bucket}/versions (the `GetOrgsOrgBucketsBucketVersions` operationId).
+func (c *ClientWithResponses) GetOrgsOrgBucketsBucketVersionsWithResponse(ctx context.Context, org string, bucket string, params *GetOrgsOrgBucketsBucketVersionsParams, reqEditors ...RequestEditorFn) (*GetOrgsOrgBucketsBucketVersionsResponse, error) {
+	rsp, err := c.GetOrgsOrgBucketsBucketVersions(ctx, org, bucket, params, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseGetOrgsOrgBucketsBucketVersionsResponse(rsp)
 }
 
 // GetOrgsOrgDatabasesWithResponse List databases
@@ -8078,6 +8491,110 @@ func ParsePostOrgsOrgBucketsBucketPresignResponse(rsp *http.Response) (*PostOrgs
 			return nil, err
 		}
 		response.ApplicationproblemJSON409 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParsePostOrgsOrgBucketsBucketRestoreResponse parses an HTTP response from a PostOrgsOrgBucketsBucketRestoreWithResponse call
+func ParsePostOrgsOrgBucketsBucketRestoreResponse(rsp *http.Response) (*PostOrgsOrgBucketsBucketRestoreResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &PostOrgsOrgBucketsBucketRestoreResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case rsp.StatusCode == 204:
+		break // No content-type
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON404 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseGetOrgsOrgBucketsBucketVersionsResponse parses an HTTP response from a GetOrgsOrgBucketsBucketVersionsWithResponse call
+func ParseGetOrgsOrgBucketsBucketVersionsResponse(rsp *http.Response) (*GetOrgsOrgBucketsBucketVersionsResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &GetOrgsOrgBucketsBucketVersionsResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest ObjectVersionList
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON404 = &dest
 
 	}
 

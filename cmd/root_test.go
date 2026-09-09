@@ -197,3 +197,30 @@ func TestExamplesAreRunnableShapes(t *testing.T) {
 	}
 	walk(rootCmd)
 }
+
+// Cobra's own complaints are usage mistakes. A missing required flag was
+// exiting 1 while our own validation exited 2, so `cloud app deploy web`
+// without --image and `cloud db create x --engine nope` disagreed about what
+// kind of error the user had made.
+func TestCobraUsageErrorsExitTwo(t *testing.T) {
+	t.Setenv("CLOUD_CONFIG_DIR", t.TempDir())
+	t.Setenv("CLOUD_API_URL", "https://example.invalid/api/v1")
+	t.Setenv("CLOUD_ORG", "acme")
+	t.Setenv("CLOUD_TOKEN", "t")
+	for _, args := range [][]string{
+		{"app", "deploy", "web"},              // required flag missing
+		{"app", "get", "web", "--nosuchflag"}, // unknown flag
+		{"nosuchcommand"},                     // unknown command
+		{"app", "get"},                        // wrong argument count
+		{"app", "get", "a", "b"},              // too many arguments
+	} {
+		_, err := run(t, args...)
+		if err == nil {
+			t.Errorf("%v should have failed", args)
+			continue
+		}
+		if got := ExitCode(err); got != ExitUsage {
+			t.Errorf("%v exited %d, want %d (%v)", args, got, ExitUsage, err)
+		}
+	}
+}
