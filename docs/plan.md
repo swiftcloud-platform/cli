@@ -12,22 +12,32 @@ Decided 2026-09-04. This document is the source of truth for the rebuild; update
 | 3 CLI core | done 2026-09-04 | `cli` — login (device flow + `--token-stdin`), logout, whoami, org, region, app list/create/get/deploy/scale/logs/delete/domain; typed client generated from `api/openapi.json`; `--wait` with worker-heartbeat check; exit codes 2/3/4/5 |
 | 4 Databases | API done 2026-09-04 (app `b28860a`: `/database-engines`, databases CRUD, start/stop/restart, logs, credentials, backups, enable, restore; client regenerated in `cli` `11bb526`); CLI done 2026-09-04 (`cli` `cb362a4`: the `cloud db` tree — list/create/get/delete, credentials with `--format env|url`, start/stop/restart, logs, backup enable/create/list, restore `--to`/`--at`, engines; `unsupported-engine`, `limit-reached` and `billing-blocked` mapped to exit 2). Restore-to-new is not yet exercised against a live cluster, since it provisions a real database. | |
 | 5 Object storage + S3 | API done (app `5756b4e`); CLI done 2026-09-04 | `cli` — `internal/s3` (URIs, client, presigning, transfer planning) and the `cloud storage` tree: bucket list/create/get/delete/credentials, ls/cp/sync/mv/rm/cat/stat/presign. Verified against the live region endpoint with the `pics` bucket: round trip, idempotent sync, `--delete`, recursive download byte-identical including binary, locally signed presigned URL fetched by curl. Multipart was blocked by the region edge and is now fixed: Traefik's default `respondingTimeouts.readTimeout` of 60 s capped the time to read a whole request body, which on an upload path is a wall-clock cap on object size (the same PUT died at 25 MiB one run and 12 MiB the next — same seconds, different bytes). Fixed with `readTimeout: 0` on the upload entrypoints (`cloud-platform`), and omnicloud verified an 80 MiB single PUT through the edge afterwards. On the CLI side the multipart path is verified live with 5 MiB parts (`TestLive_SmallPartMultipartRoundTrips`, three parts, byte-for-byte); the 64 MiB-plus test exists but could not be run on this machine, which was out of memory. Since the platform no longer cuts a slow body off, the client's own timeouts are the ceiling — `internal/s3` therefore deliberately sets no overall request timeout, and its `Options` doc says so. Credential caching in the keychain is not implemented: one API call per command, no object-storage secret at rest. |
-| 6 Release | code done 2026-09-04; publishing not started | `cli` — `cloud update` (self-update: checksum-verified, atomic rename, refuses package-manager installs and `dev` builds). The scaffolding from phase 0 stands: `.goreleaser.yaml` (6 targets + Homebrew tap), `install.sh`, `.github/workflows/{ci,release}.yml`. **Everything remaining is a publishing action needing Arthur:** push the branch, tag `v*`, create `swiftcloud-platform/homebrew-tap` and set `HOMEBREW_TAP_GITHUB_TOKEN`, serve `install.sh` from cloud.co.zm, and the `/docs/cli` page plus `llms.txt` entry. Homebrew: the `brews` block is removed from .goreleaser.yaml until the tap repo exists (it 404s today), so the first tag cannot fail on it; re-add per the comment in the config. |
+| 6 Release | done 2026-09-09 | `cli` — `cloud update` (checksum-verified, atomic rename, refuses package-manager installs and `dev` builds). **v0.1.0** and **v0.1.1** are published: six targets across Linux, macOS and Windows on amd64/arm64 plus `checksums.txt`, and both install paths verified end to end from production — `curl -fsSL https://cloud.co.zm/install.sh | sh` on Linux/macOS, `irm https://cloud.co.zm/install.ps1 | iex` on Windows. CI runs the suite on windows-latest and parse-checks install.ps1. Homebrew is deliberately out: the `brews` block is removed from .goreleaser.yaml until `swiftcloud-platform/homebrew-tap` exists, so a tag cannot fail on it; re-add per the comment in the config. |
 
-**Phases 1 and 2 are built but not reachable** (checked 2026-09-04, after `cloud login` returned
-`HTTP 404`). They live on `feat_new_cloud` in the platform repo (`swiftcloud-platform/cloud`, local
-checkout `../test/cloud`), which is 98 commits ahead of `main`; `059ee02` is on that branch only.
-`cloud.co.zm` still serves the pre-migration `main` — it sets an `__Secure-authjs.callback-url`
-cookie, so it is the Auth.js build from before better-auth, and every `/api/*` path falls through to
-the SvelteKit SSR handler and answers 404 with HTML. No merge date is set: the branch is a
-deliberate rewrite and go-live is also blocked on the infra side (tailnet-only API server, missing
-kubeconfig scopes), so do not assume `cloud.co.zm` serves `/api/v1` soon.
+**The platform is deployed** (as of 2026-09-06). `cloud.co.zm/api/v1` answers, the install
+scripts serve, and the CLI's compiled-in default reaches production with no `CLOUD_API_URL`
+needed. The earlier state — phases 1 and 2 built but stranded on an undeployed branch — is
+history; if a command 404s against the default today, that is a new problem rather than the
+old one.
 
-**Develop and test against the dev server**, not production: `CLOUD_API_URL=http://localhost:5173/api/v1`
-runs `feat_new_cloud` with the worker up, and the device flow works there — `cloud login` prints a
-code and the `/device` page approves it. For a scripted token, sign in at `/dash`, mint one under
-Settings → API tokens, then `echo "$TOKEN" | cloud login --token-stdin`. (`../swiftcloud-frontend`
-and `../swiftcloud-backend` are unrelated scaffolds — not the platform.)
+### Beyond v1: the object-storage backlog (2026-09-09)
+
+Four batches, agreed with the platform and built on both sides, all waiting on a single schema
+push and roll:
+
+| Batch | Platform | CLI |
+|---|---|---|
+| 1 versioning + public access | `b112cce` | `storage bucket update --versioning --public --public-prefix` |
+| 1c object versions | `7f56955` | `storage versions`, `storage restore --version-id`, `presign --version-id` |
+| 2 log windows | — | `--since` on `app logs` and `db logs` |
+| 3 access keys + quota | `35d4bfe` | `storage bucket keys list/add/revoke`, `readOnly` shown, read-only hint on AccessDenied |
+| 4 bucket hostnames | `766e08a` | `storage bucket domains list/add/remove` |
+
+Every CLI half is built against the platform's own Zod schemas and hand-added to
+`api/openapi.json`, because the endpoints are not deployed and `make fetch-openapi` cannot see
+them yet. That method has matched production byte for byte three times; after the roll, a fetch
+should show only the platform's own additions. **None of it has touched a live endpoint** — the
+gap between "builds and tests" and "works" is the one this project keeps finding.
 
 ## Decisions
 
