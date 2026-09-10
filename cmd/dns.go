@@ -109,19 +109,7 @@ func (r dnsRecordRows) IDs() []string {
 
 // ── commands ────────────────────────────────────────────────────────────────
 
-var domainsCmd = &cobra.Command{
-	Use:   "domains",
-	Short: "Domains the organisation holds",
-	Long: `The domains this organisation holds, and whether the platform's name
-servers are authoritative for each.
-
-A domain is added in the dashboard; the CLI lists them and manages their
-records with "cloud dns".`,
-	Example: `  cloud domains list
-  cloud dns records list example.com`,
-}
-
-var domainsListCmd = &cobra.Command{
+var dnsListCmd = &cobra.Command{
 	Use:   "list",
 	Short: "List the organisation's domains",
 	Long: `List domains, with whether DNS is delegated to the platform.
@@ -129,8 +117,8 @@ var domainsListCmd = &cobra.Command{
 "not delegated" means the domain's registrar still points elsewhere, so
 records created here will not answer until the name servers shown are set at
 the registrar.`,
-	Example: `  cloud domains list
-  cloud domains list -o json`,
+	Example: `  cloud dns list
+  cloud dns list -o json`,
 	Args: cobra.NoArgs,
 	RunE: func(cmd *cobra.Command, _ []string) error {
 		org, err := requireOrg()
@@ -163,7 +151,13 @@ the registrar.`,
 var dnsCmd = &cobra.Command{
 	Use:   "dns",
 	Short: "DNS records on the organisation's domains",
-	Long: `Read and change the DNS records the platform's name servers hold.
+	Long: `The organisation's domains, and the records the platform's name
+servers hold for them. "cloud dns list" shows the domains; "cloud dns records"
+works inside one.
+
+A domain is added in the dashboard. Hostnames attached to a particular app or
+bucket live with that resource instead — see "cloud app domain" and
+"cloud storage bucket domains".
 
 Records are written to the name servers first and recorded second, so a
 refusal from them is reported rather than swallowed — if a record appears
@@ -171,7 +165,8 @@ here, it is live.
 
 A name can carry several records, so a record is identified by its id from
 "records list" rather than by name.`,
-	Example: `  cloud dns records list example.com
+	Example: `  cloud dns list
+  cloud dns records list example.com
   cloud dns records add example.com --name www --type A --content 203.0.113.10
   cloud dns records remove example.com <id>`,
 }
@@ -418,7 +413,6 @@ func init() {
 	dnsRecordsRemoveCmd.Flags().BoolVarP(&dnsYes, "yes", "y", false, "skip the confirmation (scripts)")
 
 	dnsRecordsCmd.AddCommand(dnsRecordsListCmd, dnsRecordsAddCmd, dnsRecordsUpdateCmd, dnsRecordsRemoveCmd)
-	dnsCmd.AddCommand(dnsRecordsCmd)
-	domainsCmd.AddCommand(domainsListCmd)
-	rootCmd.AddCommand(dnsCmd, domainsCmd)
+	dnsCmd.AddCommand(dnsListCmd, dnsRecordsCmd)
+	rootCmd.AddCommand(dnsCmd)
 }

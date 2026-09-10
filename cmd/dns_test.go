@@ -66,9 +66,9 @@ func dnsSetup(t *testing.T, records []api.DnsRecord) *dnsFake {
 	return f
 }
 
-func TestDomainsList_SaysWhetherDNSIsDelegated(t *testing.T) {
+func TestDnsList_SaysWhetherDNSIsDelegated(t *testing.T) {
 	dnsSetup(t, nil)
-	out, err := run(t, "domains", "list")
+	out, err := run(t, "dns", "list")
 	if err != nil {
 		t.Fatal(err)
 	}
