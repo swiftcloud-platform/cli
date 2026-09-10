@@ -1052,6 +1052,9 @@ type PostOrgsOrgDatabasesDbRestoreJSONRequestBody = DatabaseRestore
 // PostOrgsOrgDomainsDomainRecordsJSONRequestBody defines body for PostOrgsOrgDomainsDomainRecords for application/json ContentType.
 type PostOrgsOrgDomainsDomainRecordsJSONRequestBody = DnsRecordCreate
 
+// PatchOrgsOrgDomainsDomainRecordsRecordIdJSONRequestBody defines body for PatchOrgsOrgDomainsDomainRecordsRecordId for application/json ContentType.
+type PatchOrgsOrgDomainsDomainRecordsRecordIdJSONRequestBody = DnsRecordUpdate
+
 // PutOrgsOrgDomainsDomainRecordsRecordIdJSONRequestBody defines body for PutOrgsOrgDomainsDomainRecordsRecordId for application/json ContentType.
 type PutOrgsOrgDomainsDomainRecordsRecordIdJSONRequestBody = DnsRecordUpdate
 
@@ -1502,6 +1505,20 @@ type ClientInterface interface {
 	//
 	// Corresponds with DELETE /orgs/{org}/domains/{domain}/records/{recordId} (the `DeleteOrgsOrgDomainsDomainRecordsRecordId` operationId).
 	DeleteOrgsOrgDomainsDomainRecordsRecordId(ctx context.Context, org string, domain string, recordId string, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// PatchOrgsOrgDomainsDomainRecordsRecordIdWithBody Change a DNS record (the current method; PUT is the older spelling)
+	//
+	// Takes any type of body and a specified content type.
+	//
+	// Corresponds with PATCH /orgs/{org}/domains/{domain}/records/{recordId} (the `PatchOrgsOrgDomainsDomainRecordsRecordId` operationId).
+	PatchOrgsOrgDomainsDomainRecordsRecordIdWithBody(ctx context.Context, org string, domain string, recordId string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// PatchOrgsOrgDomainsDomainRecordsRecordId Change a DNS record (the current method; PUT is the older spelling)
+	//
+	// Takes a body of the `application/json` content type.
+	//
+	// Corresponds with PATCH /orgs/{org}/domains/{domain}/records/{recordId} (the `PatchOrgsOrgDomainsDomainRecordsRecordId` operationId).
+	PatchOrgsOrgDomainsDomainRecordsRecordId(ctx context.Context, org string, domain string, recordId string, body PatchOrgsOrgDomainsDomainRecordsRecordIdJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// PutOrgsOrgDomainsDomainRecordsRecordIdWithBody Change a DNS record
 	//
@@ -2507,6 +2524,40 @@ func (c *Client) PostOrgsOrgDomainsDomainRecords(ctx context.Context, org string
 // Corresponds with DELETE /orgs/{org}/domains/{domain}/records/{recordId} (the `DeleteOrgsOrgDomainsDomainRecordsRecordId` operationId).
 func (c *Client) DeleteOrgsOrgDomainsDomainRecordsRecordId(ctx context.Context, org string, domain string, recordId string, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewDeleteOrgsOrgDomainsDomainRecordsRecordIdRequest(c.Server, org, domain, recordId)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// PatchOrgsOrgDomainsDomainRecordsRecordIdWithBody Change a DNS record (the current method; PUT is the older spelling)
+//
+// Takes any type of body and a specified content type.
+//
+// Corresponds with PATCH /orgs/{org}/domains/{domain}/records/{recordId} (the `PatchOrgsOrgDomainsDomainRecordsRecordId` operationId).
+func (c *Client) PatchOrgsOrgDomainsDomainRecordsRecordIdWithBody(ctx context.Context, org string, domain string, recordId string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewPatchOrgsOrgDomainsDomainRecordsRecordIdRequestWithBody(c.Server, org, domain, recordId, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// PatchOrgsOrgDomainsDomainRecordsRecordId Change a DNS record (the current method; PUT is the older spelling)
+//
+// Takes a body of the `application/json` content type.
+//
+// Corresponds with PATCH /orgs/{org}/domains/{domain}/records/{recordId} (the `PatchOrgsOrgDomainsDomainRecordsRecordId` operationId).
+func (c *Client) PatchOrgsOrgDomainsDomainRecordsRecordId(ctx context.Context, org string, domain string, recordId string, body PatchOrgsOrgDomainsDomainRecordsRecordIdJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewPatchOrgsOrgDomainsDomainRecordsRecordIdRequest(c.Server, org, domain, recordId, body)
 	if err != nil {
 		return nil, err
 	}
@@ -4643,6 +4694,67 @@ func NewDeleteOrgsOrgDomainsDomainRecordsRecordIdRequest(server string, org stri
 	return req, nil
 }
 
+// NewPatchOrgsOrgDomainsDomainRecordsRecordIdRequest calls the generic PatchOrgsOrgDomainsDomainRecordsRecordId builder with application/json body
+func NewPatchOrgsOrgDomainsDomainRecordsRecordIdRequest(server string, org string, domain string, recordId string, body PatchOrgsOrgDomainsDomainRecordsRecordIdJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewPatchOrgsOrgDomainsDomainRecordsRecordIdRequestWithBody(server, org, domain, recordId, "application/json", bodyReader)
+}
+
+// NewPatchOrgsOrgDomainsDomainRecordsRecordIdRequestWithBody constructs an http.Request for the PatchOrgsOrgDomainsDomainRecordsRecordId method, with any body, and a specified content type
+func NewPatchOrgsOrgDomainsDomainRecordsRecordIdRequestWithBody(server string, org string, domain string, recordId string, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "org", org, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam1 string
+
+	pathParam1, err = runtime.StyleParamWithOptions("simple", false, "domain", domain, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam2 string
+
+	pathParam2, err = runtime.StyleParamWithOptions("simple", false, "recordId", recordId, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/orgs/%s/domains/%s/records/%s", pathParam0, pathParam1, pathParam2)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodPatch, queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
+
+	return req, nil
+}
+
 // NewPutOrgsOrgDomainsDomainRecordsRecordIdRequest calls the generic PutOrgsOrgDomainsDomainRecordsRecordId builder with application/json body
 func NewPutOrgsOrgDomainsDomainRecordsRecordIdRequest(server string, org string, domain string, recordId string, body PutOrgsOrgDomainsDomainRecordsRecordIdJSONRequestBody) (*http.Request, error) {
 	var bodyReader io.Reader
@@ -5208,6 +5320,20 @@ type ClientWithResponsesInterface interface {
 	//
 	// Corresponds with DELETE /orgs/{org}/domains/{domain}/records/{recordId} (the `DeleteOrgsOrgDomainsDomainRecordsRecordId` operationId).
 	DeleteOrgsOrgDomainsDomainRecordsRecordIdWithResponse(ctx context.Context, org string, domain string, recordId string, reqEditors ...RequestEditorFn) (*DeleteOrgsOrgDomainsDomainRecordsRecordIdResponse, error)
+
+	// PatchOrgsOrgDomainsDomainRecordsRecordIdWithBodyWithResponse Change a DNS record (the current method; PUT is the older spelling)
+	//
+	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with PATCH /orgs/{org}/domains/{domain}/records/{recordId} (the `PatchOrgsOrgDomainsDomainRecordsRecordId` operationId).
+	PatchOrgsOrgDomainsDomainRecordsRecordIdWithBodyWithResponse(ctx context.Context, org string, domain string, recordId string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*PatchOrgsOrgDomainsDomainRecordsRecordIdResponse, error)
+
+	// PatchOrgsOrgDomainsDomainRecordsRecordIdWithResponse Change a DNS record (the current method; PUT is the older spelling)
+	//
+	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with PATCH /orgs/{org}/domains/{domain}/records/{recordId} (the `PatchOrgsOrgDomainsDomainRecordsRecordId` operationId).
+	PatchOrgsOrgDomainsDomainRecordsRecordIdWithResponse(ctx context.Context, org string, domain string, recordId string, body PatchOrgsOrgDomainsDomainRecordsRecordIdJSONRequestBody, reqEditors ...RequestEditorFn) (*PatchOrgsOrgDomainsDomainRecordsRecordIdResponse, error)
 
 	// PutOrgsOrgDomainsDomainRecordsRecordIdWithBodyWithResponse Change a DNS record
 	//
@@ -8440,6 +8566,75 @@ func (r DeleteOrgsOrgDomainsDomainRecordsRecordIdResponse) ContentType() string 
 	return ""
 }
 
+type PatchOrgsOrgDomainsDomainRecordsRecordIdResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *DnsRecord
+	// ApplicationproblemJSON400 the response for an HTTP 400 `application/problem+json` response
+	ApplicationproblemJSON400 *Problem
+	// ApplicationproblemJSON401 the response for an HTTP 401 `application/problem+json` response
+	ApplicationproblemJSON401 *Problem
+	// ApplicationproblemJSON403 the response for an HTTP 403 `application/problem+json` response
+	ApplicationproblemJSON403 *Problem
+	// ApplicationproblemJSON404 the response for an HTTP 404 `application/problem+json` response
+	ApplicationproblemJSON404 *Problem
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r PatchOrgsOrgDomainsDomainRecordsRecordIdResponse) GetJSON200() *DnsRecord {
+	return r.JSON200
+}
+
+// GetApplicationproblemJSON400 returns the response for an HTTP 400 `application/problem+json` response
+func (r PatchOrgsOrgDomainsDomainRecordsRecordIdResponse) GetApplicationproblemJSON400() *Problem {
+	return r.ApplicationproblemJSON400
+}
+
+// GetApplicationproblemJSON401 returns the response for an HTTP 401 `application/problem+json` response
+func (r PatchOrgsOrgDomainsDomainRecordsRecordIdResponse) GetApplicationproblemJSON401() *Problem {
+	return r.ApplicationproblemJSON401
+}
+
+// GetApplicationproblemJSON403 returns the response for an HTTP 403 `application/problem+json` response
+func (r PatchOrgsOrgDomainsDomainRecordsRecordIdResponse) GetApplicationproblemJSON403() *Problem {
+	return r.ApplicationproblemJSON403
+}
+
+// GetApplicationproblemJSON404 returns the response for an HTTP 404 `application/problem+json` response
+func (r PatchOrgsOrgDomainsDomainRecordsRecordIdResponse) GetApplicationproblemJSON404() *Problem {
+	return r.ApplicationproblemJSON404
+}
+
+// GetBody returns the raw response body bytes
+func (r PatchOrgsOrgDomainsDomainRecordsRecordIdResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r PatchOrgsOrgDomainsDomainRecordsRecordIdResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r PatchOrgsOrgDomainsDomainRecordsRecordIdResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r PatchOrgsOrgDomainsDomainRecordsRecordIdResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
 type PutOrgsOrgDomainsDomainRecordsRecordIdResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
@@ -9382,6 +9577,32 @@ func (c *ClientWithResponses) DeleteOrgsOrgDomainsDomainRecordsRecordIdWithRespo
 		return nil, err
 	}
 	return ParseDeleteOrgsOrgDomainsDomainRecordsRecordIdResponse(rsp)
+}
+
+// PatchOrgsOrgDomainsDomainRecordsRecordIdWithBodyWithResponse Change a DNS record (the current method; PUT is the older spelling)
+//
+// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with PATCH /orgs/{org}/domains/{domain}/records/{recordId} (the `PatchOrgsOrgDomainsDomainRecordsRecordId` operationId).
+func (c *ClientWithResponses) PatchOrgsOrgDomainsDomainRecordsRecordIdWithBodyWithResponse(ctx context.Context, org string, domain string, recordId string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*PatchOrgsOrgDomainsDomainRecordsRecordIdResponse, error) {
+	rsp, err := c.PatchOrgsOrgDomainsDomainRecordsRecordIdWithBody(ctx, org, domain, recordId, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParsePatchOrgsOrgDomainsDomainRecordsRecordIdResponse(rsp)
+}
+
+// PatchOrgsOrgDomainsDomainRecordsRecordIdWithResponse Change a DNS record (the current method; PUT is the older spelling)
+//
+// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with PATCH /orgs/{org}/domains/{domain}/records/{recordId} (the `PatchOrgsOrgDomainsDomainRecordsRecordId` operationId).
+func (c *ClientWithResponses) PatchOrgsOrgDomainsDomainRecordsRecordIdWithResponse(ctx context.Context, org string, domain string, recordId string, body PatchOrgsOrgDomainsDomainRecordsRecordIdJSONRequestBody, reqEditors ...RequestEditorFn) (*PatchOrgsOrgDomainsDomainRecordsRecordIdResponse, error) {
+	rsp, err := c.PatchOrgsOrgDomainsDomainRecordsRecordId(ctx, org, domain, recordId, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParsePatchOrgsOrgDomainsDomainRecordsRecordIdResponse(rsp)
 }
 
 // PutOrgsOrgDomainsDomainRecordsRecordIdWithBodyWithResponse Change a DNS record
@@ -11932,6 +12153,60 @@ func ParseDeleteOrgsOrgDomainsDomainRecordsRecordIdResponse(rsp *http.Response) 
 	switch {
 	case rsp.StatusCode == 204:
 		break // No content-type
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON404 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParsePatchOrgsOrgDomainsDomainRecordsRecordIdResponse parses an HTTP response from a PatchOrgsOrgDomainsDomainRecordsRecordIdWithResponse call
+func ParsePatchOrgsOrgDomainsDomainRecordsRecordIdResponse(rsp *http.Response) (*PatchOrgsOrgDomainsDomainRecordsRecordIdResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &PatchOrgsOrgDomainsDomainRecordsRecordIdResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest DnsRecord
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
 
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
 		var dest Problem

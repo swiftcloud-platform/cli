@@ -345,14 +345,12 @@ records and the name alone would be ambiguous.`,
 		if err != nil {
 			return err
 		}
-		res, err := c.PutOrgsOrgDomainsDomainRecordsRecordIdWithResponse(cmd.Context(), org, args[0], args[1], body)
-		if err != nil {
-			return reachErr(err)
-		}
-		if err := apiErr(res.StatusCode(), res.Body); err != nil {
-			return err
-		}
-		rec, err := decoded(res.JSON200)
+		// The platform is moving this from PUT to PATCH — every other partial
+		// update on the API is a PATCH, and PUT was the odd one out. Both
+		// spellings exist across the transition, so try the new one and fall
+		// back when the deployment predates it. Drop the fallback once no
+		// reachable platform answers 405 here.
+		rec, err := updateDNSRecord(cmd, c, org, args[0], args[1], body)
 		if err != nil {
 			return err
 		}
@@ -415,4 +413,32 @@ func init() {
 	dnsRecordsCmd.AddCommand(dnsRecordsListCmd, dnsRecordsAddCmd, dnsRecordsUpdateCmd, dnsRecordsRemoveCmd)
 	dnsCmd.AddCommand(dnsListCmd, dnsRecordsCmd)
 	rootCmd.AddCommand(dnsCmd)
+}
+
+// updateDNSRecord sends PATCH, falling back to PUT on 405.
+//
+// 405 is the only signal that separates "this platform is older" from any
+// real failure: a wrong id is 404 and a bad body is 400, both of which must
+// surface rather than be retried under another method.
+func updateDNSRecord(cmd *cobra.Command, c *api.ClientWithResponses, org, domain, recordID string,
+	body api.PatchOrgsOrgDomainsDomainRecordsRecordIdJSONRequestBody) (*api.DnsRecord, error) {
+	res, err := c.PatchOrgsOrgDomainsDomainRecordsRecordIdWithResponse(cmd.Context(), org, domain, recordID, body)
+	if err != nil {
+		return nil, reachErr(err)
+	}
+	if res.StatusCode() == 405 {
+		// Both request bodies are the same generated type, so no conversion.
+		old, err := c.PutOrgsOrgDomainsDomainRecordsRecordIdWithResponse(cmd.Context(), org, domain, recordID, body)
+		if err != nil {
+			return nil, reachErr(err)
+		}
+		if err := apiErr(old.StatusCode(), old.Body); err != nil {
+			return nil, err
+		}
+		return decoded(old.JSON200)
+	}
+	if err := apiErr(res.StatusCode(), res.Body); err != nil {
+		return nil, err
+	}
+	return decoded(res.JSON200)
 }
