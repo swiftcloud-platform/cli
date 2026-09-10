@@ -433,7 +433,7 @@ var appLogsCmd = &cobra.Command{
 			return err
 		}
 		if lines == 0 {
-			reportNoLogs(cmd, "app", args[0], logsFollow)
+			reportNoLogs(cmd, args[0], logsFollow)
 		}
 		return nil
 	},

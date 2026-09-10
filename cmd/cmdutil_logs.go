@@ -34,7 +34,7 @@ func sinceSeconds(d time.Duration) (*int, error) {
 }
 
 /*
-Log streaming, shared by `app logs` and `db logs`.
+Log streaming for `app logs`.
 
 The one behaviour worth writing down: a log stream that yields nothing is
 reported, not passed off as success. An empty stdout is indistinguishable from
@@ -65,19 +65,17 @@ func streamLines(cmd *cobra.Command, body io.Reader) (int, error) {
 // because it is the common one: the platform stops the pod when the app is
 // idle, and a stopped pod has no logs to read — it wakes it and waits a few
 // seconds, but a cold start can outlast that.
-func reportNoLogs(cmd *cobra.Command, kind, name string, following bool) {
+func reportNoLogs(cmd *cobra.Command, name string, following bool) {
 	if flagQuiet {
 		return
 	}
 	w := cmd.ErrOrStderr()
-	fmt.Fprintf(w, "No log lines returned for %s %q.\n", kind, name)
+	fmt.Fprintf(w, "No log lines returned for app %q.\n", name)
 	if following {
 		fmt.Fprintln(w, "The stream ended without any output. If the app is idle it may have no running instance; send it a request and try again.")
 		return
 	}
-	if kind == "app" {
-		fmt.Fprintln(w, "An idle app is scaled to zero and has no instance to read from. The platform wakes it and waits a few seconds, which a slow cold start can outlast.")
-		fmt.Fprintf(w, "Send it a request, then retry — or follow the stream while you do: cloud app logs %s -f\n", name)
-	}
-	fmt.Fprintf(w, "Check it is running with `cloud %s get %s`.\n", map[string]string{"app": "app", "database": "db"}[kind], name)
+	fmt.Fprintln(w, "An idle app is scaled to zero and has no instance to read from. The platform wakes it and waits a few seconds, which a slow cold start can outlast.")
+	fmt.Fprintf(w, "Send it a request, then retry — or follow the stream while you do: cloud app logs %s -f\n", name)
+	fmt.Fprintf(w, "Check it is running with `cloud app get %s`.\n", name)
 }

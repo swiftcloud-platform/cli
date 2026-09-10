@@ -805,18 +805,6 @@ type GetOrgsOrgBucketsBucketVersionsParams struct {
 	Key string `form:"key" json:"key"`
 }
 
-// GetOrgsOrgDatabasesDbLogsParams defines parameters for GetOrgsOrgDatabasesDbLogs.
-type GetOrgsOrgDatabasesDbLogsParams struct {
-	// Tail Number of recent lines (default 200)
-	Tail *int `form:"tail,omitempty" json:"tail,omitempty"`
-
-	// Follow Keep the stream open
-	Follow *bool `form:"follow,omitempty" json:"follow,omitempty"`
-
-	// Since Only logs from the last N seconds. Ignored when 0 or less; capped at 30 days. Applied before tail.
-	Since *int `form:"since,omitempty" json:"since,omitempty"`
-}
-
 // PostOrgsOrgAppsJSONRequestBody defines body for PostOrgsOrgApps for application/json ContentType.
 type PostOrgsOrgAppsJSONRequestBody = AppCreate
 
@@ -1251,11 +1239,6 @@ type ClientInterface interface {
 	//
 	// Corresponds with GET /orgs/{org}/databases/{db}/credentials (the `GetOrgsOrgDatabasesDbCredentials` operationId).
 	GetOrgsOrgDatabasesDbCredentials(ctx context.Context, org string, db string, reqEditors ...RequestEditorFn) (*http.Response, error)
-
-	// GetOrgsOrgDatabasesDbLogs Stream logs as text/plain
-	//
-	// Corresponds with GET /orgs/{org}/databases/{db}/logs (the `GetOrgsOrgDatabasesDbLogs` operationId).
-	GetOrgsOrgDatabasesDbLogs(ctx context.Context, org string, db string, params *GetOrgsOrgDatabasesDbLogsParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// PostOrgsOrgDatabasesDbRestart Restart a database
 	//
@@ -2118,21 +2101,6 @@ func (c *Client) PostOrgsOrgDatabasesDbBackupsEnable(ctx context.Context, org st
 // Corresponds with GET /orgs/{org}/databases/{db}/credentials (the `GetOrgsOrgDatabasesDbCredentials` operationId).
 func (c *Client) GetOrgsOrgDatabasesDbCredentials(ctx context.Context, org string, db string, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewGetOrgsOrgDatabasesDbCredentialsRequest(c.Server, org, db)
-	if err != nil {
-		return nil, err
-	}
-	req = req.WithContext(ctx)
-	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
-		return nil, err
-	}
-	return c.Client.Do(req)
-}
-
-// GetOrgsOrgDatabasesDbLogs Stream logs as text/plain
-//
-// Corresponds with GET /orgs/{org}/databases/{db}/logs (the `GetOrgsOrgDatabasesDbLogs` operationId).
-func (c *Client) GetOrgsOrgDatabasesDbLogs(ctx context.Context, org string, db string, params *GetOrgsOrgDatabasesDbLogsParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewGetOrgsOrgDatabasesDbLogsRequest(c.Server, org, db, params)
 	if err != nil {
 		return nil, err
 	}
@@ -3960,98 +3928,6 @@ func NewGetOrgsOrgDatabasesDbCredentialsRequest(server string, org string, db st
 	return req, nil
 }
 
-// NewGetOrgsOrgDatabasesDbLogsRequest constructs an http.Request for the GetOrgsOrgDatabasesDbLogs method
-func NewGetOrgsOrgDatabasesDbLogsRequest(server string, org string, db string, params *GetOrgsOrgDatabasesDbLogsParams) (*http.Request, error) {
-	var err error
-
-	var pathParam0 string
-
-	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "org", org, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
-	if err != nil {
-		return nil, err
-	}
-
-	var pathParam1 string
-
-	pathParam1, err = runtime.StyleParamWithOptions("simple", false, "db", db, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
-	if err != nil {
-		return nil, err
-	}
-
-	serverURL, err := url.Parse(server)
-	if err != nil {
-		return nil, err
-	}
-
-	operationPath := fmt.Sprintf("/orgs/%s/databases/%s/logs", pathParam0, pathParam1)
-	if operationPath[0] == '/' {
-		operationPath = "." + operationPath
-	}
-
-	queryURL, err := serverURL.Parse(operationPath)
-	if err != nil {
-		return nil, err
-	}
-
-	if params != nil {
-		// queryValues collects non-styled parameters (passthrough, JSON)
-		// that are safe to round-trip through url.Values.Encode().
-		queryValues := queryURL.Query()
-		// rawQueryFragments collects pre-encoded query fragments from
-		// styled parameters, preserving literal commas as delimiters
-		// per the OpenAPI spec (e.g. "color=blue,black,brown").
-		var rawQueryFragments []string
-
-		if params.Tail != nil {
-
-			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "tail", *params.Tail, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "integer", Format: ""}); err != nil {
-				return nil, err
-			} else {
-				for _, qp := range strings.Split(queryFrag, "&") {
-					rawQueryFragments = append(rawQueryFragments, qp)
-				}
-			}
-
-		}
-
-		if params.Follow != nil {
-
-			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "follow", *params.Follow, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "boolean", Format: ""}); err != nil {
-				return nil, err
-			} else {
-				for _, qp := range strings.Split(queryFrag, "&") {
-					rawQueryFragments = append(rawQueryFragments, qp)
-				}
-			}
-
-		}
-
-		if params.Since != nil {
-
-			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "since", *params.Since, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "integer", Format: ""}); err != nil {
-				return nil, err
-			} else {
-				for _, qp := range strings.Split(queryFrag, "&") {
-					rawQueryFragments = append(rawQueryFragments, qp)
-				}
-			}
-
-		}
-
-		if encoded := queryValues.Encode(); encoded != "" {
-			rawQueryFragments = append(rawQueryFragments, encoded)
-		}
-		queryURL.RawQuery = strings.Join(rawQueryFragments, "&")
-	}
-
-	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
-	if err != nil {
-		return nil, err
-	}
-
-	return req, nil
-}
-
 // NewPostOrgsOrgDatabasesDbRestartRequest constructs an http.Request for the PostOrgsOrgDatabasesDbRestart method
 func NewPostOrgsOrgDatabasesDbRestartRequest(server string, org string, db string) (*http.Request, error) {
 	var err error
@@ -4663,13 +4539,6 @@ type ClientWithResponsesInterface interface {
 	//
 	// Corresponds with GET /orgs/{org}/databases/{db}/credentials (the `GetOrgsOrgDatabasesDbCredentials` operationId).
 	GetOrgsOrgDatabasesDbCredentialsWithResponse(ctx context.Context, org string, db string, reqEditors ...RequestEditorFn) (*GetOrgsOrgDatabasesDbCredentialsResponse, error)
-
-	// GetOrgsOrgDatabasesDbLogsWithResponse Stream logs as text/plain
-	//
-	// Returns a wrapper object for the known response body format(s).
-	//
-	// Corresponds with GET /orgs/{org}/databases/{db}/logs (the `GetOrgsOrgDatabasesDbLogs` operationId).
-	GetOrgsOrgDatabasesDbLogsWithResponse(ctx context.Context, org string, db string, params *GetOrgsOrgDatabasesDbLogsParams, reqEditors ...RequestEditorFn) (*GetOrgsOrgDatabasesDbLogsResponse, error)
 
 	// PostOrgsOrgDatabasesDbRestartWithResponse Restart a database
 	//
@@ -7364,68 +7233,6 @@ func (r GetOrgsOrgDatabasesDbCredentialsResponse) ContentType() string {
 	return ""
 }
 
-type GetOrgsOrgDatabasesDbLogsResponse struct {
-	Body         []byte
-	HTTPResponse *http.Response
-	// ApplicationproblemJSON400 the response for an HTTP 400 `application/problem+json` response
-	ApplicationproblemJSON400 *Problem
-	// ApplicationproblemJSON401 the response for an HTTP 401 `application/problem+json` response
-	ApplicationproblemJSON401 *Problem
-	// ApplicationproblemJSON403 the response for an HTTP 403 `application/problem+json` response
-	ApplicationproblemJSON403 *Problem
-	// ApplicationproblemJSON404 the response for an HTTP 404 `application/problem+json` response
-	ApplicationproblemJSON404 *Problem
-}
-
-// GetApplicationproblemJSON400 returns the response for an HTTP 400 `application/problem+json` response
-func (r GetOrgsOrgDatabasesDbLogsResponse) GetApplicationproblemJSON400() *Problem {
-	return r.ApplicationproblemJSON400
-}
-
-// GetApplicationproblemJSON401 returns the response for an HTTP 401 `application/problem+json` response
-func (r GetOrgsOrgDatabasesDbLogsResponse) GetApplicationproblemJSON401() *Problem {
-	return r.ApplicationproblemJSON401
-}
-
-// GetApplicationproblemJSON403 returns the response for an HTTP 403 `application/problem+json` response
-func (r GetOrgsOrgDatabasesDbLogsResponse) GetApplicationproblemJSON403() *Problem {
-	return r.ApplicationproblemJSON403
-}
-
-// GetApplicationproblemJSON404 returns the response for an HTTP 404 `application/problem+json` response
-func (r GetOrgsOrgDatabasesDbLogsResponse) GetApplicationproblemJSON404() *Problem {
-	return r.ApplicationproblemJSON404
-}
-
-// GetBody returns the raw response body bytes
-func (r GetOrgsOrgDatabasesDbLogsResponse) GetBody() []byte {
-	return r.Body
-}
-
-// Status returns HTTPResponse.Status
-func (r GetOrgsOrgDatabasesDbLogsResponse) Status() string {
-	if r.HTTPResponse != nil {
-		return r.HTTPResponse.Status
-	}
-	return http.StatusText(0)
-}
-
-// StatusCode returns HTTPResponse.StatusCode
-func (r GetOrgsOrgDatabasesDbLogsResponse) StatusCode() int {
-	if r.HTTPResponse != nil {
-		return r.HTTPResponse.StatusCode
-	}
-	return 0
-}
-
-// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
-func (r GetOrgsOrgDatabasesDbLogsResponse) ContentType() string {
-	if r.HTTPResponse != nil {
-		return r.HTTPResponse.Header.Get("Content-Type")
-	}
-	return ""
-}
-
 type PostOrgsOrgDatabasesDbRestartResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
@@ -8459,19 +8266,6 @@ func (c *ClientWithResponses) GetOrgsOrgDatabasesDbCredentialsWithResponse(ctx c
 		return nil, err
 	}
 	return ParseGetOrgsOrgDatabasesDbCredentialsResponse(rsp)
-}
-
-// GetOrgsOrgDatabasesDbLogsWithResponse Stream logs as text/plain
-//
-// Returns a wrapper object for the known response body format(s).
-//
-// Corresponds with GET /orgs/{org}/databases/{db}/logs (the `GetOrgsOrgDatabasesDbLogs` operationId).
-func (c *ClientWithResponses) GetOrgsOrgDatabasesDbLogsWithResponse(ctx context.Context, org string, db string, params *GetOrgsOrgDatabasesDbLogsParams, reqEditors ...RequestEditorFn) (*GetOrgsOrgDatabasesDbLogsResponse, error) {
-	rsp, err := c.GetOrgsOrgDatabasesDbLogs(ctx, org, db, params, reqEditors...)
-	if err != nil {
-		return nil, err
-	}
-	return ParseGetOrgsOrgDatabasesDbLogsResponse(rsp)
 }
 
 // PostOrgsOrgDatabasesDbRestartWithResponse Restart a database
@@ -10647,53 +10441,6 @@ func ParseGetOrgsOrgDatabasesDbCredentialsResponse(rsp *http.Response) (*GetOrgs
 			return nil, err
 		}
 		response.ApplicationproblemJSON409 = &dest
-
-	}
-
-	return response, nil
-}
-
-// ParseGetOrgsOrgDatabasesDbLogsResponse parses an HTTP response from a GetOrgsOrgDatabasesDbLogsWithResponse call
-func ParseGetOrgsOrgDatabasesDbLogsResponse(rsp *http.Response) (*GetOrgsOrgDatabasesDbLogsResponse, error) {
-	bodyBytes, err := io.ReadAll(rsp.Body)
-	defer func() { _ = rsp.Body.Close() }()
-	if err != nil {
-		return nil, err
-	}
-
-	response := &GetOrgsOrgDatabasesDbLogsResponse{
-		Body:         bodyBytes,
-		HTTPResponse: rsp,
-	}
-
-	switch {
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
-		var dest Problem
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.ApplicationproblemJSON400 = &dest
-
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
-		var dest Problem
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.ApplicationproblemJSON401 = &dest
-
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
-		var dest Problem
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.ApplicationproblemJSON403 = &dest
-
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
-		var dest Problem
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.ApplicationproblemJSON404 = &dest
 
 	}
 

@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"io"
 	"net/url"
 	"regexp"
 	"strconv"
@@ -39,9 +38,6 @@ var (
 	dbCreateRegion  string
 	dbDeleteYes     bool
 	dbCredFormat    string
-	dbLogsFollow    bool
-	dbLogsTail      int
-	dbLogsSince     time.Duration
 	dbBackupKeep    string
 	dbRestoreTo     string
 	dbRestoreAt     string
@@ -636,53 +632,6 @@ var dbRestartCmd = powerCmd("restart", "Restart a database",
 		return res.JSON202, res.StatusCode(), res.Body, nil
 	})
 
-var dbLogsCmd = &cobra.Command{
-	Use:   "logs <name>",
-	Short: "Print recent database logs; -f to follow",
-	Example: `  cloud db logs orders
-  cloud db logs orders -f              # keep streaming until Ctrl-C
-  cloud db logs orders --tail 1000
-  cloud db logs orders --since 1h        # only the last hour
-  cloud db logs orders --tail 2000 | grep -i error`,
-	Args: cobra.ExactArgs(1),
-	RunE: func(cmd *cobra.Command, args []string) error {
-		org, err := requireOrg()
-		if err != nil {
-			return err
-		}
-		c, _, err := apiClient()
-		if err != nil {
-			return err
-		}
-		since, err := sinceSeconds(dbLogsSince)
-		if err != nil {
-			return err
-		}
-		params := &api.GetOrgsOrgDatabasesDbLogsParams{Tail: &dbLogsTail, Since: since}
-		if dbLogsFollow {
-			params.Follow = &dbLogsFollow
-		}
-		// Raw response: the body is a stream copied line by line, not JSON.
-		res, err := c.GetOrgsOrgDatabasesDbLogs(cmd.Context(), org, args[0], params)
-		if err != nil {
-			return reachErr(err)
-		}
-		defer func() { _ = res.Body.Close() }()
-		if res.StatusCode != 200 {
-			body, _ := io.ReadAll(io.LimitReader(res.Body, 64<<10))
-			return apiErr(res.StatusCode, body)
-		}
-		lines, err := streamLines(cmd, res.Body)
-		if err != nil {
-			return err
-		}
-		if lines == 0 {
-			reportNoLogs(cmd, "database", args[0], dbLogsFollow)
-		}
-		return nil
-	},
-}
-
 var dbBackupCmd = &cobra.Command{
 	Use:   "backup",
 	Short: "Backups of a database",
@@ -882,10 +831,6 @@ func init() {
 
 	dbCredentialsCmd.Flags().StringVar(&dbCredFormat, "format", "env", "env or url (ignored for --output json|yaml)")
 
-	dbLogsCmd.Flags().BoolVarP(&dbLogsFollow, "follow", "f", false, "keep streaming")
-	dbLogsCmd.Flags().IntVar(&dbLogsTail, "tail", 200, "number of recent lines")
-	dbLogsCmd.Flags().DurationVar(&dbLogsSince, "since", 0, "only logs from the last duration, e.g. 10m or 2h (max 30 days)")
-
 	dbBackupEnableCmd.Flags().StringVar(&dbBackupKeep, "retention", "", "how long to keep backups: 7d, 2w, 1m (default: the platform's own)")
 
 	dbRestoreCmd.Flags().StringVar(&dbRestoreTo, "to", "", "name for the new database (required)")
@@ -899,6 +844,6 @@ func init() {
 
 	dbBackupCmd.AddCommand(dbBackupEnableCmd, dbBackupCreateCmd, dbBackupListCmd)
 	dbCmd.AddCommand(dbListCmd, dbCreateCmd, dbGetCmd, dbDeleteCmd, dbCredentialsCmd,
-		dbStartCmd, dbStopCmd, dbRestartCmd, dbLogsCmd, dbBackupCmd, dbRestoreCmd, dbEnginesCmd)
+		dbStartCmd, dbStopCmd, dbRestartCmd, dbBackupCmd, dbRestoreCmd, dbEnginesCmd)
 	rootCmd.AddCommand(dbCmd)
 }
