@@ -83,7 +83,33 @@ Every command's own --help lists its arguments, flags and examples.`,
 // Execute runs the CLI.
 func Execute() error {
 	rootCmd.Version = version.Long()
+	rejectUnknownSubcommands(rootCmd)
 	return rootCmd.Execute()
+}
+
+// rejectUnknownSubcommands makes `cloud db logs` an error rather than a help
+// screen with exit 0.
+//
+// Cobra's default for a command group with no Run of its own is to print help
+// and succeed, whatever arguments follow. So a removed or misspelled
+// subcommand looks exactly like asking for help, and a script sees success —
+// which matters most for a command that used to exist, where the user has the
+// muscle memory and no reason to read the output. A bare group still prints
+// its help and exits 0, because that is a fair thing to ask for.
+func rejectUnknownSubcommands(c *cobra.Command) {
+	for _, sub := range c.Commands() {
+		rejectUnknownSubcommands(sub)
+	}
+	if !c.HasSubCommands() || c.Run != nil || c.RunE != nil {
+		return
+	}
+	c.RunE = func(cmd *cobra.Command, args []string) error {
+		if len(args) > 0 {
+			return &UsageError{fmt.Errorf("unknown command %q for %q — run `%s --help` to see what it takes",
+				args[0], cmd.CommandPath(), cmd.CommandPath())}
+		}
+		return cmd.Help()
+	}
 }
 
 // UsageError marks a mistake in how the command was invoked, as opposed to a

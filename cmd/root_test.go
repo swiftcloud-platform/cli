@@ -224,3 +224,36 @@ func TestCobraUsageErrorsExitTwo(t *testing.T) {
 		}
 	}
 }
+
+// Cobra's default for a group with no Run of its own is to print help and
+// exit 0 whatever follows it, so `cloud db logs` — a command that used to
+// exist — looked like a success. A bare group asking for help still is one.
+func TestUnknownSubcommandIsAnError(t *testing.T) {
+	t.Setenv("CLOUD_CONFIG_DIR", t.TempDir())
+	t.Setenv("CLOUD_API_URL", "https://example.invalid/api/v1")
+	t.Setenv("CLOUD_ORG", "acme")
+	t.Setenv("CLOUD_TOKEN", "t")
+	rejectUnknownSubcommands(rootCmd)
+
+	for _, args := range [][]string{
+		{"db", "logs", "orders"},      // removed on 2026-09-10
+		{"storage", "nosuchthing"},    // misspelled
+		{"storage", "bucket", "nope"}, // nested group
+		{"dns", "records", "nope"},
+	} {
+		_, err := run(t, args...)
+		if err == nil {
+			t.Errorf("%v should have failed", args)
+			continue
+		}
+		if got := ExitCode(err); got != ExitUsage {
+			t.Errorf("%v exited %d, want %d (%v)", args, got, ExitUsage, err)
+		}
+	}
+	// A group on its own is a legitimate request for help.
+	for _, args := range [][]string{{"db"}, {"storage"}, {"storage", "bucket"}, {"dns"}} {
+		if _, err := run(t, args...); err != nil {
+			t.Errorf("%v should print help and succeed, got %v", args, err)
+		}
+	}
+}
