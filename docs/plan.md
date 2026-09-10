@@ -133,6 +133,12 @@ cloud db    backup  create <name>
 cloud db    backup  list   <name>
 cloud db    restore <name> --to <new-name> [--at 2026-09-04T10:15:00Z]   always a NEW database
 
+cloud domains list                                  domains, and whether DNS is delegated here
+cloud dns     records list <domain>
+cloud dns     records add  <domain> --name --type --content [--ttl] [--priority]
+cloud dns     records update <domain> <record-id> [--name --type --content --ttl --priority]
+cloud dns     records remove <domain> <record-id> [--yes]
+
 cloud storage bucket list
 cloud storage bucket create <name> [--region]
 cloud storage bucket get    <name>

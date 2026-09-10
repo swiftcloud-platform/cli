@@ -50,6 +50,123 @@ func (e DatabaseCreateEngine) Valid() bool {
 	}
 }
 
+// Defines values for DnsRecordType.
+const (
+	DnsRecordTypeA     DnsRecordType = "A"
+	DnsRecordTypeAAAA  DnsRecordType = "AAAA"
+	DnsRecordTypeCAA   DnsRecordType = "CAA"
+	DnsRecordTypeCNAME DnsRecordType = "CNAME"
+	DnsRecordTypeMX    DnsRecordType = "MX"
+	DnsRecordTypeNS    DnsRecordType = "NS"
+	DnsRecordTypePTR   DnsRecordType = "PTR"
+	DnsRecordTypeSRV   DnsRecordType = "SRV"
+	DnsRecordTypeTXT   DnsRecordType = "TXT"
+)
+
+// Valid indicates whether the value is a known member of the DnsRecordType enum.
+func (e DnsRecordType) Valid() bool {
+	switch e {
+	case DnsRecordTypeA:
+		return true
+	case DnsRecordTypeAAAA:
+		return true
+	case DnsRecordTypeCAA:
+		return true
+	case DnsRecordTypeCNAME:
+		return true
+	case DnsRecordTypeMX:
+		return true
+	case DnsRecordTypeNS:
+		return true
+	case DnsRecordTypePTR:
+		return true
+	case DnsRecordTypeSRV:
+		return true
+	case DnsRecordTypeTXT:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for DnsRecordCreateType.
+const (
+	DnsRecordCreateTypeA     DnsRecordCreateType = "A"
+	DnsRecordCreateTypeAAAA  DnsRecordCreateType = "AAAA"
+	DnsRecordCreateTypeCAA   DnsRecordCreateType = "CAA"
+	DnsRecordCreateTypeCNAME DnsRecordCreateType = "CNAME"
+	DnsRecordCreateTypeMX    DnsRecordCreateType = "MX"
+	DnsRecordCreateTypeNS    DnsRecordCreateType = "NS"
+	DnsRecordCreateTypePTR   DnsRecordCreateType = "PTR"
+	DnsRecordCreateTypeSRV   DnsRecordCreateType = "SRV"
+	DnsRecordCreateTypeTXT   DnsRecordCreateType = "TXT"
+)
+
+// Valid indicates whether the value is a known member of the DnsRecordCreateType enum.
+func (e DnsRecordCreateType) Valid() bool {
+	switch e {
+	case DnsRecordCreateTypeA:
+		return true
+	case DnsRecordCreateTypeAAAA:
+		return true
+	case DnsRecordCreateTypeCAA:
+		return true
+	case DnsRecordCreateTypeCNAME:
+		return true
+	case DnsRecordCreateTypeMX:
+		return true
+	case DnsRecordCreateTypeNS:
+		return true
+	case DnsRecordCreateTypePTR:
+		return true
+	case DnsRecordCreateTypeSRV:
+		return true
+	case DnsRecordCreateTypeTXT:
+		return true
+	default:
+		return false
+	}
+}
+
+// Defines values for DnsRecordUpdateType.
+const (
+	DnsRecordUpdateTypeA     DnsRecordUpdateType = "A"
+	DnsRecordUpdateTypeAAAA  DnsRecordUpdateType = "AAAA"
+	DnsRecordUpdateTypeCAA   DnsRecordUpdateType = "CAA"
+	DnsRecordUpdateTypeCNAME DnsRecordUpdateType = "CNAME"
+	DnsRecordUpdateTypeMX    DnsRecordUpdateType = "MX"
+	DnsRecordUpdateTypeNS    DnsRecordUpdateType = "NS"
+	DnsRecordUpdateTypePTR   DnsRecordUpdateType = "PTR"
+	DnsRecordUpdateTypeSRV   DnsRecordUpdateType = "SRV"
+	DnsRecordUpdateTypeTXT   DnsRecordUpdateType = "TXT"
+)
+
+// Valid indicates whether the value is a known member of the DnsRecordUpdateType enum.
+func (e DnsRecordUpdateType) Valid() bool {
+	switch e {
+	case DnsRecordUpdateTypeA:
+		return true
+	case DnsRecordUpdateTypeAAAA:
+		return true
+	case DnsRecordUpdateTypeCAA:
+		return true
+	case DnsRecordUpdateTypeCNAME:
+		return true
+	case DnsRecordUpdateTypeMX:
+		return true
+	case DnsRecordUpdateTypeNS:
+		return true
+	case DnsRecordUpdateTypePTR:
+		return true
+	case DnsRecordUpdateTypeSRV:
+		return true
+	case DnsRecordUpdateTypeTXT:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for EngineVersionEngine.
 const (
 	EngineVersionEngineMariadb    EngineVersionEngine = "mariadb"
@@ -628,9 +745,91 @@ type DeploymentList struct {
 	Items []Deployment `json:"items"`
 }
 
+// DnsRecord defines model for DnsRecord.
+type DnsRecord struct {
+	// Content Canonical value as held by the name servers (hostnames end with a dot, TXT is quoted)
+	Content   string `json:"content"`
+	CreatedAt string `json:"createdAt"`
+	Id        string `json:"id"`
+
+	// Name Relative to the domain: "@" for the apex, "www" for www.<domain>
+	Name string `json:"name"`
+
+	// Priority MX and SRV only
+	Priority  int           `json:"priority"`
+	Ttl       int           `json:"ttl"`
+	Type      DnsRecordType `json:"type"`
+	UpdatedAt string        `json:"updatedAt"`
+}
+
+// DnsRecordType defines model for DnsRecord.Type.
+type DnsRecordType string
+
+// DnsRecordCreate defines model for DnsRecordCreate.
+type DnsRecordCreate struct {
+	Content string `json:"content"`
+
+	// Name "@", "www", or a full name within the domain
+	Name string `json:"name"`
+
+	// Priority Required for MX and SRV
+	Priority *int `json:"priority,omitempty"`
+
+	// Ttl Defaults: 300 for A/AAAA/CNAME/SRV/PTR, 3600 for MX/TXT/NS/CAA
+	Ttl  *int                `json:"ttl,omitempty"`
+	Type DnsRecordCreateType `json:"type"`
+}
+
+// DnsRecordCreateType defines model for DnsRecordCreate.Type.
+type DnsRecordCreateType string
+
+// DnsRecordList defines model for DnsRecordList.
+type DnsRecordList struct {
+	Items []DnsRecord `json:"items"`
+}
+
+// DnsRecordUpdate defines model for DnsRecordUpdate.
+type DnsRecordUpdate struct {
+	Content *string `json:"content,omitempty"`
+
+	// Name "@", "www", or a full name within the domain
+	Name *string `json:"name,omitempty"`
+
+	// Priority Required for MX and SRV
+	Priority *int `json:"priority,omitempty"`
+
+	// Ttl Defaults: 300 for A/AAAA/CNAME/SRV/PTR, 3600 for MX/TXT/NS/CAA
+	Ttl  *int                 `json:"ttl,omitempty"`
+	Type *DnsRecordUpdateType `json:"type,omitempty"`
+}
+
+// DnsRecordUpdateType defines model for DnsRecordUpdate.Type.
+type DnsRecordUpdateType string
+
+// Domain defines model for Domain.
+type Domain struct {
+	CreatedAt string `json:"createdAt"`
+
+	// DnsSynced True when the platform's name servers are authoritative for it
+	DnsSynced bool   `json:"dnsSynced"`
+	Id        string `json:"id"`
+	Name      string `json:"name"`
+
+	// Nameservers Name servers currently observed for the domain
+	Nameservers []string `json:"nameservers"`
+
+	// Status pending | active
+	Status string `json:"status"`
+}
+
 // DomainAdd defines model for DomainAdd.
 type DomainAdd struct {
 	Domain string `json:"domain"`
+}
+
+// DomainList defines model for DomainList.
+type DomainList struct {
+	Items []Domain `json:"items"`
 }
 
 // EngineVersion defines model for EngineVersion.
@@ -849,6 +1048,12 @@ type PostOrgsOrgDatabasesDbBackupsEnableJSONRequestBody = BackupsEnable
 
 // PostOrgsOrgDatabasesDbRestoreJSONRequestBody defines body for PostOrgsOrgDatabasesDbRestore for application/json ContentType.
 type PostOrgsOrgDatabasesDbRestoreJSONRequestBody = DatabaseRestore
+
+// PostOrgsOrgDomainsDomainRecordsJSONRequestBody defines body for PostOrgsOrgDomainsDomainRecords for application/json ContentType.
+type PostOrgsOrgDomainsDomainRecordsJSONRequestBody = DnsRecordCreate
+
+// PutOrgsOrgDomainsDomainRecordsRecordIdJSONRequestBody defines body for PutOrgsOrgDomainsDomainRecordsRecordId for application/json ContentType.
+type PutOrgsOrgDomainsDomainRecordsRecordIdJSONRequestBody = DnsRecordUpdate
 
 // RequestEditorFn is the function signature for the RequestEditor callback function
 type RequestEditorFn func(ctx context.Context, req *http.Request) error
@@ -1268,6 +1473,49 @@ type ClientInterface interface {
 	//
 	// Corresponds with POST /orgs/{org}/databases/{db}/stop (the `PostOrgsOrgDatabasesDbStop` operationId).
 	PostOrgsOrgDatabasesDbStop(ctx context.Context, org string, db string, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// GetOrgsOrgDomains List the organisation's domains
+	//
+	// Corresponds with GET /orgs/{org}/domains (the `GetOrgsOrgDomains` operationId).
+	GetOrgsOrgDomains(ctx context.Context, org string, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// GetOrgsOrgDomainsDomainRecords List a domain's DNS records
+	//
+	// Corresponds with GET /orgs/{org}/domains/{domain}/records (the `GetOrgsOrgDomainsDomainRecords` operationId).
+	GetOrgsOrgDomainsDomainRecords(ctx context.Context, org string, domain string, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// PostOrgsOrgDomainsDomainRecordsWithBody Create a DNS record
+	//
+	// Takes any type of body and a specified content type.
+	//
+	// Corresponds with POST /orgs/{org}/domains/{domain}/records (the `PostOrgsOrgDomainsDomainRecords` operationId).
+	PostOrgsOrgDomainsDomainRecordsWithBody(ctx context.Context, org string, domain string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// PostOrgsOrgDomainsDomainRecords Create a DNS record
+	//
+	// Takes a body of the `application/json` content type.
+	//
+	// Corresponds with POST /orgs/{org}/domains/{domain}/records (the `PostOrgsOrgDomainsDomainRecords` operationId).
+	PostOrgsOrgDomainsDomainRecords(ctx context.Context, org string, domain string, body PostOrgsOrgDomainsDomainRecordsJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// DeleteOrgsOrgDomainsDomainRecordsRecordId Delete a DNS record
+	//
+	// Corresponds with DELETE /orgs/{org}/domains/{domain}/records/{recordId} (the `DeleteOrgsOrgDomainsDomainRecordsRecordId` operationId).
+	DeleteOrgsOrgDomainsDomainRecordsRecordId(ctx context.Context, org string, domain string, recordId string, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// PutOrgsOrgDomainsDomainRecordsRecordIdWithBody Change a DNS record
+	//
+	// Takes any type of body and a specified content type.
+	//
+	// Corresponds with PUT /orgs/{org}/domains/{domain}/records/{recordId} (the `PutOrgsOrgDomainsDomainRecordsRecordId` operationId).
+	PutOrgsOrgDomainsDomainRecordsRecordIdWithBody(ctx context.Context, org string, domain string, recordId string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// PutOrgsOrgDomainsDomainRecordsRecordId Change a DNS record
+	//
+	// Takes a body of the `application/json` content type.
+	//
+	// Corresponds with PUT /orgs/{org}/domains/{domain}/records/{recordId} (the `PutOrgsOrgDomainsDomainRecordsRecordId` operationId).
+	PutOrgsOrgDomainsDomainRecordsRecordId(ctx context.Context, org string, domain string, recordId string, body PutOrgsOrgDomainsDomainRecordsRecordIdJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// GetRegions Regions available for new resources
 	//
@@ -2180,6 +2428,119 @@ func (c *Client) PostOrgsOrgDatabasesDbStart(ctx context.Context, org string, db
 // Corresponds with POST /orgs/{org}/databases/{db}/stop (the `PostOrgsOrgDatabasesDbStop` operationId).
 func (c *Client) PostOrgsOrgDatabasesDbStop(ctx context.Context, org string, db string, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewPostOrgsOrgDatabasesDbStopRequest(c.Server, org, db)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// GetOrgsOrgDomains List the organisation's domains
+//
+// Corresponds with GET /orgs/{org}/domains (the `GetOrgsOrgDomains` operationId).
+func (c *Client) GetOrgsOrgDomains(ctx context.Context, org string, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewGetOrgsOrgDomainsRequest(c.Server, org)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// GetOrgsOrgDomainsDomainRecords List a domain's DNS records
+//
+// Corresponds with GET /orgs/{org}/domains/{domain}/records (the `GetOrgsOrgDomainsDomainRecords` operationId).
+func (c *Client) GetOrgsOrgDomainsDomainRecords(ctx context.Context, org string, domain string, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewGetOrgsOrgDomainsDomainRecordsRequest(c.Server, org, domain)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// PostOrgsOrgDomainsDomainRecordsWithBody Create a DNS record
+//
+// Takes any type of body and a specified content type.
+//
+// Corresponds with POST /orgs/{org}/domains/{domain}/records (the `PostOrgsOrgDomainsDomainRecords` operationId).
+func (c *Client) PostOrgsOrgDomainsDomainRecordsWithBody(ctx context.Context, org string, domain string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewPostOrgsOrgDomainsDomainRecordsRequestWithBody(c.Server, org, domain, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// PostOrgsOrgDomainsDomainRecords Create a DNS record
+//
+// Takes a body of the `application/json` content type.
+//
+// Corresponds with POST /orgs/{org}/domains/{domain}/records (the `PostOrgsOrgDomainsDomainRecords` operationId).
+func (c *Client) PostOrgsOrgDomainsDomainRecords(ctx context.Context, org string, domain string, body PostOrgsOrgDomainsDomainRecordsJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewPostOrgsOrgDomainsDomainRecordsRequest(c.Server, org, domain, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// DeleteOrgsOrgDomainsDomainRecordsRecordId Delete a DNS record
+//
+// Corresponds with DELETE /orgs/{org}/domains/{domain}/records/{recordId} (the `DeleteOrgsOrgDomainsDomainRecordsRecordId` operationId).
+func (c *Client) DeleteOrgsOrgDomainsDomainRecordsRecordId(ctx context.Context, org string, domain string, recordId string, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewDeleteOrgsOrgDomainsDomainRecordsRecordIdRequest(c.Server, org, domain, recordId)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// PutOrgsOrgDomainsDomainRecordsRecordIdWithBody Change a DNS record
+//
+// Takes any type of body and a specified content type.
+//
+// Corresponds with PUT /orgs/{org}/domains/{domain}/records/{recordId} (the `PutOrgsOrgDomainsDomainRecordsRecordId` operationId).
+func (c *Client) PutOrgsOrgDomainsDomainRecordsRecordIdWithBody(ctx context.Context, org string, domain string, recordId string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewPutOrgsOrgDomainsDomainRecordsRecordIdRequestWithBody(c.Server, org, domain, recordId, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// PutOrgsOrgDomainsDomainRecordsRecordId Change a DNS record
+//
+// Takes a body of the `application/json` content type.
+//
+// Corresponds with PUT /orgs/{org}/domains/{domain}/records/{recordId} (the `PutOrgsOrgDomainsDomainRecordsRecordId` operationId).
+func (c *Client) PutOrgsOrgDomainsDomainRecordsRecordId(ctx context.Context, org string, domain string, recordId string, body PutOrgsOrgDomainsDomainRecordsRecordIdJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewPutOrgsOrgDomainsDomainRecordsRecordIdRequest(c.Server, org, domain, recordId, body)
 	if err != nil {
 		return nil, err
 	}
@@ -4105,6 +4466,244 @@ func NewPostOrgsOrgDatabasesDbStopRequest(server string, org string, db string) 
 	return req, nil
 }
 
+// NewGetOrgsOrgDomainsRequest constructs an http.Request for the GetOrgsOrgDomains method
+func NewGetOrgsOrgDomainsRequest(server string, org string) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "org", org, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/orgs/%s/domains", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewGetOrgsOrgDomainsDomainRecordsRequest constructs an http.Request for the GetOrgsOrgDomainsDomainRecords method
+func NewGetOrgsOrgDomainsDomainRecordsRequest(server string, org string, domain string) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "org", org, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam1 string
+
+	pathParam1, err = runtime.StyleParamWithOptions("simple", false, "domain", domain, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/orgs/%s/domains/%s/records", pathParam0, pathParam1)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewPostOrgsOrgDomainsDomainRecordsRequest calls the generic PostOrgsOrgDomainsDomainRecords builder with application/json body
+func NewPostOrgsOrgDomainsDomainRecordsRequest(server string, org string, domain string, body PostOrgsOrgDomainsDomainRecordsJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewPostOrgsOrgDomainsDomainRecordsRequestWithBody(server, org, domain, "application/json", bodyReader)
+}
+
+// NewPostOrgsOrgDomainsDomainRecordsRequestWithBody constructs an http.Request for the PostOrgsOrgDomainsDomainRecords method, with any body, and a specified content type
+func NewPostOrgsOrgDomainsDomainRecordsRequestWithBody(server string, org string, domain string, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "org", org, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam1 string
+
+	pathParam1, err = runtime.StyleParamWithOptions("simple", false, "domain", domain, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/orgs/%s/domains/%s/records", pathParam0, pathParam1)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodPost, queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
+
+	return req, nil
+}
+
+// NewDeleteOrgsOrgDomainsDomainRecordsRecordIdRequest constructs an http.Request for the DeleteOrgsOrgDomainsDomainRecordsRecordId method
+func NewDeleteOrgsOrgDomainsDomainRecordsRecordIdRequest(server string, org string, domain string, recordId string) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "org", org, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam1 string
+
+	pathParam1, err = runtime.StyleParamWithOptions("simple", false, "domain", domain, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam2 string
+
+	pathParam2, err = runtime.StyleParamWithOptions("simple", false, "recordId", recordId, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/orgs/%s/domains/%s/records/%s", pathParam0, pathParam1, pathParam2)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodDelete, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewPutOrgsOrgDomainsDomainRecordsRecordIdRequest calls the generic PutOrgsOrgDomainsDomainRecordsRecordId builder with application/json body
+func NewPutOrgsOrgDomainsDomainRecordsRecordIdRequest(server string, org string, domain string, recordId string, body PutOrgsOrgDomainsDomainRecordsRecordIdJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewPutOrgsOrgDomainsDomainRecordsRecordIdRequestWithBody(server, org, domain, recordId, "application/json", bodyReader)
+}
+
+// NewPutOrgsOrgDomainsDomainRecordsRecordIdRequestWithBody constructs an http.Request for the PutOrgsOrgDomainsDomainRecordsRecordId method, with any body, and a specified content type
+func NewPutOrgsOrgDomainsDomainRecordsRecordIdRequestWithBody(server string, org string, domain string, recordId string, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "org", org, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam1 string
+
+	pathParam1, err = runtime.StyleParamWithOptions("simple", false, "domain", domain, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam2 string
+
+	pathParam2, err = runtime.StyleParamWithOptions("simple", false, "recordId", recordId, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/orgs/%s/domains/%s/records/%s", pathParam0, pathParam1, pathParam2)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodPut, queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
+
+	return req, nil
+}
+
 // NewGetRegionsRequest constructs an http.Request for the GetRegions method
 func NewGetRegionsRequest(server string) (*http.Request, error) {
 	var err error
@@ -4574,6 +5173,55 @@ type ClientWithResponsesInterface interface {
 	//
 	// Corresponds with POST /orgs/{org}/databases/{db}/stop (the `PostOrgsOrgDatabasesDbStop` operationId).
 	PostOrgsOrgDatabasesDbStopWithResponse(ctx context.Context, org string, db string, reqEditors ...RequestEditorFn) (*PostOrgsOrgDatabasesDbStopResponse, error)
+
+	// GetOrgsOrgDomainsWithResponse List the organisation's domains
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with GET /orgs/{org}/domains (the `GetOrgsOrgDomains` operationId).
+	GetOrgsOrgDomainsWithResponse(ctx context.Context, org string, reqEditors ...RequestEditorFn) (*GetOrgsOrgDomainsResponse, error)
+
+	// GetOrgsOrgDomainsDomainRecordsWithResponse List a domain's DNS records
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with GET /orgs/{org}/domains/{domain}/records (the `GetOrgsOrgDomainsDomainRecords` operationId).
+	GetOrgsOrgDomainsDomainRecordsWithResponse(ctx context.Context, org string, domain string, reqEditors ...RequestEditorFn) (*GetOrgsOrgDomainsDomainRecordsResponse, error)
+
+	// PostOrgsOrgDomainsDomainRecordsWithBodyWithResponse Create a DNS record
+	//
+	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with POST /orgs/{org}/domains/{domain}/records (the `PostOrgsOrgDomainsDomainRecords` operationId).
+	PostOrgsOrgDomainsDomainRecordsWithBodyWithResponse(ctx context.Context, org string, domain string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*PostOrgsOrgDomainsDomainRecordsResponse, error)
+
+	// PostOrgsOrgDomainsDomainRecordsWithResponse Create a DNS record
+	//
+	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with POST /orgs/{org}/domains/{domain}/records (the `PostOrgsOrgDomainsDomainRecords` operationId).
+	PostOrgsOrgDomainsDomainRecordsWithResponse(ctx context.Context, org string, domain string, body PostOrgsOrgDomainsDomainRecordsJSONRequestBody, reqEditors ...RequestEditorFn) (*PostOrgsOrgDomainsDomainRecordsResponse, error)
+
+	// DeleteOrgsOrgDomainsDomainRecordsRecordIdWithResponse Delete a DNS record
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with DELETE /orgs/{org}/domains/{domain}/records/{recordId} (the `DeleteOrgsOrgDomainsDomainRecordsRecordId` operationId).
+	DeleteOrgsOrgDomainsDomainRecordsRecordIdWithResponse(ctx context.Context, org string, domain string, recordId string, reqEditors ...RequestEditorFn) (*DeleteOrgsOrgDomainsDomainRecordsRecordIdResponse, error)
+
+	// PutOrgsOrgDomainsDomainRecordsRecordIdWithBodyWithResponse Change a DNS record
+	//
+	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with PUT /orgs/{org}/domains/{domain}/records/{recordId} (the `PutOrgsOrgDomainsDomainRecordsRecordId` operationId).
+	PutOrgsOrgDomainsDomainRecordsRecordIdWithBodyWithResponse(ctx context.Context, org string, domain string, recordId string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*PutOrgsOrgDomainsDomainRecordsRecordIdResponse, error)
+
+	// PutOrgsOrgDomainsDomainRecordsRecordIdWithResponse Change a DNS record
+	//
+	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with PUT /orgs/{org}/domains/{domain}/records/{recordId} (the `PutOrgsOrgDomainsDomainRecordsRecordId` operationId).
+	PutOrgsOrgDomainsDomainRecordsRecordIdWithResponse(ctx context.Context, org string, domain string, recordId string, body PutOrgsOrgDomainsDomainRecordsRecordIdJSONRequestBody, reqEditors ...RequestEditorFn) (*PutOrgsOrgDomainsDomainRecordsRecordIdResponse, error)
 
 	// GetRegionsWithResponse Regions available for new resources
 	//
@@ -7523,6 +8171,344 @@ func (r PostOrgsOrgDatabasesDbStopResponse) ContentType() string {
 	return ""
 }
 
+type GetOrgsOrgDomainsResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *DomainList
+	// ApplicationproblemJSON400 the response for an HTTP 400 `application/problem+json` response
+	ApplicationproblemJSON400 *Problem
+	// ApplicationproblemJSON401 the response for an HTTP 401 `application/problem+json` response
+	ApplicationproblemJSON401 *Problem
+	// ApplicationproblemJSON403 the response for an HTTP 403 `application/problem+json` response
+	ApplicationproblemJSON403 *Problem
+	// ApplicationproblemJSON404 the response for an HTTP 404 `application/problem+json` response
+	ApplicationproblemJSON404 *Problem
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r GetOrgsOrgDomainsResponse) GetJSON200() *DomainList {
+	return r.JSON200
+}
+
+// GetApplicationproblemJSON400 returns the response for an HTTP 400 `application/problem+json` response
+func (r GetOrgsOrgDomainsResponse) GetApplicationproblemJSON400() *Problem {
+	return r.ApplicationproblemJSON400
+}
+
+// GetApplicationproblemJSON401 returns the response for an HTTP 401 `application/problem+json` response
+func (r GetOrgsOrgDomainsResponse) GetApplicationproblemJSON401() *Problem {
+	return r.ApplicationproblemJSON401
+}
+
+// GetApplicationproblemJSON403 returns the response for an HTTP 403 `application/problem+json` response
+func (r GetOrgsOrgDomainsResponse) GetApplicationproblemJSON403() *Problem {
+	return r.ApplicationproblemJSON403
+}
+
+// GetApplicationproblemJSON404 returns the response for an HTTP 404 `application/problem+json` response
+func (r GetOrgsOrgDomainsResponse) GetApplicationproblemJSON404() *Problem {
+	return r.ApplicationproblemJSON404
+}
+
+// GetBody returns the raw response body bytes
+func (r GetOrgsOrgDomainsResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r GetOrgsOrgDomainsResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r GetOrgsOrgDomainsResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r GetOrgsOrgDomainsResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type GetOrgsOrgDomainsDomainRecordsResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *DnsRecordList
+	// ApplicationproblemJSON400 the response for an HTTP 400 `application/problem+json` response
+	ApplicationproblemJSON400 *Problem
+	// ApplicationproblemJSON401 the response for an HTTP 401 `application/problem+json` response
+	ApplicationproblemJSON401 *Problem
+	// ApplicationproblemJSON403 the response for an HTTP 403 `application/problem+json` response
+	ApplicationproblemJSON403 *Problem
+	// ApplicationproblemJSON404 the response for an HTTP 404 `application/problem+json` response
+	ApplicationproblemJSON404 *Problem
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r GetOrgsOrgDomainsDomainRecordsResponse) GetJSON200() *DnsRecordList {
+	return r.JSON200
+}
+
+// GetApplicationproblemJSON400 returns the response for an HTTP 400 `application/problem+json` response
+func (r GetOrgsOrgDomainsDomainRecordsResponse) GetApplicationproblemJSON400() *Problem {
+	return r.ApplicationproblemJSON400
+}
+
+// GetApplicationproblemJSON401 returns the response for an HTTP 401 `application/problem+json` response
+func (r GetOrgsOrgDomainsDomainRecordsResponse) GetApplicationproblemJSON401() *Problem {
+	return r.ApplicationproblemJSON401
+}
+
+// GetApplicationproblemJSON403 returns the response for an HTTP 403 `application/problem+json` response
+func (r GetOrgsOrgDomainsDomainRecordsResponse) GetApplicationproblemJSON403() *Problem {
+	return r.ApplicationproblemJSON403
+}
+
+// GetApplicationproblemJSON404 returns the response for an HTTP 404 `application/problem+json` response
+func (r GetOrgsOrgDomainsDomainRecordsResponse) GetApplicationproblemJSON404() *Problem {
+	return r.ApplicationproblemJSON404
+}
+
+// GetBody returns the raw response body bytes
+func (r GetOrgsOrgDomainsDomainRecordsResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r GetOrgsOrgDomainsDomainRecordsResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r GetOrgsOrgDomainsDomainRecordsResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r GetOrgsOrgDomainsDomainRecordsResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type PostOrgsOrgDomainsDomainRecordsResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON201 the response for an HTTP 201 `application/json` response
+	JSON201 *DnsRecord
+	// ApplicationproblemJSON400 the response for an HTTP 400 `application/problem+json` response
+	ApplicationproblemJSON400 *Problem
+	// ApplicationproblemJSON401 the response for an HTTP 401 `application/problem+json` response
+	ApplicationproblemJSON401 *Problem
+	// ApplicationproblemJSON403 the response for an HTTP 403 `application/problem+json` response
+	ApplicationproblemJSON403 *Problem
+	// ApplicationproblemJSON404 the response for an HTTP 404 `application/problem+json` response
+	ApplicationproblemJSON404 *Problem
+}
+
+// GetJSON201 returns the response for an HTTP 201 `application/json` response
+func (r PostOrgsOrgDomainsDomainRecordsResponse) GetJSON201() *DnsRecord {
+	return r.JSON201
+}
+
+// GetApplicationproblemJSON400 returns the response for an HTTP 400 `application/problem+json` response
+func (r PostOrgsOrgDomainsDomainRecordsResponse) GetApplicationproblemJSON400() *Problem {
+	return r.ApplicationproblemJSON400
+}
+
+// GetApplicationproblemJSON401 returns the response for an HTTP 401 `application/problem+json` response
+func (r PostOrgsOrgDomainsDomainRecordsResponse) GetApplicationproblemJSON401() *Problem {
+	return r.ApplicationproblemJSON401
+}
+
+// GetApplicationproblemJSON403 returns the response for an HTTP 403 `application/problem+json` response
+func (r PostOrgsOrgDomainsDomainRecordsResponse) GetApplicationproblemJSON403() *Problem {
+	return r.ApplicationproblemJSON403
+}
+
+// GetApplicationproblemJSON404 returns the response for an HTTP 404 `application/problem+json` response
+func (r PostOrgsOrgDomainsDomainRecordsResponse) GetApplicationproblemJSON404() *Problem {
+	return r.ApplicationproblemJSON404
+}
+
+// GetBody returns the raw response body bytes
+func (r PostOrgsOrgDomainsDomainRecordsResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r PostOrgsOrgDomainsDomainRecordsResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r PostOrgsOrgDomainsDomainRecordsResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r PostOrgsOrgDomainsDomainRecordsResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type DeleteOrgsOrgDomainsDomainRecordsRecordIdResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// ApplicationproblemJSON400 the response for an HTTP 400 `application/problem+json` response
+	ApplicationproblemJSON400 *Problem
+	// ApplicationproblemJSON401 the response for an HTTP 401 `application/problem+json` response
+	ApplicationproblemJSON401 *Problem
+	// ApplicationproblemJSON403 the response for an HTTP 403 `application/problem+json` response
+	ApplicationproblemJSON403 *Problem
+	// ApplicationproblemJSON404 the response for an HTTP 404 `application/problem+json` response
+	ApplicationproblemJSON404 *Problem
+}
+
+// GetApplicationproblemJSON400 returns the response for an HTTP 400 `application/problem+json` response
+func (r DeleteOrgsOrgDomainsDomainRecordsRecordIdResponse) GetApplicationproblemJSON400() *Problem {
+	return r.ApplicationproblemJSON400
+}
+
+// GetApplicationproblemJSON401 returns the response for an HTTP 401 `application/problem+json` response
+func (r DeleteOrgsOrgDomainsDomainRecordsRecordIdResponse) GetApplicationproblemJSON401() *Problem {
+	return r.ApplicationproblemJSON401
+}
+
+// GetApplicationproblemJSON403 returns the response for an HTTP 403 `application/problem+json` response
+func (r DeleteOrgsOrgDomainsDomainRecordsRecordIdResponse) GetApplicationproblemJSON403() *Problem {
+	return r.ApplicationproblemJSON403
+}
+
+// GetApplicationproblemJSON404 returns the response for an HTTP 404 `application/problem+json` response
+func (r DeleteOrgsOrgDomainsDomainRecordsRecordIdResponse) GetApplicationproblemJSON404() *Problem {
+	return r.ApplicationproblemJSON404
+}
+
+// GetBody returns the raw response body bytes
+func (r DeleteOrgsOrgDomainsDomainRecordsRecordIdResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r DeleteOrgsOrgDomainsDomainRecordsRecordIdResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r DeleteOrgsOrgDomainsDomainRecordsRecordIdResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r DeleteOrgsOrgDomainsDomainRecordsRecordIdResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type PutOrgsOrgDomainsDomainRecordsRecordIdResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *DnsRecord
+	// ApplicationproblemJSON400 the response for an HTTP 400 `application/problem+json` response
+	ApplicationproblemJSON400 *Problem
+	// ApplicationproblemJSON401 the response for an HTTP 401 `application/problem+json` response
+	ApplicationproblemJSON401 *Problem
+	// ApplicationproblemJSON403 the response for an HTTP 403 `application/problem+json` response
+	ApplicationproblemJSON403 *Problem
+	// ApplicationproblemJSON404 the response for an HTTP 404 `application/problem+json` response
+	ApplicationproblemJSON404 *Problem
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r PutOrgsOrgDomainsDomainRecordsRecordIdResponse) GetJSON200() *DnsRecord {
+	return r.JSON200
+}
+
+// GetApplicationproblemJSON400 returns the response for an HTTP 400 `application/problem+json` response
+func (r PutOrgsOrgDomainsDomainRecordsRecordIdResponse) GetApplicationproblemJSON400() *Problem {
+	return r.ApplicationproblemJSON400
+}
+
+// GetApplicationproblemJSON401 returns the response for an HTTP 401 `application/problem+json` response
+func (r PutOrgsOrgDomainsDomainRecordsRecordIdResponse) GetApplicationproblemJSON401() *Problem {
+	return r.ApplicationproblemJSON401
+}
+
+// GetApplicationproblemJSON403 returns the response for an HTTP 403 `application/problem+json` response
+func (r PutOrgsOrgDomainsDomainRecordsRecordIdResponse) GetApplicationproblemJSON403() *Problem {
+	return r.ApplicationproblemJSON403
+}
+
+// GetApplicationproblemJSON404 returns the response for an HTTP 404 `application/problem+json` response
+func (r PutOrgsOrgDomainsDomainRecordsRecordIdResponse) GetApplicationproblemJSON404() *Problem {
+	return r.ApplicationproblemJSON404
+}
+
+// GetBody returns the raw response body bytes
+func (r PutOrgsOrgDomainsDomainRecordsRecordIdResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r PutOrgsOrgDomainsDomainRecordsRecordIdResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r PutOrgsOrgDomainsDomainRecordsRecordIdResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r PutOrgsOrgDomainsDomainRecordsRecordIdResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
 type GetRegionsResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
@@ -8331,6 +9317,97 @@ func (c *ClientWithResponses) PostOrgsOrgDatabasesDbStopWithResponse(ctx context
 		return nil, err
 	}
 	return ParsePostOrgsOrgDatabasesDbStopResponse(rsp)
+}
+
+// GetOrgsOrgDomainsWithResponse List the organisation's domains
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with GET /orgs/{org}/domains (the `GetOrgsOrgDomains` operationId).
+func (c *ClientWithResponses) GetOrgsOrgDomainsWithResponse(ctx context.Context, org string, reqEditors ...RequestEditorFn) (*GetOrgsOrgDomainsResponse, error) {
+	rsp, err := c.GetOrgsOrgDomains(ctx, org, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseGetOrgsOrgDomainsResponse(rsp)
+}
+
+// GetOrgsOrgDomainsDomainRecordsWithResponse List a domain's DNS records
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with GET /orgs/{org}/domains/{domain}/records (the `GetOrgsOrgDomainsDomainRecords` operationId).
+func (c *ClientWithResponses) GetOrgsOrgDomainsDomainRecordsWithResponse(ctx context.Context, org string, domain string, reqEditors ...RequestEditorFn) (*GetOrgsOrgDomainsDomainRecordsResponse, error) {
+	rsp, err := c.GetOrgsOrgDomainsDomainRecords(ctx, org, domain, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseGetOrgsOrgDomainsDomainRecordsResponse(rsp)
+}
+
+// PostOrgsOrgDomainsDomainRecordsWithBodyWithResponse Create a DNS record
+//
+// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with POST /orgs/{org}/domains/{domain}/records (the `PostOrgsOrgDomainsDomainRecords` operationId).
+func (c *ClientWithResponses) PostOrgsOrgDomainsDomainRecordsWithBodyWithResponse(ctx context.Context, org string, domain string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*PostOrgsOrgDomainsDomainRecordsResponse, error) {
+	rsp, err := c.PostOrgsOrgDomainsDomainRecordsWithBody(ctx, org, domain, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParsePostOrgsOrgDomainsDomainRecordsResponse(rsp)
+}
+
+// PostOrgsOrgDomainsDomainRecordsWithResponse Create a DNS record
+//
+// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with POST /orgs/{org}/domains/{domain}/records (the `PostOrgsOrgDomainsDomainRecords` operationId).
+func (c *ClientWithResponses) PostOrgsOrgDomainsDomainRecordsWithResponse(ctx context.Context, org string, domain string, body PostOrgsOrgDomainsDomainRecordsJSONRequestBody, reqEditors ...RequestEditorFn) (*PostOrgsOrgDomainsDomainRecordsResponse, error) {
+	rsp, err := c.PostOrgsOrgDomainsDomainRecords(ctx, org, domain, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParsePostOrgsOrgDomainsDomainRecordsResponse(rsp)
+}
+
+// DeleteOrgsOrgDomainsDomainRecordsRecordIdWithResponse Delete a DNS record
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with DELETE /orgs/{org}/domains/{domain}/records/{recordId} (the `DeleteOrgsOrgDomainsDomainRecordsRecordId` operationId).
+func (c *ClientWithResponses) DeleteOrgsOrgDomainsDomainRecordsRecordIdWithResponse(ctx context.Context, org string, domain string, recordId string, reqEditors ...RequestEditorFn) (*DeleteOrgsOrgDomainsDomainRecordsRecordIdResponse, error) {
+	rsp, err := c.DeleteOrgsOrgDomainsDomainRecordsRecordId(ctx, org, domain, recordId, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseDeleteOrgsOrgDomainsDomainRecordsRecordIdResponse(rsp)
+}
+
+// PutOrgsOrgDomainsDomainRecordsRecordIdWithBodyWithResponse Change a DNS record
+//
+// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with PUT /orgs/{org}/domains/{domain}/records/{recordId} (the `PutOrgsOrgDomainsDomainRecordsRecordId` operationId).
+func (c *ClientWithResponses) PutOrgsOrgDomainsDomainRecordsRecordIdWithBodyWithResponse(ctx context.Context, org string, domain string, recordId string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*PutOrgsOrgDomainsDomainRecordsRecordIdResponse, error) {
+	rsp, err := c.PutOrgsOrgDomainsDomainRecordsRecordIdWithBody(ctx, org, domain, recordId, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParsePutOrgsOrgDomainsDomainRecordsRecordIdResponse(rsp)
+}
+
+// PutOrgsOrgDomainsDomainRecordsRecordIdWithResponse Change a DNS record
+//
+// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with PUT /orgs/{org}/domains/{domain}/records/{recordId} (the `PutOrgsOrgDomainsDomainRecordsRecordId` operationId).
+func (c *ClientWithResponses) PutOrgsOrgDomainsDomainRecordsRecordIdWithResponse(ctx context.Context, org string, domain string, recordId string, body PutOrgsOrgDomainsDomainRecordsRecordIdJSONRequestBody, reqEditors ...RequestEditorFn) (*PutOrgsOrgDomainsDomainRecordsRecordIdResponse, error) {
+	rsp, err := c.PutOrgsOrgDomainsDomainRecordsRecordId(ctx, org, domain, recordId, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParsePutOrgsOrgDomainsDomainRecordsRecordIdResponse(rsp)
 }
 
 // GetRegionsWithResponse Regions available for new resources
@@ -10643,6 +11720,272 @@ func ParsePostOrgsOrgDatabasesDbStopResponse(rsp *http.Response) (*PostOrgsOrgDa
 			return nil, err
 		}
 		response.JSON202 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON404 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseGetOrgsOrgDomainsResponse parses an HTTP response from a GetOrgsOrgDomainsWithResponse call
+func ParseGetOrgsOrgDomainsResponse(rsp *http.Response) (*GetOrgsOrgDomainsResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &GetOrgsOrgDomainsResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest DomainList
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON404 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseGetOrgsOrgDomainsDomainRecordsResponse parses an HTTP response from a GetOrgsOrgDomainsDomainRecordsWithResponse call
+func ParseGetOrgsOrgDomainsDomainRecordsResponse(rsp *http.Response) (*GetOrgsOrgDomainsDomainRecordsResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &GetOrgsOrgDomainsDomainRecordsResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest DnsRecordList
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON404 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParsePostOrgsOrgDomainsDomainRecordsResponse parses an HTTP response from a PostOrgsOrgDomainsDomainRecordsWithResponse call
+func ParsePostOrgsOrgDomainsDomainRecordsResponse(rsp *http.Response) (*PostOrgsOrgDomainsDomainRecordsResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &PostOrgsOrgDomainsDomainRecordsResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 201:
+		var dest DnsRecord
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON201 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON404 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseDeleteOrgsOrgDomainsDomainRecordsRecordIdResponse parses an HTTP response from a DeleteOrgsOrgDomainsDomainRecordsRecordIdWithResponse call
+func ParseDeleteOrgsOrgDomainsDomainRecordsRecordIdResponse(rsp *http.Response) (*DeleteOrgsOrgDomainsDomainRecordsRecordIdResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &DeleteOrgsOrgDomainsDomainRecordsRecordIdResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case rsp.StatusCode == 204:
+		break // No content-type
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON404 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParsePutOrgsOrgDomainsDomainRecordsRecordIdResponse parses an HTTP response from a PutOrgsOrgDomainsDomainRecordsRecordIdWithResponse call
+func ParsePutOrgsOrgDomainsDomainRecordsRecordIdResponse(rsp *http.Response) (*PutOrgsOrgDomainsDomainRecordsRecordIdResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &PutOrgsOrgDomainsDomainRecordsRecordIdResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest DnsRecord
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
 
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
 		var dest Problem
