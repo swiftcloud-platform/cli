@@ -248,13 +248,15 @@ var storageCmd = &cobra.Command{
 	Short: "Object storage: buckets and the objects in them",
 	Long: `S3-compatible object storage.
 
-Buckets are managed through the platform ("storage bucket …"); objects move
-directly between this machine and the region's storage endpoint, using the
-bucket's own credentials. Object bytes never pass through the platform API.
+"storage list" shows the buckets; "storage ls s3://bucket" shows what is
+inside one. Buckets are managed through the platform ("storage bucket …");
+objects move directly between this machine and the region's storage endpoint,
+using the bucket's own credentials, and their bytes never pass through the
+platform API.
 
 Remote locations are written s3://bucket/key, and the bucket may be named
 either way: the name you chose or the physical name the storage layer uses.`,
-	Example: `  cloud storage bucket list
+	Example: `  cloud storage list
   cloud storage ls s3://pics
   cloud storage cp ./photo.jpg s3://pics/2026/photo.jpg
   cloud storage sync ./site s3://pics/site --delete
@@ -274,34 +276,53 @@ freshly uploaded object may not be counted yet.`,
   cloud storage bucket credentials photos --format env`,
 }
 
+// storageListCmd is "cloud storage list", the sibling of "cloud app list" and
+// "cloud dns list": every service lists its principal resource one word in.
+// For storage that resource is the bucket, so this and "storage bucket list"
+// are the same command under two names.
+var storageListCmd = &cobra.Command{
+	Use:   "list",
+	Short: "List buckets",
+	Long: `List the organisation's buckets.
+
+The same as "cloud storage bucket list". To list the objects inside a bucket,
+use "cloud storage ls s3://bucket".`,
+	Example: `  cloud storage list
+  cloud storage list -o json`,
+	Args: cobra.NoArgs,
+	RunE: func(cmd *cobra.Command, _ []string) error { return listBuckets(cmd) },
+}
+
 var bucketListCmd = &cobra.Command{
 	Use:   "list",
 	Short: "List buckets",
 	Example: `  cloud storage bucket list
   cloud storage bucket list -o json`,
 	Args: cobra.NoArgs,
-	RunE: func(cmd *cobra.Command, _ []string) error {
-		org, err := requireOrg()
-		if err != nil {
-			return err
-		}
-		c, _, err := apiClient()
-		if err != nil {
-			return err
-		}
-		res, err := c.GetOrgsOrgBucketsWithResponse(cmd.Context(), org)
-		if err != nil {
-			return reachErr(err)
-		}
-		if err := apiErr(res.StatusCode(), res.Body); err != nil {
-			return err
-		}
-		list, err := decoded(res.JSON200)
-		if err != nil {
-			return err
-		}
-		return printer.Print(bucketRows(list.Items))
-	},
+	RunE: func(cmd *cobra.Command, _ []string) error { return listBuckets(cmd) },
+}
+
+func listBuckets(cmd *cobra.Command) error {
+	org, err := requireOrg()
+	if err != nil {
+		return err
+	}
+	c, _, err := apiClient()
+	if err != nil {
+		return err
+	}
+	res, err := c.GetOrgsOrgBucketsWithResponse(cmd.Context(), org)
+	if err != nil {
+		return reachErr(err)
+	}
+	if err := apiErr(res.StatusCode(), res.Body); err != nil {
+		return err
+	}
+	list, err := decoded(res.JSON200)
+	if err != nil {
+		return err
+	}
+	return printer.Print(bucketRows(list.Items))
 }
 
 var bucketCreateCmd = &cobra.Command{
@@ -1163,7 +1184,7 @@ func init() {
 	// lists the ids, which cobra's "required flag not set" cannot.
 	storageRestoreCmd.Flags().StringVar(&restoreVersionID, "version-id", "", "the version to put back (required; see `cloud storage versions`)")
 
-	storageCmd.AddCommand(bucketCmd, storageLsCmd, storageCpCmd, storageSyncCmd, storageMvCmd,
+	storageCmd.AddCommand(storageListCmd, bucketCmd, storageLsCmd, storageCpCmd, storageSyncCmd, storageMvCmd,
 		storageRmCmd, storageCatCmd, storageStatCmd, storagePresignCmd,
 		storageVersionsCmd, storageRestoreCmd)
 	rootCmd.AddCommand(storageCmd)
