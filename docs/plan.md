@@ -139,6 +139,7 @@ cloud dns     records add  <domain> --name --type --content [--ttl] [--priority]
 cloud dns     records update <domain> <record-id> [--name --type --content --ttl --priority]
 cloud dns     records remove <domain> <record-id> [--yes]
 
+cloud storage list                                     the buckets; same as "bucket list"
 cloud storage bucket list
 cloud storage bucket create <name> [--region]
 cloud storage bucket get    <name>
