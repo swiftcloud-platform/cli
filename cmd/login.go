@@ -32,6 +32,11 @@ For scripts and CI, pipe an API token from the dashboard instead:
   echo "$TOKEN" | cloud login --token-stdin
 or skip login entirely and set CLOUD_TOKEN.
 
+Signing in picks an organisation for you — the first you belong to — and saves
+it, so the CLI is usable immediately. An --org flag, CLOUD_ORG, or a context
+that already names one all take precedence; change it later with
+"cloud org use <slug>".
+
 The credential is stored per API host, so signing in to a staging or local API
 does not disturb your production session — and vice versa.`,
 	Example: `  cloud login
@@ -66,6 +71,7 @@ does not disturb your production session — and vice versa.`,
 				return err
 			}
 			fmt.Fprintf(cmd.ErrOrStderr(), "Signed in as %s (%s token) on %s\n", me.User.Email, cred.Kind, cfg.APIURL)
+			adoptDefaultOrg(cmd, me)
 			return nil
 		}
 
@@ -106,14 +112,7 @@ does not disturb your production session — and vice versa.`,
 			return err
 		}
 		fmt.Fprintf(cmd.ErrOrStderr(), "Signed in as %s. Session valid until %s.\n", me.User.Email, cred.ExpiresAt.Local().Format("Mon 2 Jan 15:04"))
-		if len(me.Organizations) > 0 && cfg.Org == "" {
-			orgs := me.Organizations
-			if len(orgs) == 1 {
-				fmt.Fprintf(cmd.ErrOrStderr(), "Organisation: %s. Set it as default with `cloud org use %s`.\n", orgs[0].Slug, orgs[0].Slug)
-			} else {
-				fmt.Fprintf(cmd.ErrOrStderr(), "You belong to %d organisations; pick one with `cloud org use <slug>`.\n", len(orgs))
-			}
-		}
+		adoptDefaultOrg(cmd, me)
 		return nil
 	},
 }
@@ -162,4 +161,42 @@ func init() {
 	loginCmd.Flags().BoolVar(&loginTokenStdin, "token-stdin", false, "read an API token from stdin instead of using the browser flow")
 	loginCmd.Flags().BoolVar(&loginNoBrowser, "no-browser", false, "print the URL but do not try to open a browser")
 	rootCmd.AddCommand(loginCmd)
+}
+
+// adoptDefaultOrg picks an organisation so that signing in leaves the CLI
+// ready to use, rather than one instruction short of it.
+//
+// Only when nothing has chosen one already: an --org flag, CLOUD_ORG, or a
+// context that names one all win, because they are deliberate and this is a
+// guess. The first organisation is the guess — for the overwhelmingly common
+// case of belonging to exactly one, it is not really a guess at all, and for
+// the rest it is a starting point the message names and says how to change.
+//
+// A failure to save is reported but does not fail the login: the sign-in
+// itself succeeded, and telling someone their login failed because a
+// convenience could not be written would be worse than the inconvenience.
+func adoptDefaultOrg(cmd *cobra.Command, me *api.Me) {
+	w := cmd.ErrOrStderr()
+	if len(me.Organizations) == 0 {
+		fmt.Fprintln(w, "You do not belong to an organisation yet. Create one in the dashboard, then run `cloud org list`.")
+		return
+	}
+	if cfg.Org != "" {
+		// Already chosen deliberately; say which, so the choice is visible.
+		fmt.Fprintf(w, "Organisation: %s (from %s).\n", cfg.Org, cfg.Source["org"])
+		return
+	}
+	first := me.Organizations[0]
+	name, err := saveDefaultOrg(first.Slug)
+	if err != nil {
+		fmt.Fprintf(w, "Organisation: %s. Could not save it as your default (%v) — set it with `cloud org use %s`.\n",
+			first.Slug, err, first.Slug)
+		return
+	}
+	if len(me.Organizations) == 1 {
+		fmt.Fprintf(w, "Organisation: %s, saved as the default for context %q.\n", first.Slug, name)
+		return
+	}
+	fmt.Fprintf(w, "Organisation: %s, saved as the default for context %q. You belong to %d — switch with `cloud org use <slug>`, and see them with `cloud org list`.\n",
+		first.Slug, name, len(me.Organizations))
 }

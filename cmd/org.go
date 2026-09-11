@@ -83,27 +83,8 @@ new shells. The argument is the slug from "cloud org list", not the display name
 			return &UsageError{fmt.Errorf("you are not a member of an organisation %q (see `cloud org list`)", slug)}
 		}
 
-		dir, err := config.Dir(os.Getenv)
+		name, err := saveDefaultOrg(slug)
 		if err != nil {
-			return err
-		}
-		path := filepath.Join(dir, "config.yaml")
-		file, err := config.Load(path)
-		if err != nil {
-			return err
-		}
-		name := cfg.ContextName
-		if name == "" {
-			name = "default"
-			file.CurrentContext = name
-		}
-		ctx := file.Contexts[name]
-		ctx.Org = slug
-		if ctx.APIURL == "" && cfg.APIURL != config.DefaultAPIURL {
-			ctx.APIURL = cfg.APIURL
-		}
-		file.Contexts[name] = ctx
-		if err := config.Save(path, file); err != nil {
 			return err
 		}
 		fmt.Fprintf(cmd.ErrOrStderr(), "Default organisation for context %q is now %s.\n", name, slug)
@@ -114,4 +95,39 @@ new shells. The argument is the slug from "cloud org list", not the display name
 func init() {
 	orgCmd.AddCommand(orgListCmd, orgUseCmd)
 	rootCmd.AddCommand(orgCmd)
+}
+
+// saveDefaultOrg writes the organisation into the current context and returns
+// the context it wrote to, creating "default" when none is named.
+//
+// Shared by `org use` and by `login`, which sets the first organisation
+// automatically so that signing in leaves the CLI ready to use rather than
+// one instruction short of it.
+func saveDefaultOrg(slug string) (string, error) {
+	dir, err := config.Dir(os.Getenv)
+	if err != nil {
+		return "", err
+	}
+	path := filepath.Join(dir, "config.yaml")
+	file, err := config.Load(path)
+	if err != nil {
+		return "", err
+	}
+	name := cfg.ContextName
+	if name == "" {
+		name = "default"
+		file.CurrentContext = name
+	}
+	ctx := file.Contexts[name]
+	ctx.Org = slug
+	// Keep a non-default API URL with the organisation it belongs to, or the
+	// context would point the org at production next time.
+	if ctx.APIURL == "" && cfg.APIURL != config.DefaultAPIURL {
+		ctx.APIURL = cfg.APIURL
+	}
+	if file.Contexts == nil {
+		file.Contexts = map[string]config.Context{}
+	}
+	file.Contexts[name] = ctx
+	return name, config.Save(path, file)
 }
