@@ -84,10 +84,9 @@ func Open(platformWsURL, ticket string) error {
 
 // proxyWebSocket bridges a browser WebSocket to the platform's console proxy.
 func proxyWebSocket(w http.ResponseWriter, r *http.Request, platformWsURL, ticket string) {
-	// Upgrade the browser connection.
-	browserWs, err := websocket.Accept(w, r, &websocket.AcceptOptions{
-		Subprotocols: []string{"binary"},
-	})
+	// Upgrade the browser connection — no subprotocol, let the raw binary
+	// frames pass through unchanged (SPICE uses its own framing on top).
+	browserWs, err := websocket.Accept(w, r, nil)
 	if err != nil {
 		return
 	}
