@@ -233,6 +233,6 @@ Estimates are working days for one engineer with the platform already running lo
 
 ## Later
 
-- v1.1: virtual machines — done on the CLI side (cmd/vm.go, cmd/vm_console.go, cmd/vm_ssh_key.go, cmd/vm_ip.go, internal/spice/). Awaits platform API endpoints and WebSocket SPICE proxy.
+- v1.1: virtual machines — done. CLI: vm list/create/get/delete, vm start/stop/restart, vm console (SPICE), vm ssh-key list/add/remove, vm ip get/attach/detach, 20 tests. Platform: 11 API routes under `/api/v1/orgs/[org]/vms/`, Zod schemas + serializers, WebSocket console proxy (console-ws.ts, console-proxy.ts), OpenAPI synced. Pushed to `343a54b` (platform) and `ebb5fe6` (cli).
 - Deploy from source via buildpacks and a platform registry.
 - `cloud db sql <name>` wrapping the SQL editor endpoint.
