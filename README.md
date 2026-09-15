@@ -1,8 +1,8 @@
 # cloud — the SwiftCloud CLI
 
-Deploy apps, manage databases and work with object storage on [SwiftCloud](https://cloud.co.zm) from the terminal.
+Deploy apps, manage databases, work with object storage, and run virtual machines on [SwiftCloud](https://cloud.co.zm) from the terminal.
 
-> **Status: rebuild in progress.** This repository is being rebuilt as the customer CLI for the Kubernetes-based platform. The plan, decisions and command tree are in [`docs/plan.md`](docs/plan.md). The previous Proxmox operator tool is preserved at tag [`v0-proxmox`](https://github.com/swiftcloud-platform/cli/releases/tag/v0-proxmox).
+> **Status: rebuild in progress.** This repository is the customer CLI for the Kubernetes-based platform. The full plan and command tree are in [`docs/plan.md`](docs/plan.md). The previous Proxmox operator tool is preserved at tag [`v0-proxmox`](https://github.com/swiftcloud-platform/cli/releases/tag/v0-proxmox).
 
 ## Install
 
@@ -36,9 +36,23 @@ cloud login                      # approve a code in your browser, once
 cloud app create demo --image nginx --wait
 cloud db create main --engine postgresql
 cloud storage cp ./site s3://assets/ --recursive
+cloud vm create web --image ubuntu-24.04 --ssh-key ~/.ssh/id_ed25519.pub --wait
+cloud vm list
 ```
 
 Every command accepts `--output table|json|yaml` and `--quiet`. In CI, set `CLOUD_TOKEN`, `CLOUD_ORG` and `CLOUD_REGION` instead of a config file; `CLOUD_API_URL` points the CLI at another environment.
+
+## Commands
+
+| Category | Commands |
+|---|---|
+| **Auth** | `login`, `logout`, `whoami`, `org list/use`, `region list` |
+| **Context** | `context list/current/use/set/delete` |
+| **Apps** | `app list/create/get/deploy/update/delete`, `app env list/set/unset`, `app scale`, `app logs`, `app domain add/list/remove` |
+| **Databases** | `db engines/list/create/get/delete/credentials/start/stop/restart`, `db backup enable/create/list`, `db restore` |
+| **Storage** | `storage list`, `storage bucket list/create/get/delete/credentials/update`, `storage bucket keys list/add/revoke`, `storage bucket domains list/add/remove`, `storage ls/cp/sync/mv/rm/cat/stat/presign/versions/restore` |
+| **VMs** | `vm list/create/get/delete/start/stop/restart`, `vm console`, `vm ssh-key list/add/remove`, `vm ip get/attach/detach` |
+| **System** | `version`, `update`, `completion bash/zsh/fish/powershell` |
 
 ## Configuration
 
