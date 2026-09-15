@@ -63,7 +63,7 @@ var vmIPAttachCmd = &cobra.Command{
 to a VM. The IP is assigned by the platform; you cannot choose a specific
 address.`,
 	Example: `  cloud vm ip attach web`,
-	Args: cobra.ExactArgs(1),
+	Args:    cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		org, err := requireOrg()
 		if err != nil {

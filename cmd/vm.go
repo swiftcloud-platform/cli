@@ -27,15 +27,15 @@ through the same healthProbe the app commands use.
 */
 
 var (
-	vmCreateImage   string
-	vmCreateSize    string
-	vmCreateRegion  string
-	vmCreateDesc    string
-	vmCreateSSHKey  string
-	vmDeleteYes     bool
-	vmSSHKeyLabel   string
+	vmCreateImage     string
+	vmCreateSize      string
+	vmCreateRegion    string
+	vmCreateDesc      string
+	vmCreateSSHKey    string
+	vmDeleteYes       bool
+	vmSSHKeyLabel     string
 	vmSSHKeyRemoveYes bool
-	vmIPDetachYes   bool
+	vmIPDetachYes     bool
 )
 
 // ── table shapes ────────────────────────────────────────────────────────────
@@ -60,17 +60,17 @@ func (r vmRows) IDs() []string {
 	return out
 }
 
-type vmSshKeyRows []api.VmSshKey
+type vmSSHKeyRows []api.VmSshKey
 
-func (r vmSshKeyRows) Columns() []string { return []string{"ID", "LABEL", "FINGERPRINT", "ADDED"} }
-func (r vmSshKeyRows) Rows() [][]string {
+func (r vmSSHKeyRows) Columns() []string { return []string{"ID", "LABEL", "FINGERPRINT", "ADDED"} }
+func (r vmSSHKeyRows) Rows() [][]string {
 	out := make([][]string, len(r))
 	for i, k := range r {
 		out[i] = []string{k.Id, orDash(k.Label), k.Fingerprint, k.AddedAt.Local().Format("2006-01-02 15:04")}
 	}
 	return out
 }
-func (r vmSshKeyRows) IDs() []string {
+func (r vmSSHKeyRows) IDs() []string {
 	out := make([]string, len(r))
 	for i, k := range r {
 		out[i] = k.Id
@@ -416,7 +416,7 @@ func readSSHKey(pathOrKey string) (string, error) {
 	if strings.HasPrefix(pathOrKey, "ssh-") {
 		return pathOrKey, nil
 	}
-	data, err := os.ReadFile(pathOrKey)
+	data, err := os.ReadFile(pathOrKey) // #nosec G304 -- path is user-supplied SSH key file
 	if err != nil {
 		return "", fmt.Errorf("reading SSH key: %w", err)
 	}

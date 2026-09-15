@@ -1,6 +1,7 @@
 package spice
 
 import (
+	"errors"
 	"fmt"
 	"net"
 	"net/http"
@@ -20,10 +21,10 @@ func Open(wsURL, ticket string) error {
 	mux := http.NewServeMux()
 
 	// Serve the SPICE client JS
-	mux.HandleFunc("/spice-client.min.js", func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc("/spice-client.min.js", func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Type", "application/javascript")
 		w.Header().Set("Cache-Control", "no-cache")
-		w.Write(jsBundle)
+		_, _ = w.Write(jsBundle)
 	})
 
 	// Serve the viewer page — connection params are passed as query strings
@@ -34,7 +35,7 @@ func Open(wsURL, ticket string) error {
 			return
 		}
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
-		w.Write([]byte(indexHTML))
+		_, _ = w.Write([]byte(indexHTML))
 	})
 
 	// Find a free port on loopback
@@ -42,7 +43,7 @@ func Open(wsURL, ticket string) error {
 	if err != nil {
 		return fmt.Errorf("binding local port: %w", err)
 	}
-	defer listener.Close()
+	defer func() { _ = listener.Close() }()
 
 	addr := listener.Addr().String()
 	baseURL := "http://" + addr
@@ -66,16 +67,13 @@ func Open(wsURL, ticket string) error {
 
 	// Open the browser
 	if err := openBrowser(consoleURL); err != nil {
-		srv.Close()
+		_ = srv.Close()
 		return fmt.Errorf("opening browser: %w", err)
 	}
 
 	// Wait for the server to stop (Ctrl-C or error)
-	select {
-	case err := <-errCh:
-		if err != nil && err != http.ErrServerClosed {
-			return fmt.Errorf("local server: %w", err)
-		}
+	if err := <-errCh; err != nil && !errors.Is(err, http.ErrServerClosed) {
+		return fmt.Errorf("local server: %w", err)
 	}
 	return nil
 }
@@ -102,7 +100,7 @@ func openBrowser(target string) error {
 		}
 	}
 
-	c := exec.Command(cmd, args...)
+	c := exec.Command(cmd, args...) // #nosec G204 -- command is a fixed browser launcher
 	c.Stdin = nil
 	c.Stdout = nil
 	c.Stderr = nil

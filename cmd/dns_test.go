@@ -18,11 +18,11 @@ what the name servers would refuse rather than spending a round trip on it.
 */
 
 type dnsFake struct {
-	records []api.DnsRecord
-	posted  map[string]any
+	records   []api.DnsRecord
+	posted    map[string]any
 	patchBody map[string]any
-	deleted string
-	method  string
+	deleted   string
+	method    string
 }
 
 func dnsSetup(t *testing.T, records []api.DnsRecord) *dnsFake {

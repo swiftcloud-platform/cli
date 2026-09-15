@@ -47,7 +47,7 @@ var vmSSHKeyListCmd = &cobra.Command{
 		if err != nil {
 			return err
 		}
-		return printer.Print(vmSshKeyRows(list.Items))
+		return printer.Print(vmSSHKeyRows(list.Items))
 	},
 }
 
@@ -95,7 +95,7 @@ The key is deployed to the VM's authorised_keys on the next boot or update.`,
 			fmt.Fprintf(cmd.ErrOrStderr(), "Added key %s (%s)\n", k.Id, k.Fingerprint)
 			return nil
 		}
-		return printer.Print(vmSshKeyRows{*k})
+		return printer.Print(vmSSHKeyRows{*k})
 	},
 }
 

@@ -16,7 +16,7 @@ exit code a script would branch on. The fake speaks the real wire shapes.
 
 const vmJSON = `{"id":"vm1","name":"web","organizationId":"org1","region":"zm-lusaka-central-1","regionId":"r1","image":"ubuntu-24.04","size":"vm-1","description":"test VM","status":"running","publicIp":"203.0.113.10","privateIp":"10.0.0.5","errorMessage":"","createdAt":"2026-09-01T00:00:00Z","updatedAt":"2026-09-01T00:00:00Z"}`
 
-const vmSshKeyJSON = `{"id":"key1","label":"laptop","publicKey":"ssh-ed25519 AAAA...","fingerprint":"SHA256:abc123","addedAt":"2026-09-01T00:00:00Z"}`
+const vmSSHKeyJSON = `{"id":"key1","label":"laptop","publicKey":"ssh-ed25519 AAAA...","fingerprint":"SHA256:abc123","addedAt":"2026-09-01T00:00:00Z"}`
 
 func fakeVMPlatform(t *testing.T) *httptest.Server {
 	t.Helper()
@@ -90,10 +90,10 @@ func fakeVMPlatform(t *testing.T) *httptest.Server {
 					return
 				}
 				w.WriteHeader(201)
-				_, _ = w.Write([]byte(vmSshKeyJSON))
+				_, _ = w.Write([]byte(vmSSHKeyJSON))
 				return
 			}
-			_, _ = w.Write([]byte(`{"items":[` + vmSshKeyJSON + `]}`))
+			_, _ = w.Write([]byte(`{"items":[` + vmSSHKeyJSON + `]}`))
 			return
 		case strings.HasPrefix(r.URL.Path, "/api/v1/orgs/acme/vms/web/ssh-keys/"):
 			if r.Method == http.MethodDelete {
