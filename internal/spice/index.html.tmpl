@@ -44,13 +44,15 @@
 <script>
 (function() {
   var params = new URLSearchParams(window.location.search);
-  var wsUrl   = params.get('ws');
-  var ticket  = params.get('ticket');
+  var ticket = params.get('ticket');
 
-  if (!wsUrl || !ticket) {
+  if (!ticket) {
     setStatus('Missing connection parameters', 'error');
     return;
   }
+
+  // Connect to the local proxy — it bridges to the platform's console WebSocket.
+  var wsUrl = 'ws://' + window.location.host + '/ws';
 
   var display = document.getElementById('display');
   var canvas = document.createElement('canvas');
@@ -94,7 +96,6 @@
 
   window.sendCtrlAltDel = function() {
     if (spiceConn && spiceConn.inputs) {
-      // Ctrl+Alt+Del scancodes
       spiceConn.inputs.KeyDown(29);   // Ctrl
       spiceConn.inputs.KeyDown(56);   // Alt
       spiceConn.inputs.KeyDown(83);   // Delete
@@ -112,7 +113,6 @@
     }
   };
 
-  // Keep status visible on hover
   document.addEventListener('mousemove', function() {
     document.getElementById('status').style.opacity = '1';
   });

@@ -1,6 +1,7 @@
 package spice
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"net"
@@ -9,15 +10,19 @@ import (
 	"os/exec"
 	"runtime"
 	"strings"
+	"sync"
 	"time"
+
+	"github.com/coder/websocket"
 )
 
 // Open starts a local HTTP server with the embedded SPICE client and opens
 // the user's browser to it. It blocks until the server is shut down.
 //
-// wsURL is the WebSocket URL for the platform's SPICE proxy.
-// ticket is the short-lived authentication ticket from the API.
-func Open(wsURL, ticket string) error {
+// platformWsURL is the WebSocket URL for the platform's console proxy
+// (returned by the /console API endpoint). ticket is the short-lived
+// authentication ticket.
+func Open(platformWsURL, ticket string) error {
 	mux := http.NewServeMux()
 
 	// Serve the SPICE client JS
@@ -27,8 +32,7 @@ func Open(wsURL, ticket string) error {
 		_, _ = w.Write(jsBundle)
 	})
 
-	// Serve the viewer page — connection params are passed as query strings
-	// and read by JavaScript in the page.
+	// Serve the viewer page — connection params are embedded by the handler.
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/" {
 			http.NotFound(w, r)
@@ -36,6 +40,11 @@ func Open(wsURL, ticket string) error {
 		}
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
 		_, _ = w.Write([]byte(indexHTML))
+	})
+
+	// WebSocket proxy — the browser connects here, we bridge to the platform.
+	mux.HandleFunc("/ws", func(w http.ResponseWriter, r *http.Request) {
+		proxyWebSocket(w, r, platformWsURL, ticket)
 	})
 
 	// Find a free port on loopback
@@ -59,13 +68,8 @@ func Open(wsURL, ticket string) error {
 		errCh <- srv.Serve(listener)
 	}()
 
-	// Build the URL with query params
-	q := url.Values{}
-	q.Set("ws", wsURL)
-	q.Set("ticket", ticket)
-	consoleURL := baseURL + "?" + q.Encode()
-
-	// Open the browser
+	// Open the browser — the SPICE client reads ticket from the query param.
+	consoleURL := baseURL + "/?ticket=" + url.QueryEscape(ticket)
 	if err := openBrowser(consoleURL); err != nil {
 		_ = srv.Close()
 		return fmt.Errorf("opening browser: %w", err)
@@ -76,6 +80,77 @@ func Open(wsURL, ticket string) error {
 		return fmt.Errorf("local server: %w", err)
 	}
 	return nil
+}
+
+// proxyWebSocket bridges a browser WebSocket to the platform's console proxy.
+func proxyWebSocket(w http.ResponseWriter, r *http.Request, platformWsURL, ticket string) {
+	// Upgrade the browser connection.
+	browserWs, err := websocket.Accept(w, r, &websocket.AcceptOptions{
+		Subprotocols: []string{"binary"},
+	})
+	if err != nil {
+		return
+	}
+
+	// Connect to the platform's console WebSocket with the ticket.
+	platformURL := platformWsURL
+	if !strings.Contains(platformURL, "?") {
+		platformURL += "?"
+	} else {
+		platformURL += "&"
+	}
+	platformURL += "ticket=" + url.QueryEscape(ticket)
+
+	ctx, cancel := context.WithTimeout(r.Context(), 30*time.Second)
+	platformWs, _, err := websocket.Dial(ctx, platformURL, nil)
+	cancel()
+	if err != nil {
+		_ = browserWs.Close(websocket.StatusInternalError, "platform connection failed")
+		return
+	}
+
+	// Bridge both directions.
+	var once sync.Once
+	closeBoth := func() {
+		once.Do(func() {
+			_ = browserWs.CloseNow()
+			_ = platformWs.CloseNow()
+		})
+	}
+
+	// Browser → Platform
+	go func() {
+		defer closeBoth()
+		for {
+			typ, data, err := browserWs.Read(r.Context())
+			if err != nil {
+				return
+			}
+			if err := platformWs.Write(r.Context(), typ, data); err != nil {
+				return
+			}
+		}
+	}()
+
+	// Platform → Browser
+	go func() {
+		defer closeBoth()
+		for {
+			typ, data, err := platformWs.Read(r.Context())
+			if err != nil {
+				return
+			}
+			if err := browserWs.Write(r.Context(), typ, data); err != nil {
+				return
+			}
+		}
+	}()
+
+	// Wait until one side closes or errors, then tear down.
+	<-r.Context().Done()
+	closeBoth()
+	_ = platformWs.Close(websocket.StatusNormalClosure, "")
+	_ = browserWs.Close(websocket.StatusNormalClosure, "")
 }
 
 // openBrowser opens the default browser. No-op if the command is not found.
