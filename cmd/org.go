@@ -32,7 +32,7 @@ var orgListCmd = &cobra.Command{
 		if err != nil {
 			return err
 		}
-		res, err := c.GetOrgsWithResponse(cmd.Context())
+		res, err := c.GetOrgsWithResponse(cmd.Context(), nil)
 		if err != nil {
 			return fmt.Errorf("could not reach %s: %w", cfg.APIURL, err)
 		}
@@ -61,7 +61,7 @@ new shells. The argument is the slug from "cloud org list", not the display name
 		if err != nil {
 			return err
 		}
-		res, err := c.GetOrgsWithResponse(cmd.Context())
+		res, err := c.GetOrgsWithResponse(cmd.Context(), nil)
 		if err != nil {
 			return fmt.Errorf("could not reach %s: %w", cfg.APIURL, err)
 		}

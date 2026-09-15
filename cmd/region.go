@@ -47,7 +47,7 @@ var regionListCmd = &cobra.Command{
 		if err != nil {
 			return err
 		}
-		res, err := c.GetRegionsWithResponse(cmd.Context())
+		res, err := c.GetRegionsWithResponse(cmd.Context(), nil)
 		if err != nil {
 			return fmt.Errorf("could not reach %s: %w", cfg.APIURL, err)
 		}

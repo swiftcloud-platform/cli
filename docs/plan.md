@@ -168,6 +168,22 @@ cloud storage presign s3://bucket/key [--method get|put] [--expires 1h] [--platf
 cloud storage versions s3://bucket/key              every version held, newest first
 cloud storage restore  s3://bucket/key --version-id <id>   copy one back; nothing is lost
 
+cloud vm    list
+cloud vm    create  <name> --image <ref> [--size <tier>] [--region <r>]
+                      [--description <d>] [--ssh-key <path-or-key>] [--wait]
+cloud vm    get     <name>
+cloud vm    delete  <name> [--yes]
+cloud vm    start   <name> [--wait]
+cloud vm    stop    <name> [--wait]
+cloud vm    restart <name> [--wait]
+cloud vm    console <name>                    opens browser with embedded SPICE client
+cloud vm    ssh-key list   <name>
+cloud vm    ssh-key add    <name> <path-or-key> [--label <l>]
+cloud vm    ssh-key remove <name> <key-id> [--yes]
+cloud vm    ip get    <name>                   shows public and private IPs
+cloud vm    ip attach <name>                   allocate and attach a public IP
+cloud vm    ip detach <name> [--yes]           release the public IP
+
 cloud completion bash|zsh|fish|powershell
 cloud version
 cloud update
@@ -217,6 +233,6 @@ Estimates are working days for one engineer with the platform already running lo
 
 ## Later
 
-- v1.1: virtual machines — create, power, console URL, public address attach (tier A), published ports.
+- v1.1: virtual machines — done on the CLI side (cmd/vm.go, cmd/vm_console.go, cmd/vm_ssh_key.go, cmd/vm_ip.go, internal/spice/). Awaits platform API endpoints and WebSocket SPICE proxy.
 - Deploy from source via buildpacks and a platform registry.
 - `cloud db sql <name>` wrapping the SQL editor endpoint.

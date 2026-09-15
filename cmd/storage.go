@@ -311,7 +311,7 @@ func listBuckets(cmd *cobra.Command) error {
 	if err != nil {
 		return err
 	}
-	res, err := c.GetOrgsOrgBucketsWithResponse(cmd.Context(), org)
+	res, err := c.GetOrgsOrgBucketsWithResponse(cmd.Context(), org, nil)
 	if err != nil {
 		return reachErr(err)
 	}
@@ -1596,7 +1596,7 @@ they exist only in the response that created them.`,
 		if err != nil {
 			return err
 		}
-		res, err := c.GetOrgsOrgBucketsBucketKeysWithResponse(cmd.Context(), org, args[0])
+		res, err := c.GetOrgsOrgBucketsBucketKeysWithResponse(cmd.Context(), org, args[0], nil)
 		if err != nil {
 			return reachErr(err)
 		}
@@ -1662,8 +1662,8 @@ revoked. The new key works within about a minute.`,
 			w := cmd.ErrOrStderr()
 			fmt.Fprintf(w, "\nKey %s added.\n", k.Id)
 			fmt.Fprintln(w, "The secret above is shown once and cannot be retrieved again.")
-			if k.Note != "" {
-				fmt.Fprintf(w, "%s\n", k.Note)
+			if k.Note != nil && *k.Note != "" {
+				fmt.Fprintf(w, "%s\n", *k.Note)
 			}
 		}
 		return nil
@@ -1772,7 +1772,7 @@ var bucketDomainsListCmd = &cobra.Command{
 		if err != nil {
 			return err
 		}
-		res, err := c.GetOrgsOrgBucketsBucketDomainsWithResponse(cmd.Context(), org, args[0])
+		res, err := c.GetOrgsOrgBucketsBucketDomainsWithResponse(cmd.Context(), org, args[0], nil)
 		if err != nil {
 			return reachErr(err)
 		}

@@ -129,7 +129,7 @@ the registrar.`,
 		if err != nil {
 			return err
 		}
-		res, err := c.GetOrgsOrgDomainsWithResponse(cmd.Context(), org)
+		res, err := c.GetOrgsOrgDomainsWithResponse(cmd.Context(), org, nil)
 		if err != nil {
 			return reachErr(err)
 		}
@@ -199,7 +199,7 @@ them.`,
 		if err != nil {
 			return err
 		}
-		res, err := c.GetOrgsOrgDomainsDomainRecordsWithResponse(cmd.Context(), org, args[0])
+		res, err := c.GetOrgsOrgDomainsDomainRecordsWithResponse(cmd.Context(), org, args[0], nil)
 		if err != nil {
 			return reachErr(err)
 		}
@@ -311,7 +311,7 @@ records and the name alone would be ambiguous.`,
 		if err != nil {
 			return err
 		}
-		body := api.PutOrgsOrgDomainsDomainRecordsRecordIdJSONRequestBody{}
+		body := api.PatchOrgsOrgDomainsDomainRecordsRecordIdJSONRequestBody{}
 		changed := false
 		if cmd.Flags().Changed("name") {
 			body.Name = &dnsName
@@ -425,17 +425,6 @@ func updateDNSRecord(cmd *cobra.Command, c *api.ClientWithResponses, org, domain
 	res, err := c.PatchOrgsOrgDomainsDomainRecordsRecordIdWithResponse(cmd.Context(), org, domain, recordID, body)
 	if err != nil {
 		return nil, reachErr(err)
-	}
-	if res.StatusCode() == 405 {
-		// Both request bodies are the same generated type, so no conversion.
-		old, err := c.PutOrgsOrgDomainsDomainRecordsRecordIdWithResponse(cmd.Context(), org, domain, recordID, body)
-		if err != nil {
-			return nil, reachErr(err)
-		}
-		if err := apiErr(old.StatusCode(), old.Body); err != nil {
-			return nil, err
-		}
-		return decoded(old.JSON200)
 	}
 	if err := apiErr(res.StatusCode(), res.Body); err != nil {
 		return nil, err

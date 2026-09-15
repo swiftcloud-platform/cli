@@ -334,21 +334,24 @@ type AccessKey struct {
 	Label       string `json:"label"`
 }
 
-// AccessKeyCreated defines model for AccessKeyCreated.
+// AccessKeyCreated The secret appears in this response only; it is never retrievable again.
 type AccessKeyCreated struct {
-	AccessKeyId string `json:"accessKeyId"`
-	CreatedAt   string `json:"createdAt"`
-	Id          string `json:"id"`
-	Label       string `json:"label"`
-	Note        string `json:"note"`
-
-	// SecretAccessKey Shown once, at creation, and never again
-	SecretAccessKey string `json:"secretAccessKey"`
+	AccessKeyId     string    `json:"accessKeyId"`
+	CreatedAt       time.Time `json:"createdAt"`
+	Id              string    `json:"id"`
+	Label           *string   `json:"label"`
+	Note            *string   `json:"note,omitempty"`
+	SecretAccessKey string    `json:"secretAccessKey"`
 }
 
 // AccessKeyList defines model for AccessKeyList.
 type AccessKeyList struct {
-	Items []AccessKey `json:"items"`
+	// HasMore Whether another page exists.
+	HasMore *bool       `json:"hasMore,omitempty"`
+	Items   []AccessKey `json:"items"`
+
+	// NextCursor Pass as ?cursor= to fetch the next page. Null when there are no more.
+	NextCursor *string `json:"nextCursor,omitempty"`
 }
 
 // App defines model for App.
@@ -367,14 +370,14 @@ type App struct {
 	// Image Container image reference, e.g. ghcr.io/acme/web:1.4.2
 	Image string `json:"image"`
 
-	// LatestRevision The newest revision Knative has created for this app.
+	// LatestRevision The newest revision the platform has created for this app.
 	LatestRevision string `json:"latestRevision"`
 
 	// Name Unique within the organisation. Lowercase letters, digits and hyphens.
 	Name           string `json:"name"`
 	OrganizationId string `json:"organizationId"`
 
-	// Region Region name, e.g. zm-lusaka-central-1
+	// Region Region name, e.g. zm-lsk-1
 	Region   string `json:"region"`
 	RegionId string `json:"regionId"`
 
@@ -412,7 +415,7 @@ type AppCreate struct {
 	// Name Unique within the organisation. Lowercase letters, digits and hyphens.
 	Name string `json:"name"`
 
-	// Region Region id or name, e.g. zm-lusaka-central-1
+	// Region Region id or name, e.g. zm-lsk-1
 	Region string `json:"region"`
 
 	// RegistryAuth Credentials for a private registry.
@@ -427,7 +430,7 @@ type AppCreate struct {
 	ReplicasMax *int `json:"replicasMax,omitempty"`
 	ReplicasMin *int `json:"replicasMin,omitempty"`
 
-	// Size Pricing tier name (see /pricing). Defaults to the smallest.
+	// Size Pricing tier name (see /pricing). Omit it and the smallest active tier for your market is used.
 	Size *string `json:"size,omitempty"`
 }
 
@@ -442,7 +445,12 @@ type AppDeploy struct {
 
 // AppList defines model for AppList.
 type AppList struct {
-	Items []App `json:"items"`
+	// HasMore Whether another page exists.
+	HasMore *bool `json:"hasMore,omitempty"`
+	Items   []App `json:"items"`
+
+	// NextCursor Pass as ?cursor= to fetch the next page. Null when there are no more.
+	NextCursor *string `json:"nextCursor,omitempty"`
 }
 
 // AppUpdate defines model for AppUpdate.
@@ -480,12 +488,17 @@ type Backup struct {
 
 // BackupList defines model for BackupList.
 type BackupList struct {
-	Items []Backup `json:"items"`
+	// HasMore Whether another page exists.
+	HasMore *bool    `json:"hasMore,omitempty"`
+	Items   []Backup `json:"items"`
+
+	// NextCursor Pass as ?cursor= to fetch the next page. Null when there are no more.
+	NextCursor *string `json:"nextCursor,omitempty"`
 }
 
 // BackupsEnable defines model for BackupsEnable.
 type BackupsEnable struct {
-	// Retention Retention window (barman syntax, e.g. 3d). A window, not a count: with a daily schedule 3d keeps two or three base backups.
+	// Retention Retention window: a number followed by d, w or m, e.g. 3d. A window, not a count: with a daily schedule 3d keeps two or three base backups.
 	Retention *string `json:"retention,omitempty"`
 }
 
@@ -512,7 +525,9 @@ type Bucket struct {
 	Name           string `json:"name"`
 	ObjectCount    int    `json:"objectCount"`
 	OrganizationId string `json:"organizationId"`
-	PublicAccess   bool   `json:"publicAccess"`
+
+	// PublicAccess Anyone may read every object in the bucket
+	PublicAccess bool `json:"publicAccess"`
 
 	// PublicPrefixes Folders anyone may read, when the bucket itself is private
 	PublicPrefixes []string `json:"publicPrefixes"`
@@ -534,7 +549,9 @@ type Bucket struct {
 	Status       string    `json:"status"`
 	StorageClass string    `json:"storageClass"`
 	UpdatedAt    time.Time `json:"updatedAt"`
-	Versioning   bool      `json:"versioning"`
+
+	// Versioning What the storage server reports, refreshed every 15 minutes
+	Versioning bool `json:"versioning"`
 
 	// VirtualHost Virtual-hosted address of the bucket, <bucketName>.s3.<region domain>
 	VirtualHost string `json:"virtualHost"`
@@ -548,7 +565,7 @@ type BucketCreate struct {
 	// Region Region id or name
 	Region string `json:"region"`
 
-	// Size Pricing tier name (see /pricing). Defaults to the smallest.
+	// Size Pricing tier name (see /pricing). Omit it and the smallest active tier for your market is used.
 	Size *string `json:"size,omitempty"`
 
 	// StorageClass Only STANDARD is offered today.
@@ -565,10 +582,10 @@ type BucketCredentials struct {
 	// BucketName Physical bucket name to use with the endpoint
 	BucketName string `json:"bucketName"`
 
-	// Endpoint Public S3 endpoint for the region. Use path-style addressing with region "us-east-1".
+	// Endpoint Public S3 endpoint for the region. Use path-style addressing, with the region name as the S3 region.
 	Endpoint string `json:"endpoint"`
 
-	// Region Platform region name (informational; the S3 signing region is always us-east-1)
+	// Region Platform region name — also the S3 signing region to configure in clients
 	Region          string `json:"region"`
 	SecretAccessKey string `json:"secretAccessKey"`
 	VirtualHost     string `json:"virtualHost"`
@@ -600,7 +617,12 @@ type BucketDomainAdd struct {
 
 // BucketDomainList defines model for BucketDomainList.
 type BucketDomainList struct {
-	Items []BucketDomain `json:"items"`
+	// HasMore Whether another page exists.
+	HasMore *bool          `json:"hasMore,omitempty"`
+	Items   []BucketDomain `json:"items"`
+
+	// NextCursor Pass as ?cursor= to fetch the next page. Null when there are no more.
+	NextCursor *string `json:"nextCursor,omitempty"`
 }
 
 // BucketDomainRemove defines model for BucketDomainRemove.
@@ -611,7 +633,12 @@ type BucketDomainRemove struct {
 
 // BucketList defines model for BucketList.
 type BucketList struct {
-	Items []Bucket `json:"items"`
+	// HasMore Whether another page exists.
+	HasMore *bool    `json:"hasMore,omitempty"`
+	Items   []Bucket `json:"items"`
+
+	// NextCursor Pass as ?cursor= to fetch the next page. Null when there are no more.
+	NextCursor *string `json:"nextCursor,omitempty"`
 }
 
 // BucketUpdate defines model for BucketUpdate.
@@ -632,12 +659,14 @@ type Credentials struct {
 	ConnectionString string `json:"connectionString"`
 
 	// ConnectionStringUri URI form: postgresql:// or mysql://
-	ConnectionStringUri      string `json:"connectionStringUri"`
-	Database                 string `json:"database"`
-	Host                     string `json:"host"`
+	ConnectionStringUri string `json:"connectionStringUri"`
+	Database            string `json:"database"`
+	Host                string `json:"host"`
+
+	// InternalConnectionString URI form using internalHost
 	InternalConnectionString string `json:"internalConnectionString"`
 
-	// InternalHost Reachable only from apps in the same region
+	// InternalHost Short name apps in the same organisation connect to (e.g. db-shop); null until it is ready
 	InternalHost string `json:"internalHost"`
 	Password     string `json:"password"`
 	Port         int    `json:"port"`
@@ -663,7 +692,12 @@ type CustomDomain struct {
 
 // CustomDomainList defines model for CustomDomainList.
 type CustomDomainList struct {
-	Items []CustomDomain `json:"items"`
+	// HasMore Whether another page exists.
+	HasMore *bool          `json:"hasMore,omitempty"`
+	Items   []CustomDomain `json:"items"`
+
+	// NextCursor Pass as ?cursor= to fetch the next page. Null when there are no more.
+	NextCursor *string `json:"nextCursor,omitempty"`
 }
 
 // Database defines model for Database.
@@ -704,7 +738,7 @@ type DatabaseCreate struct {
 	// Region Region id or name
 	Region string `json:"region"`
 
-	// Size Pricing tier name (see /pricing). Defaults to the smallest.
+	// Size Pricing tier name (see /pricing). Omit it and the smallest active tier for your market is used.
 	Size *string `json:"size,omitempty"`
 
 	// Version An available version for the engine (see GET /database-engines). Defaults to the engine default.
@@ -716,7 +750,12 @@ type DatabaseCreateEngine string
 
 // DatabaseList defines model for DatabaseList.
 type DatabaseList struct {
-	Items []Database `json:"items"`
+	// HasMore Whether another page exists.
+	HasMore *bool      `json:"hasMore,omitempty"`
+	Items   []Database `json:"items"`
+
+	// NextCursor Pass as ?cursor= to fetch the next page. Null when there are no more.
+	NextCursor *string `json:"nextCursor,omitempty"`
 }
 
 // DatabaseRestore defines model for DatabaseRestore.
@@ -742,7 +781,12 @@ type Deployment struct {
 
 // DeploymentList defines model for DeploymentList.
 type DeploymentList struct {
-	Items []Deployment `json:"items"`
+	// HasMore Whether another page exists.
+	HasMore *bool        `json:"hasMore,omitempty"`
+	Items   []Deployment `json:"items"`
+
+	// NextCursor Pass as ?cursor= to fetch the next page. Null when there are no more.
+	NextCursor *string `json:"nextCursor,omitempty"`
 }
 
 // DnsRecord defines model for DnsRecord.
@@ -785,7 +829,12 @@ type DnsRecordCreateType string
 
 // DnsRecordList defines model for DnsRecordList.
 type DnsRecordList struct {
-	Items []DnsRecord `json:"items"`
+	// HasMore Whether another page exists.
+	HasMore *bool       `json:"hasMore,omitempty"`
+	Items   []DnsRecord `json:"items"`
+
+	// NextCursor Pass as ?cursor= to fetch the next page. Null when there are no more.
+	NextCursor *string `json:"nextCursor,omitempty"`
 }
 
 // DnsRecordUpdate defines model for DnsRecordUpdate.
@@ -829,7 +878,12 @@ type DomainAdd struct {
 
 // DomainList defines model for DomainList.
 type DomainList struct {
-	Items []Domain `json:"items"`
+	// HasMore Whether another page exists.
+	HasMore *bool    `json:"hasMore,omitempty"`
+	Items   []Domain `json:"items"`
+
+	// NextCursor Pass as ?cursor= to fetch the next page. Null when there are no more.
+	NextCursor *string `json:"nextCursor,omitempty"`
 }
 
 // EngineVersion defines model for EngineVersion.
@@ -844,7 +898,12 @@ type EngineVersionEngine string
 
 // EngineVersionList defines model for EngineVersionList.
 type EngineVersionList struct {
-	Items []EngineVersion `json:"items"`
+	// HasMore Whether another page exists.
+	HasMore *bool           `json:"hasMore,omitempty"`
+	Items   []EngineVersion `json:"items"`
+
+	// NextCursor Pass as ?cursor= to fetch the next page. Null when there are no more.
+	NextCursor *string `json:"nextCursor,omitempty"`
 }
 
 // Health defines model for Health.
@@ -927,7 +986,12 @@ type OrgRole string
 
 // OrgList defines model for OrgList.
 type OrgList struct {
-	Items []Org `json:"items"`
+	// HasMore Whether another page exists.
+	HasMore *bool `json:"hasMore,omitempty"`
+	Items   []Org `json:"items"`
+
+	// NextCursor Pass as ?cursor= to fetch the next page. Null when there are no more.
+	NextCursor *string `json:"nextCursor,omitempty"`
 }
 
 // PresignRequest defines model for PresignRequest.
@@ -970,14 +1034,19 @@ type Region struct {
 	Location *string `json:"location"`
 	Name     string  `json:"name"`
 
-	// S3Endpoint Public S3 endpoint for buckets in this region (path-style, signing region us-east-1), or null when none is configured.
+	// S3Endpoint Public S3 endpoint for buckets in this region (path-style; sign with the region name as the S3 region), or null when none is configured.
 	S3Endpoint *string `json:"s3Endpoint"`
 	Status     string  `json:"status"`
 }
 
 // RegionList defines model for RegionList.
 type RegionList struct {
-	Items []Region `json:"items"`
+	// HasMore Whether another page exists.
+	HasMore *bool    `json:"hasMore,omitempty"`
+	Items   []Region `json:"items"`
+
+	// NextCursor Pass as ?cursor= to fetch the next page. Null when there are no more.
+	NextCursor *string `json:"nextCursor,omitempty"`
 }
 
 // RestoreRequest defines model for RestoreRequest.
@@ -986,22 +1055,280 @@ type RestoreRequest struct {
 	VersionId string `json:"versionId"`
 }
 
+// Vm defines model for Vm.
+type Vm struct {
+	CreatedAt   time.Time `json:"createdAt"`
+	Description string    `json:"description"`
+
+	// ErrorMessage Why the VM is in its current state, when the state alone is not actionable.
+	ErrorMessage string `json:"errorMessage"`
+	Id           string `json:"id"`
+
+	// Image VM image slug, e.g. ubuntu-24.04
+	Image string `json:"image"`
+
+	// Name Unique within the organisation. Lowercase letters, digits and hyphens.
+	Name           string `json:"name"`
+	OrganizationId string `json:"organizationId"`
+
+	// PrivateIp Private IP address on the internal network.
+	PrivateIp string `json:"privateIp"`
+
+	// PublicIp Public IP address, once attached. Empty when not attached.
+	PublicIp string `json:"publicIp"`
+
+	// Region Region name, e.g. zm-lusaka-central-1
+	Region   string `json:"region"`
+	RegionId string `json:"regionId"`
+
+	// Size Pricing tier name (vCPU/RAM)
+	Size string `json:"size"`
+
+	// Status provisioning | running | stopped | suspended | failed. `running` is the healthy state. Advanced by the platform worker; poll until terminal (running, stopped, suspended, failed).
+	Status    string    `json:"status"`
+	UpdatedAt time.Time `json:"updatedAt"`
+}
+
+// VmConsole defines model for VmConsole.
+type VmConsole struct {
+	// ExpiresAt When the ticket expires
+	ExpiresAt time.Time `json:"expiresAt"`
+
+	// Ticket Short-lived authentication ticket
+	Ticket string `json:"ticket"`
+
+	// WsUrl WebSocket URL for the SPICE proxy
+	WsUrl string `json:"wsUrl"`
+}
+
+// VmCreate defines model for VmCreate.
+type VmCreate struct {
+	Description *string `json:"description,omitempty"`
+
+	// Image VM image slug, e.g. ubuntu-24.04
+	Image string `json:"image"`
+
+	// Name Unique within the organisation. Lowercase letters, digits and hyphens.
+	Name string `json:"name"`
+
+	// Region Region id or name, e.g. zm-lusaka-central-1
+	Region string `json:"region"`
+
+	// Size Pricing tier name. Defaults to the smallest.
+	Size *string `json:"size,omitempty"`
+
+	// SshPublicKey Optional SSH public key to install on first boot.
+	SshPublicKey *string `json:"sshPublicKey,omitempty"`
+}
+
+// VmIp defines model for VmIp.
+type VmIp struct {
+	// PrivateIp Private IP address on the internal network
+	PrivateIp string `json:"privateIp"`
+
+	// PublicIp Public IP address, or null if not attached
+	PublicIp string `json:"publicIp"`
+}
+
+// VmList defines model for VmList.
+type VmList struct {
+	// HasMore Whether another page exists.
+	HasMore *bool `json:"hasMore,omitempty"`
+	Items   []Vm  `json:"items"`
+
+	// NextCursor Pass as ?cursor= to fetch the next page. Null when there are no more.
+	NextCursor *string `json:"nextCursor,omitempty"`
+}
+
+// VmSshKey defines model for VmSshKey.
+type VmSshKey struct {
+	AddedAt time.Time `json:"addedAt"`
+
+	// Fingerprint SHA256 fingerprint
+	Fingerprint string `json:"fingerprint"`
+	Id          string `json:"id"`
+	Label       string `json:"label"`
+
+	// PublicKey The public key content
+	PublicKey string `json:"publicKey"`
+}
+
+// VmSshKeyCreate defines model for VmSshKeyCreate.
+type VmSshKeyCreate struct {
+	// Label Optional human-readable label
+	Label *string `json:"label,omitempty"`
+
+	// PublicKey SSH public key content
+	PublicKey string `json:"publicKey"`
+}
+
+// VmSshKeyList defines model for VmSshKeyList.
+type VmSshKeyList struct {
+	// HasMore Whether another page exists.
+	HasMore *bool      `json:"hasMore,omitempty"`
+	Items   []VmSshKey `json:"items"`
+
+	// NextCursor Pass as ?cursor= to fetch the next page. Null when there are no more.
+	NextCursor *string `json:"nextCursor,omitempty"`
+}
+
+// GetDatabaseEnginesParams defines parameters for GetDatabaseEngines.
+type GetDatabaseEnginesParams struct {
+	// Limit Rows per page. Clamped to 200.
+	Limit *int `form:"limit,omitempty" json:"limit,omitempty"`
+
+	// Cursor Opaque cursor from a previous response’s nextCursor.
+	Cursor *string `form:"cursor,omitempty" json:"cursor,omitempty"`
+}
+
+// GetOrgsParams defines parameters for GetOrgs.
+type GetOrgsParams struct {
+	// Limit Rows per page. Clamped to 200.
+	Limit *int `form:"limit,omitempty" json:"limit,omitempty"`
+
+	// Cursor Opaque cursor from a previous response’s nextCursor.
+	Cursor *string `form:"cursor,omitempty" json:"cursor,omitempty"`
+}
+
+// GetOrgsOrgAppsParams defines parameters for GetOrgsOrgApps.
+type GetOrgsOrgAppsParams struct {
+	// Limit Rows per page. Clamped to 200.
+	Limit *int `form:"limit,omitempty" json:"limit,omitempty"`
+
+	// Cursor Opaque cursor from a previous response’s nextCursor.
+	Cursor *string `form:"cursor,omitempty" json:"cursor,omitempty"`
+}
+
+// GetOrgsOrgAppsAppDeploymentsParams defines parameters for GetOrgsOrgAppsAppDeployments.
+type GetOrgsOrgAppsAppDeploymentsParams struct {
+	// Limit Rows per page. Clamped to 200.
+	Limit *int `form:"limit,omitempty" json:"limit,omitempty"`
+
+	// Cursor Opaque cursor from a previous response’s nextCursor.
+	Cursor *string `form:"cursor,omitempty" json:"cursor,omitempty"`
+}
+
+// GetOrgsOrgAppsAppDomainsParams defines parameters for GetOrgsOrgAppsAppDomains.
+type GetOrgsOrgAppsAppDomainsParams struct {
+	// Limit Rows per page. Clamped to 200.
+	Limit *int `form:"limit,omitempty" json:"limit,omitempty"`
+
+	// Cursor Opaque cursor from a previous response’s nextCursor.
+	Cursor *string `form:"cursor,omitempty" json:"cursor,omitempty"`
+}
+
 // GetOrgsOrgAppsAppLogsParams defines parameters for GetOrgsOrgAppsAppLogs.
 type GetOrgsOrgAppsAppLogsParams struct {
-	// Tail Number of recent lines (default 200)
+	// Tail Number of recent lines (default 200, max 5000)
 	Tail *int `form:"tail,omitempty" json:"tail,omitempty"`
 
 	// Follow Keep the stream open
 	Follow *bool `form:"follow,omitempty" json:"follow,omitempty"`
 
-	// Since Only logs from the last N seconds. Ignored when 0 or less; capped at 30 days. Applied before tail.
+	// Since Only lines from the last N seconds (max 30 days)
 	Since *int `form:"since,omitempty" json:"since,omitempty"`
+}
+
+// GetOrgsOrgBucketsParams defines parameters for GetOrgsOrgBuckets.
+type GetOrgsOrgBucketsParams struct {
+	// Limit Rows per page. Clamped to 200.
+	Limit *int `form:"limit,omitempty" json:"limit,omitempty"`
+
+	// Cursor Opaque cursor from a previous response’s nextCursor.
+	Cursor *string `form:"cursor,omitempty" json:"cursor,omitempty"`
+}
+
+// GetOrgsOrgBucketsBucketDomainsParams defines parameters for GetOrgsOrgBucketsBucketDomains.
+type GetOrgsOrgBucketsBucketDomainsParams struct {
+	// Limit Rows per page. Clamped to 200.
+	Limit *int `form:"limit,omitempty" json:"limit,omitempty"`
+
+	// Cursor Opaque cursor from a previous response’s nextCursor.
+	Cursor *string `form:"cursor,omitempty" json:"cursor,omitempty"`
+}
+
+// GetOrgsOrgBucketsBucketKeysParams defines parameters for GetOrgsOrgBucketsBucketKeys.
+type GetOrgsOrgBucketsBucketKeysParams struct {
+	// Limit Rows per page. Clamped to 200.
+	Limit *int `form:"limit,omitempty" json:"limit,omitempty"`
+
+	// Cursor Opaque cursor from a previous response’s nextCursor.
+	Cursor *string `form:"cursor,omitempty" json:"cursor,omitempty"`
 }
 
 // GetOrgsOrgBucketsBucketVersionsParams defines parameters for GetOrgsOrgBucketsBucketVersions.
 type GetOrgsOrgBucketsBucketVersionsParams struct {
+	// Limit Rows per page. Clamped to 200.
+	Limit *int `form:"limit,omitempty" json:"limit,omitempty"`
+
+	// Cursor Opaque cursor from a previous response’s nextCursor.
+	Cursor *string `form:"cursor,omitempty" json:"cursor,omitempty"`
+
 	// Key Object key
 	Key string `form:"key" json:"key"`
+}
+
+// GetOrgsOrgDatabasesParams defines parameters for GetOrgsOrgDatabases.
+type GetOrgsOrgDatabasesParams struct {
+	// Limit Rows per page. Clamped to 200.
+	Limit *int `form:"limit,omitempty" json:"limit,omitempty"`
+
+	// Cursor Opaque cursor from a previous response’s nextCursor.
+	Cursor *string `form:"cursor,omitempty" json:"cursor,omitempty"`
+}
+
+// GetOrgsOrgDatabasesDbBackupsParams defines parameters for GetOrgsOrgDatabasesDbBackups.
+type GetOrgsOrgDatabasesDbBackupsParams struct {
+	// Limit Rows per page. Clamped to 200.
+	Limit *int `form:"limit,omitempty" json:"limit,omitempty"`
+
+	// Cursor Opaque cursor from a previous response’s nextCursor.
+	Cursor *string `form:"cursor,omitempty" json:"cursor,omitempty"`
+}
+
+// GetOrgsOrgDomainsParams defines parameters for GetOrgsOrgDomains.
+type GetOrgsOrgDomainsParams struct {
+	// Limit Rows per page. Clamped to 200.
+	Limit *int `form:"limit,omitempty" json:"limit,omitempty"`
+
+	// Cursor Opaque cursor from a previous response’s nextCursor.
+	Cursor *string `form:"cursor,omitempty" json:"cursor,omitempty"`
+}
+
+// GetOrgsOrgDomainsDomainRecordsParams defines parameters for GetOrgsOrgDomainsDomainRecords.
+type GetOrgsOrgDomainsDomainRecordsParams struct {
+	// Limit Rows per page. Clamped to 200.
+	Limit *int `form:"limit,omitempty" json:"limit,omitempty"`
+
+	// Cursor Opaque cursor from a previous response’s nextCursor.
+	Cursor *string `form:"cursor,omitempty" json:"cursor,omitempty"`
+}
+
+// GetOrgsOrgVmsParams defines parameters for GetOrgsOrgVms.
+type GetOrgsOrgVmsParams struct {
+	// Limit Rows per page. Clamped to 200.
+	Limit *int `form:"limit,omitempty" json:"limit,omitempty"`
+
+	// Cursor Opaque cursor from a previous response’s nextCursor.
+	Cursor *string `form:"cursor,omitempty" json:"cursor,omitempty"`
+}
+
+// GetOrgsOrgVmsVmSshKeysParams defines parameters for GetOrgsOrgVmsVmSshKeys.
+type GetOrgsOrgVmsVmSshKeysParams struct {
+	// Limit Rows per page. Clamped to 200.
+	Limit *int `form:"limit,omitempty" json:"limit,omitempty"`
+
+	// Cursor Opaque cursor from a previous response’s nextCursor.
+	Cursor *string `form:"cursor,omitempty" json:"cursor,omitempty"`
+}
+
+// GetRegionsParams defines parameters for GetRegions.
+type GetRegionsParams struct {
+	// Limit Rows per page. Clamped to 200.
+	Limit *int `form:"limit,omitempty" json:"limit,omitempty"`
+
+	// Cursor Opaque cursor from a previous response’s nextCursor.
+	Cursor *string `form:"cursor,omitempty" json:"cursor,omitempty"`
 }
 
 // PostOrgsOrgAppsJSONRequestBody defines body for PostOrgsOrgApps for application/json ContentType.
@@ -1055,8 +1382,11 @@ type PostOrgsOrgDomainsDomainRecordsJSONRequestBody = DnsRecordCreate
 // PatchOrgsOrgDomainsDomainRecordsRecordIdJSONRequestBody defines body for PatchOrgsOrgDomainsDomainRecordsRecordId for application/json ContentType.
 type PatchOrgsOrgDomainsDomainRecordsRecordIdJSONRequestBody = DnsRecordUpdate
 
-// PutOrgsOrgDomainsDomainRecordsRecordIdJSONRequestBody defines body for PutOrgsOrgDomainsDomainRecordsRecordId for application/json ContentType.
-type PutOrgsOrgDomainsDomainRecordsRecordIdJSONRequestBody = DnsRecordUpdate
+// PostOrgsOrgVmsJSONRequestBody defines body for PostOrgsOrgVms for application/json ContentType.
+type PostOrgsOrgVmsJSONRequestBody = VmCreate
+
+// PostOrgsOrgVmsVmSshKeysJSONRequestBody defines body for PostOrgsOrgVmsVmSshKeys for application/json ContentType.
+type PostOrgsOrgVmsVmSshKeysJSONRequestBody = VmSshKeyCreate
 
 // RequestEditorFn is the function signature for the RequestEditor callback function
 type RequestEditorFn func(ctx context.Context, req *http.Request) error
@@ -1135,7 +1465,7 @@ type ClientInterface interface {
 	// GetDatabaseEngines Engines and versions available for new databases
 	//
 	// Corresponds with GET /database-engines (the `GetDatabaseEngines` operationId).
-	GetDatabaseEngines(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error)
+	GetDatabaseEngines(ctx context.Context, params *GetDatabaseEnginesParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// GetHealth Liveness, including worker heartbeat age
 	//
@@ -1150,12 +1480,12 @@ type ClientInterface interface {
 	// GetOrgs Organisations the caller belongs to
 	//
 	// Corresponds with GET /orgs (the `GetOrgs` operationId).
-	GetOrgs(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error)
+	GetOrgs(ctx context.Context, params *GetOrgsParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// GetOrgsOrgApps List apps
 	//
 	// Corresponds with GET /orgs/{org}/apps (the `GetOrgsOrgApps` operationId).
-	GetOrgsOrgApps(ctx context.Context, org string, reqEditors ...RequestEditorFn) (*http.Response, error)
+	GetOrgsOrgApps(ctx context.Context, org string, params *GetOrgsOrgAppsParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// PostOrgsOrgAppsWithBody Create an app
 	//
@@ -1212,12 +1542,12 @@ type ClientInterface interface {
 	// GetOrgsOrgAppsAppDeployments Deployment history, newest first
 	//
 	// Corresponds with GET /orgs/{org}/apps/{app}/deployments (the `GetOrgsOrgAppsAppDeployments` operationId).
-	GetOrgsOrgAppsAppDeployments(ctx context.Context, org string, app string, reqEditors ...RequestEditorFn) (*http.Response, error)
+	GetOrgsOrgAppsAppDeployments(ctx context.Context, org string, app string, params *GetOrgsOrgAppsAppDeploymentsParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// GetOrgsOrgAppsAppDomains Custom domains
 	//
 	// Corresponds with GET /orgs/{org}/apps/{app}/domains (the `GetOrgsOrgAppsAppDomains` operationId).
-	GetOrgsOrgAppsAppDomains(ctx context.Context, org string, app string, reqEditors ...RequestEditorFn) (*http.Response, error)
+	GetOrgsOrgAppsAppDomains(ctx context.Context, org string, app string, params *GetOrgsOrgAppsAppDomainsParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// PostOrgsOrgAppsAppDomainsWithBody Attach a custom domain
 	//
@@ -1246,7 +1576,7 @@ type ClientInterface interface {
 	// GetOrgsOrgBuckets List buckets
 	//
 	// Corresponds with GET /orgs/{org}/buckets (the `GetOrgsOrgBuckets` operationId).
-	GetOrgsOrgBuckets(ctx context.Context, org string, reqEditors ...RequestEditorFn) (*http.Response, error)
+	GetOrgsOrgBuckets(ctx context.Context, org string, params *GetOrgsOrgBucketsParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// PostOrgsOrgBucketsWithBody Create a bucket (exists on the object store when this returns)
 	//
@@ -1272,14 +1602,14 @@ type ClientInterface interface {
 	// Corresponds with GET /orgs/{org}/buckets/{bucket} (the `GetOrgsOrgBucketsBucket` operationId).
 	GetOrgsOrgBucketsBucket(ctx context.Context, org string, bucket string, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	// PatchOrgsOrgBucketsBucketWithBody Change a bucket's versioning or public access
+	// PatchOrgsOrgBucketsBucketWithBody Change versioning or public access (applied on the storage service and verified before this returns)
 	//
 	// Takes any type of body and a specified content type.
 	//
 	// Corresponds with PATCH /orgs/{org}/buckets/{bucket} (the `PatchOrgsOrgBucketsBucket` operationId).
 	PatchOrgsOrgBucketsBucketWithBody(ctx context.Context, org string, bucket string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	// PatchOrgsOrgBucketsBucket Change a bucket's versioning or public access
+	// PatchOrgsOrgBucketsBucket Change versioning or public access (applied on the storage service and verified before this returns)
 	//
 	// Takes a body of the `application/json` content type.
 	//
@@ -1291,66 +1621,66 @@ type ClientInterface interface {
 	// Corresponds with GET /orgs/{org}/buckets/{bucket}/credentials (the `GetOrgsOrgBucketsBucketCredentials` operationId).
 	GetOrgsOrgBucketsBucketCredentials(ctx context.Context, org string, bucket string, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	// DeleteOrgsOrgBucketsBucketDomainsWithBody Remove a custom hostname
+	// DeleteOrgsOrgBucketsBucketDomainsWithBody Remove a hostname, by id or by the hostname itself
 	//
 	// Takes any type of body and a specified content type.
 	//
 	// Corresponds with DELETE /orgs/{org}/buckets/{bucket}/domains (the `DeleteOrgsOrgBucketsBucketDomains` operationId).
 	DeleteOrgsOrgBucketsBucketDomainsWithBody(ctx context.Context, org string, bucket string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	// DeleteOrgsOrgBucketsBucketDomains Remove a custom hostname
+	// DeleteOrgsOrgBucketsBucketDomains Remove a hostname, by id or by the hostname itself
 	//
 	// Takes a body of the `application/json` content type.
 	//
 	// Corresponds with DELETE /orgs/{org}/buckets/{bucket}/domains (the `DeleteOrgsOrgBucketsBucketDomains` operationId).
 	DeleteOrgsOrgBucketsBucketDomains(ctx context.Context, org string, bucket string, body DeleteOrgsOrgBucketsBucketDomainsJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	// GetOrgsOrgBucketsBucketDomains List custom hostnames on a bucket
+	// GetOrgsOrgBucketsBucketDomains Custom hostnames in front of a public bucket
 	//
 	// Corresponds with GET /orgs/{org}/buckets/{bucket}/domains (the `GetOrgsOrgBucketsBucketDomains` operationId).
-	GetOrgsOrgBucketsBucketDomains(ctx context.Context, org string, bucket string, reqEditors ...RequestEditorFn) (*http.Response, error)
+	GetOrgsOrgBucketsBucketDomains(ctx context.Context, org string, bucket string, params *GetOrgsOrgBucketsBucketDomainsParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	// PostOrgsOrgBucketsBucketDomainsWithBody Attach a custom hostname to a public bucket
+	// PostOrgsOrgBucketsBucketDomainsWithBody Attach a hostname (the bucket, or a folder in it, must be public)
 	//
 	// Takes any type of body and a specified content type.
 	//
 	// Corresponds with POST /orgs/{org}/buckets/{bucket}/domains (the `PostOrgsOrgBucketsBucketDomains` operationId).
 	PostOrgsOrgBucketsBucketDomainsWithBody(ctx context.Context, org string, bucket string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	// PostOrgsOrgBucketsBucketDomains Attach a custom hostname to a public bucket
+	// PostOrgsOrgBucketsBucketDomains Attach a hostname (the bucket, or a folder in it, must be public)
 	//
 	// Takes a body of the `application/json` content type.
 	//
 	// Corresponds with POST /orgs/{org}/buckets/{bucket}/domains (the `PostOrgsOrgBucketsBucketDomains` operationId).
 	PostOrgsOrgBucketsBucketDomains(ctx context.Context, org string, bucket string, body PostOrgsOrgBucketsBucketDomainsJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	// DeleteOrgsOrgBucketsBucketKeysWithBody Revoke an access key pair
+	// DeleteOrgsOrgBucketsBucketKeysWithBody Revoke a key pair (at least one must remain). Stops working within about a minute.
 	//
 	// Takes any type of body and a specified content type.
 	//
 	// Corresponds with DELETE /orgs/{org}/buckets/{bucket}/keys (the `DeleteOrgsOrgBucketsBucketKeys` operationId).
 	DeleteOrgsOrgBucketsBucketKeysWithBody(ctx context.Context, org string, bucket string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	// DeleteOrgsOrgBucketsBucketKeys Revoke an access key pair
+	// DeleteOrgsOrgBucketsBucketKeys Revoke a key pair (at least one must remain). Stops working within about a minute.
 	//
 	// Takes a body of the `application/json` content type.
 	//
 	// Corresponds with DELETE /orgs/{org}/buckets/{bucket}/keys (the `DeleteOrgsOrgBucketsBucketKeys` operationId).
 	DeleteOrgsOrgBucketsBucketKeys(ctx context.Context, org string, bucket string, body DeleteOrgsOrgBucketsBucketKeysJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	// GetOrgsOrgBucketsBucketKeys List the organisation's active access keys
+	// GetOrgsOrgBucketsBucketKeys Active access keys on the organisation's storage identity
 	//
 	// Corresponds with GET /orgs/{org}/buckets/{bucket}/keys (the `GetOrgsOrgBucketsBucketKeys` operationId).
-	GetOrgsOrgBucketsBucketKeys(ctx context.Context, org string, bucket string, reqEditors ...RequestEditorFn) (*http.Response, error)
+	GetOrgsOrgBucketsBucketKeys(ctx context.Context, org string, bucket string, params *GetOrgsOrgBucketsBucketKeysParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	// PostOrgsOrgBucketsBucketKeysWithBody Add an access key pair
+	// PostOrgsOrgBucketsBucketKeysWithBody Add a key pair (two active at most). Usable within about a minute; the secret is shown once.
 	//
 	// Takes any type of body and a specified content type.
 	//
 	// Corresponds with POST /orgs/{org}/buckets/{bucket}/keys (the `PostOrgsOrgBucketsBucketKeys` operationId).
 	PostOrgsOrgBucketsBucketKeysWithBody(ctx context.Context, org string, bucket string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	// PostOrgsOrgBucketsBucketKeys Add an access key pair
+	// PostOrgsOrgBucketsBucketKeys Add a key pair (two active at most). Usable within about a minute; the secret is shown once.
 	//
 	// Takes a body of the `application/json` content type.
 	//
@@ -1371,21 +1701,21 @@ type ClientInterface interface {
 	// Corresponds with POST /orgs/{org}/buckets/{bucket}/presign (the `PostOrgsOrgBucketsBucketPresign` operationId).
 	PostOrgsOrgBucketsBucketPresign(ctx context.Context, org string, bucket string, body PostOrgsOrgBucketsBucketPresignJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	// PostOrgsOrgBucketsBucketRestoreWithBody Copy a previous version back onto the key
+	// PostOrgsOrgBucketsBucketRestoreWithBody Make an older version current (a copy of it; nothing is lost)
 	//
 	// Takes any type of body and a specified content type.
 	//
 	// Corresponds with POST /orgs/{org}/buckets/{bucket}/restore (the `PostOrgsOrgBucketsBucketRestore` operationId).
 	PostOrgsOrgBucketsBucketRestoreWithBody(ctx context.Context, org string, bucket string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	// PostOrgsOrgBucketsBucketRestore Copy a previous version back onto the key
+	// PostOrgsOrgBucketsBucketRestore Make an older version current (a copy of it; nothing is lost)
 	//
 	// Takes a body of the `application/json` content type.
 	//
 	// Corresponds with POST /orgs/{org}/buckets/{bucket}/restore (the `PostOrgsOrgBucketsBucketRestore` operationId).
 	PostOrgsOrgBucketsBucketRestore(ctx context.Context, org string, bucket string, body PostOrgsOrgBucketsBucketRestoreJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	// GetOrgsOrgBucketsBucketVersions List an object's versions, newest first
+	// GetOrgsOrgBucketsBucketVersions Versions of one object, newest first (empty unless versioning is on)
 	//
 	// Corresponds with GET /orgs/{org}/buckets/{bucket}/versions (the `GetOrgsOrgBucketsBucketVersions` operationId).
 	GetOrgsOrgBucketsBucketVersions(ctx context.Context, org string, bucket string, params *GetOrgsOrgBucketsBucketVersionsParams, reqEditors ...RequestEditorFn) (*http.Response, error)
@@ -1393,7 +1723,7 @@ type ClientInterface interface {
 	// GetOrgsOrgDatabases List databases
 	//
 	// Corresponds with GET /orgs/{org}/databases (the `GetOrgsOrgDatabases` operationId).
-	GetOrgsOrgDatabases(ctx context.Context, org string, reqEditors ...RequestEditorFn) (*http.Response, error)
+	GetOrgsOrgDatabases(ctx context.Context, org string, params *GetOrgsOrgDatabasesParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// PostOrgsOrgDatabasesWithBody Create a database
 	//
@@ -1422,7 +1752,7 @@ type ClientInterface interface {
 	// GetOrgsOrgDatabasesDbBackups List backups, newest first
 	//
 	// Corresponds with GET /orgs/{org}/databases/{db}/backups (the `GetOrgsOrgDatabasesDbBackups` operationId).
-	GetOrgsOrgDatabasesDbBackups(ctx context.Context, org string, db string, reqEditors ...RequestEditorFn) (*http.Response, error)
+	GetOrgsOrgDatabasesDbBackups(ctx context.Context, org string, db string, params *GetOrgsOrgDatabasesDbBackupsParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// PostOrgsOrgDatabasesDbBackups Take a backup now (PostgreSQL only)
 	//
@@ -1477,74 +1807,148 @@ type ClientInterface interface {
 	// Corresponds with POST /orgs/{org}/databases/{db}/stop (the `PostOrgsOrgDatabasesDbStop` operationId).
 	PostOrgsOrgDatabasesDbStop(ctx context.Context, org string, db string, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	// GetOrgsOrgDomains List the organisation's domains
+	// GetOrgsOrgDomains DNS zones the organisation holds
 	//
 	// Corresponds with GET /orgs/{org}/domains (the `GetOrgsOrgDomains` operationId).
-	GetOrgsOrgDomains(ctx context.Context, org string, reqEditors ...RequestEditorFn) (*http.Response, error)
+	GetOrgsOrgDomains(ctx context.Context, org string, params *GetOrgsOrgDomainsParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	// GetOrgsOrgDomainsDomainRecords List a domain's DNS records
+	// GetOrgsOrgDomainsDomainRecords DNS records of a zone
 	//
 	// Corresponds with GET /orgs/{org}/domains/{domain}/records (the `GetOrgsOrgDomainsDomainRecords` operationId).
-	GetOrgsOrgDomainsDomainRecords(ctx context.Context, org string, domain string, reqEditors ...RequestEditorFn) (*http.Response, error)
+	GetOrgsOrgDomainsDomainRecords(ctx context.Context, org string, domain string, params *GetOrgsOrgDomainsDomainRecordsParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	// PostOrgsOrgDomainsDomainRecordsWithBody Create a DNS record
+	// PostOrgsOrgDomainsDomainRecordsWithBody Create a record (written to the name servers first; a refusal is the answer and nothing is saved)
 	//
 	// Takes any type of body and a specified content type.
 	//
 	// Corresponds with POST /orgs/{org}/domains/{domain}/records (the `PostOrgsOrgDomainsDomainRecords` operationId).
 	PostOrgsOrgDomainsDomainRecordsWithBody(ctx context.Context, org string, domain string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	// PostOrgsOrgDomainsDomainRecords Create a DNS record
+	// PostOrgsOrgDomainsDomainRecords Create a record (written to the name servers first; a refusal is the answer and nothing is saved)
 	//
 	// Takes a body of the `application/json` content type.
 	//
 	// Corresponds with POST /orgs/{org}/domains/{domain}/records (the `PostOrgsOrgDomainsDomainRecords` operationId).
 	PostOrgsOrgDomainsDomainRecords(ctx context.Context, org string, domain string, body PostOrgsOrgDomainsDomainRecordsJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	// DeleteOrgsOrgDomainsDomainRecordsRecordId Delete a DNS record
+	// DeleteOrgsOrgDomainsDomainRecordsRecordId Delete a record (name servers first; sibling values on the same name are kept)
 	//
 	// Corresponds with DELETE /orgs/{org}/domains/{domain}/records/{recordId} (the `DeleteOrgsOrgDomainsDomainRecordsRecordId` operationId).
 	DeleteOrgsOrgDomainsDomainRecordsRecordId(ctx context.Context, org string, domain string, recordId string, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	// PatchOrgsOrgDomainsDomainRecordsRecordIdWithBody Change a DNS record (the current method; PUT is the older spelling)
+	// PatchOrgsOrgDomainsDomainRecordsRecordIdWithBody Change a record (name servers first)
 	//
 	// Takes any type of body and a specified content type.
 	//
 	// Corresponds with PATCH /orgs/{org}/domains/{domain}/records/{recordId} (the `PatchOrgsOrgDomainsDomainRecordsRecordId` operationId).
 	PatchOrgsOrgDomainsDomainRecordsRecordIdWithBody(ctx context.Context, org string, domain string, recordId string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	// PatchOrgsOrgDomainsDomainRecordsRecordId Change a DNS record (the current method; PUT is the older spelling)
+	// PatchOrgsOrgDomainsDomainRecordsRecordId Change a record (name servers first)
 	//
 	// Takes a body of the `application/json` content type.
 	//
 	// Corresponds with PATCH /orgs/{org}/domains/{domain}/records/{recordId} (the `PatchOrgsOrgDomainsDomainRecordsRecordId` operationId).
 	PatchOrgsOrgDomainsDomainRecordsRecordId(ctx context.Context, org string, domain string, recordId string, body PatchOrgsOrgDomainsDomainRecordsRecordIdJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	// PutOrgsOrgDomainsDomainRecordsRecordIdWithBody Change a DNS record
+	// GetOrgsOrgVms List VMs
+	//
+	// Corresponds with GET /orgs/{org}/vms (the `GetOrgsOrgVms` operationId).
+	GetOrgsOrgVms(ctx context.Context, org string, params *GetOrgsOrgVmsParams, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// PostOrgsOrgVmsWithBody Create a VM
 	//
 	// Takes any type of body and a specified content type.
 	//
-	// Corresponds with PUT /orgs/{org}/domains/{domain}/records/{recordId} (the `PutOrgsOrgDomainsDomainRecordsRecordId` operationId).
-	PutOrgsOrgDomainsDomainRecordsRecordIdWithBody(ctx context.Context, org string, domain string, recordId string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+	// Corresponds with POST /orgs/{org}/vms (the `PostOrgsOrgVms` operationId).
+	PostOrgsOrgVmsWithBody(ctx context.Context, org string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	// PutOrgsOrgDomainsDomainRecordsRecordId Change a DNS record
+	// PostOrgsOrgVms Create a VM
 	//
 	// Takes a body of the `application/json` content type.
 	//
-	// Corresponds with PUT /orgs/{org}/domains/{domain}/records/{recordId} (the `PutOrgsOrgDomainsDomainRecordsRecordId` operationId).
-	PutOrgsOrgDomainsDomainRecordsRecordId(ctx context.Context, org string, domain string, recordId string, body PutOrgsOrgDomainsDomainRecordsRecordIdJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+	// Corresponds with POST /orgs/{org}/vms (the `PostOrgsOrgVms` operationId).
+	PostOrgsOrgVms(ctx context.Context, org string, body PostOrgsOrgVmsJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// DeleteOrgsOrgVmsVm Delete a VM
+	//
+	// Corresponds with DELETE /orgs/{org}/vms/{vm} (the `DeleteOrgsOrgVmsVm` operationId).
+	DeleteOrgsOrgVmsVm(ctx context.Context, org string, vm string, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// GetOrgsOrgVmsVm Get a VM
+	//
+	// Corresponds with GET /orgs/{org}/vms/{vm} (the `GetOrgsOrgVmsVm` operationId).
+	GetOrgsOrgVmsVm(ctx context.Context, org string, vm string, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// GetOrgsOrgVmsVmConsole Get a short-lived SPICE console ticket
+	//
+	// Corresponds with GET /orgs/{org}/vms/{vm}/console (the `GetOrgsOrgVmsVmConsole` operationId).
+	GetOrgsOrgVmsVmConsole(ctx context.Context, org string, vm string, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// GetOrgsOrgVmsVmIp Public and private IP addresses
+	//
+	// Corresponds with GET /orgs/{org}/vms/{vm}/ip (the `GetOrgsOrgVmsVmIp` operationId).
+	GetOrgsOrgVmsVmIp(ctx context.Context, org string, vm string, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// PostOrgsOrgVmsVmIpAttach Attach a public IP address
+	//
+	// Corresponds with POST /orgs/{org}/vms/{vm}/ip/attach (the `PostOrgsOrgVmsVmIpAttach` operationId).
+	PostOrgsOrgVmsVmIpAttach(ctx context.Context, org string, vm string, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// PostOrgsOrgVmsVmIpDetach Detach the public IP address
+	//
+	// Corresponds with POST /orgs/{org}/vms/{vm}/ip/detach (the `PostOrgsOrgVmsVmIpDetach` operationId).
+	PostOrgsOrgVmsVmIpDetach(ctx context.Context, org string, vm string, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// PostOrgsOrgVmsVmRestart Restart a VM
+	//
+	// Corresponds with POST /orgs/{org}/vms/{vm}/restart (the `PostOrgsOrgVmsVmRestart` operationId).
+	PostOrgsOrgVmsVmRestart(ctx context.Context, org string, vm string, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// GetOrgsOrgVmsVmSshKeys List SSH public keys on a VM
+	//
+	// Corresponds with GET /orgs/{org}/vms/{vm}/ssh-keys (the `GetOrgsOrgVmsVmSshKeys` operationId).
+	GetOrgsOrgVmsVmSshKeys(ctx context.Context, org string, vm string, params *GetOrgsOrgVmsVmSshKeysParams, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// PostOrgsOrgVmsVmSshKeysWithBody Add an SSH public key
+	//
+	// Takes any type of body and a specified content type.
+	//
+	// Corresponds with POST /orgs/{org}/vms/{vm}/ssh-keys (the `PostOrgsOrgVmsVmSshKeys` operationId).
+	PostOrgsOrgVmsVmSshKeysWithBody(ctx context.Context, org string, vm string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// PostOrgsOrgVmsVmSshKeys Add an SSH public key
+	//
+	// Takes a body of the `application/json` content type.
+	//
+	// Corresponds with POST /orgs/{org}/vms/{vm}/ssh-keys (the `PostOrgsOrgVmsVmSshKeys` operationId).
+	PostOrgsOrgVmsVmSshKeys(ctx context.Context, org string, vm string, body PostOrgsOrgVmsVmSshKeysJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// DeleteOrgsOrgVmsVmSshKeysKeyId Remove an SSH public key
+	//
+	// Corresponds with DELETE /orgs/{org}/vms/{vm}/ssh-keys/{keyId} (the `DeleteOrgsOrgVmsVmSshKeysKeyId` operationId).
+	DeleteOrgsOrgVmsVmSshKeysKeyId(ctx context.Context, org string, vm string, keyId string, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// PostOrgsOrgVmsVmStart Start a stopped VM
+	//
+	// Corresponds with POST /orgs/{org}/vms/{vm}/start (the `PostOrgsOrgVmsVmStart` operationId).
+	PostOrgsOrgVmsVmStart(ctx context.Context, org string, vm string, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// PostOrgsOrgVmsVmStop Stop a running VM
+	//
+	// Corresponds with POST /orgs/{org}/vms/{vm}/stop (the `PostOrgsOrgVmsVmStop` operationId).
+	PostOrgsOrgVmsVmStop(ctx context.Context, org string, vm string, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// GetRegions Regions available for new resources
 	//
 	// Corresponds with GET /regions (the `GetRegions` operationId).
-	GetRegions(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error)
+	GetRegions(ctx context.Context, params *GetRegionsParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 }
 
 // GetDatabaseEngines Engines and versions available for new databases
 //
 // Corresponds with GET /database-engines (the `GetDatabaseEngines` operationId).
-func (c *Client) GetDatabaseEngines(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewGetDatabaseEnginesRequest(c.Server)
+func (c *Client) GetDatabaseEngines(ctx context.Context, params *GetDatabaseEnginesParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewGetDatabaseEnginesRequest(c.Server, params)
 	if err != nil {
 		return nil, err
 	}
@@ -1588,8 +1992,8 @@ func (c *Client) GetMe(ctx context.Context, reqEditors ...RequestEditorFn) (*htt
 // GetOrgs Organisations the caller belongs to
 //
 // Corresponds with GET /orgs (the `GetOrgs` operationId).
-func (c *Client) GetOrgs(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewGetOrgsRequest(c.Server)
+func (c *Client) GetOrgs(ctx context.Context, params *GetOrgsParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewGetOrgsRequest(c.Server, params)
 	if err != nil {
 		return nil, err
 	}
@@ -1603,8 +2007,8 @@ func (c *Client) GetOrgs(ctx context.Context, reqEditors ...RequestEditorFn) (*h
 // GetOrgsOrgApps List apps
 //
 // Corresponds with GET /orgs/{org}/apps (the `GetOrgsOrgApps` operationId).
-func (c *Client) GetOrgsOrgApps(ctx context.Context, org string, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewGetOrgsOrgAppsRequest(c.Server, org)
+func (c *Client) GetOrgsOrgApps(ctx context.Context, org string, params *GetOrgsOrgAppsParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewGetOrgsOrgAppsRequest(c.Server, org, params)
 	if err != nil {
 		return nil, err
 	}
@@ -1750,8 +2154,8 @@ func (c *Client) PostOrgsOrgAppsAppDeploy(ctx context.Context, org string, app s
 // GetOrgsOrgAppsAppDeployments Deployment history, newest first
 //
 // Corresponds with GET /orgs/{org}/apps/{app}/deployments (the `GetOrgsOrgAppsAppDeployments` operationId).
-func (c *Client) GetOrgsOrgAppsAppDeployments(ctx context.Context, org string, app string, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewGetOrgsOrgAppsAppDeploymentsRequest(c.Server, org, app)
+func (c *Client) GetOrgsOrgAppsAppDeployments(ctx context.Context, org string, app string, params *GetOrgsOrgAppsAppDeploymentsParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewGetOrgsOrgAppsAppDeploymentsRequest(c.Server, org, app, params)
 	if err != nil {
 		return nil, err
 	}
@@ -1765,8 +2169,8 @@ func (c *Client) GetOrgsOrgAppsAppDeployments(ctx context.Context, org string, a
 // GetOrgsOrgAppsAppDomains Custom domains
 //
 // Corresponds with GET /orgs/{org}/apps/{app}/domains (the `GetOrgsOrgAppsAppDomains` operationId).
-func (c *Client) GetOrgsOrgAppsAppDomains(ctx context.Context, org string, app string, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewGetOrgsOrgAppsAppDomainsRequest(c.Server, org, app)
+func (c *Client) GetOrgsOrgAppsAppDomains(ctx context.Context, org string, app string, params *GetOrgsOrgAppsAppDomainsParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewGetOrgsOrgAppsAppDomainsRequest(c.Server, org, app, params)
 	if err != nil {
 		return nil, err
 	}
@@ -1844,8 +2248,8 @@ func (c *Client) GetOrgsOrgAppsAppLogs(ctx context.Context, org string, app stri
 // GetOrgsOrgBuckets List buckets
 //
 // Corresponds with GET /orgs/{org}/buckets (the `GetOrgsOrgBuckets` operationId).
-func (c *Client) GetOrgsOrgBuckets(ctx context.Context, org string, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewGetOrgsOrgBucketsRequest(c.Server, org)
+func (c *Client) GetOrgsOrgBuckets(ctx context.Context, org string, params *GetOrgsOrgBucketsParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewGetOrgsOrgBucketsRequest(c.Server, org, params)
 	if err != nil {
 		return nil, err
 	}
@@ -1920,7 +2324,7 @@ func (c *Client) GetOrgsOrgBucketsBucket(ctx context.Context, org string, bucket
 	return c.Client.Do(req)
 }
 
-// PatchOrgsOrgBucketsBucketWithBody Change a bucket's versioning or public access
+// PatchOrgsOrgBucketsBucketWithBody Change versioning or public access (applied on the storage service and verified before this returns)
 //
 // Takes any type of body and a specified content type.
 //
@@ -1937,7 +2341,7 @@ func (c *Client) PatchOrgsOrgBucketsBucketWithBody(ctx context.Context, org stri
 	return c.Client.Do(req)
 }
 
-// PatchOrgsOrgBucketsBucket Change a bucket's versioning or public access
+// PatchOrgsOrgBucketsBucket Change versioning or public access (applied on the storage service and verified before this returns)
 //
 // Takes a body of the `application/json` content type.
 //
@@ -1969,7 +2373,7 @@ func (c *Client) GetOrgsOrgBucketsBucketCredentials(ctx context.Context, org str
 	return c.Client.Do(req)
 }
 
-// DeleteOrgsOrgBucketsBucketDomainsWithBody Remove a custom hostname
+// DeleteOrgsOrgBucketsBucketDomainsWithBody Remove a hostname, by id or by the hostname itself
 //
 // Takes any type of body and a specified content type.
 //
@@ -1986,7 +2390,7 @@ func (c *Client) DeleteOrgsOrgBucketsBucketDomainsWithBody(ctx context.Context, 
 	return c.Client.Do(req)
 }
 
-// DeleteOrgsOrgBucketsBucketDomains Remove a custom hostname
+// DeleteOrgsOrgBucketsBucketDomains Remove a hostname, by id or by the hostname itself
 //
 // Takes a body of the `application/json` content type.
 //
@@ -2003,11 +2407,11 @@ func (c *Client) DeleteOrgsOrgBucketsBucketDomains(ctx context.Context, org stri
 	return c.Client.Do(req)
 }
 
-// GetOrgsOrgBucketsBucketDomains List custom hostnames on a bucket
+// GetOrgsOrgBucketsBucketDomains Custom hostnames in front of a public bucket
 //
 // Corresponds with GET /orgs/{org}/buckets/{bucket}/domains (the `GetOrgsOrgBucketsBucketDomains` operationId).
-func (c *Client) GetOrgsOrgBucketsBucketDomains(ctx context.Context, org string, bucket string, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewGetOrgsOrgBucketsBucketDomainsRequest(c.Server, org, bucket)
+func (c *Client) GetOrgsOrgBucketsBucketDomains(ctx context.Context, org string, bucket string, params *GetOrgsOrgBucketsBucketDomainsParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewGetOrgsOrgBucketsBucketDomainsRequest(c.Server, org, bucket, params)
 	if err != nil {
 		return nil, err
 	}
@@ -2018,7 +2422,7 @@ func (c *Client) GetOrgsOrgBucketsBucketDomains(ctx context.Context, org string,
 	return c.Client.Do(req)
 }
 
-// PostOrgsOrgBucketsBucketDomainsWithBody Attach a custom hostname to a public bucket
+// PostOrgsOrgBucketsBucketDomainsWithBody Attach a hostname (the bucket, or a folder in it, must be public)
 //
 // Takes any type of body and a specified content type.
 //
@@ -2035,7 +2439,7 @@ func (c *Client) PostOrgsOrgBucketsBucketDomainsWithBody(ctx context.Context, or
 	return c.Client.Do(req)
 }
 
-// PostOrgsOrgBucketsBucketDomains Attach a custom hostname to a public bucket
+// PostOrgsOrgBucketsBucketDomains Attach a hostname (the bucket, or a folder in it, must be public)
 //
 // Takes a body of the `application/json` content type.
 //
@@ -2052,7 +2456,7 @@ func (c *Client) PostOrgsOrgBucketsBucketDomains(ctx context.Context, org string
 	return c.Client.Do(req)
 }
 
-// DeleteOrgsOrgBucketsBucketKeysWithBody Revoke an access key pair
+// DeleteOrgsOrgBucketsBucketKeysWithBody Revoke a key pair (at least one must remain). Stops working within about a minute.
 //
 // Takes any type of body and a specified content type.
 //
@@ -2069,7 +2473,7 @@ func (c *Client) DeleteOrgsOrgBucketsBucketKeysWithBody(ctx context.Context, org
 	return c.Client.Do(req)
 }
 
-// DeleteOrgsOrgBucketsBucketKeys Revoke an access key pair
+// DeleteOrgsOrgBucketsBucketKeys Revoke a key pair (at least one must remain). Stops working within about a minute.
 //
 // Takes a body of the `application/json` content type.
 //
@@ -2086,11 +2490,11 @@ func (c *Client) DeleteOrgsOrgBucketsBucketKeys(ctx context.Context, org string,
 	return c.Client.Do(req)
 }
 
-// GetOrgsOrgBucketsBucketKeys List the organisation's active access keys
+// GetOrgsOrgBucketsBucketKeys Active access keys on the organisation's storage identity
 //
 // Corresponds with GET /orgs/{org}/buckets/{bucket}/keys (the `GetOrgsOrgBucketsBucketKeys` operationId).
-func (c *Client) GetOrgsOrgBucketsBucketKeys(ctx context.Context, org string, bucket string, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewGetOrgsOrgBucketsBucketKeysRequest(c.Server, org, bucket)
+func (c *Client) GetOrgsOrgBucketsBucketKeys(ctx context.Context, org string, bucket string, params *GetOrgsOrgBucketsBucketKeysParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewGetOrgsOrgBucketsBucketKeysRequest(c.Server, org, bucket, params)
 	if err != nil {
 		return nil, err
 	}
@@ -2101,7 +2505,7 @@ func (c *Client) GetOrgsOrgBucketsBucketKeys(ctx context.Context, org string, bu
 	return c.Client.Do(req)
 }
 
-// PostOrgsOrgBucketsBucketKeysWithBody Add an access key pair
+// PostOrgsOrgBucketsBucketKeysWithBody Add a key pair (two active at most). Usable within about a minute; the secret is shown once.
 //
 // Takes any type of body and a specified content type.
 //
@@ -2118,7 +2522,7 @@ func (c *Client) PostOrgsOrgBucketsBucketKeysWithBody(ctx context.Context, org s
 	return c.Client.Do(req)
 }
 
-// PostOrgsOrgBucketsBucketKeys Add an access key pair
+// PostOrgsOrgBucketsBucketKeys Add a key pair (two active at most). Usable within about a minute; the secret is shown once.
 //
 // Takes a body of the `application/json` content type.
 //
@@ -2169,7 +2573,7 @@ func (c *Client) PostOrgsOrgBucketsBucketPresign(ctx context.Context, org string
 	return c.Client.Do(req)
 }
 
-// PostOrgsOrgBucketsBucketRestoreWithBody Copy a previous version back onto the key
+// PostOrgsOrgBucketsBucketRestoreWithBody Make an older version current (a copy of it; nothing is lost)
 //
 // Takes any type of body and a specified content type.
 //
@@ -2186,7 +2590,7 @@ func (c *Client) PostOrgsOrgBucketsBucketRestoreWithBody(ctx context.Context, or
 	return c.Client.Do(req)
 }
 
-// PostOrgsOrgBucketsBucketRestore Copy a previous version back onto the key
+// PostOrgsOrgBucketsBucketRestore Make an older version current (a copy of it; nothing is lost)
 //
 // Takes a body of the `application/json` content type.
 //
@@ -2203,7 +2607,7 @@ func (c *Client) PostOrgsOrgBucketsBucketRestore(ctx context.Context, org string
 	return c.Client.Do(req)
 }
 
-// GetOrgsOrgBucketsBucketVersions List an object's versions, newest first
+// GetOrgsOrgBucketsBucketVersions Versions of one object, newest first (empty unless versioning is on)
 //
 // Corresponds with GET /orgs/{org}/buckets/{bucket}/versions (the `GetOrgsOrgBucketsBucketVersions` operationId).
 func (c *Client) GetOrgsOrgBucketsBucketVersions(ctx context.Context, org string, bucket string, params *GetOrgsOrgBucketsBucketVersionsParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
@@ -2221,8 +2625,8 @@ func (c *Client) GetOrgsOrgBucketsBucketVersions(ctx context.Context, org string
 // GetOrgsOrgDatabases List databases
 //
 // Corresponds with GET /orgs/{org}/databases (the `GetOrgsOrgDatabases` operationId).
-func (c *Client) GetOrgsOrgDatabases(ctx context.Context, org string, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewGetOrgsOrgDatabasesRequest(c.Server, org)
+func (c *Client) GetOrgsOrgDatabases(ctx context.Context, org string, params *GetOrgsOrgDatabasesParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewGetOrgsOrgDatabasesRequest(c.Server, org, params)
 	if err != nil {
 		return nil, err
 	}
@@ -2300,8 +2704,8 @@ func (c *Client) GetOrgsOrgDatabasesDb(ctx context.Context, org string, db strin
 // GetOrgsOrgDatabasesDbBackups List backups, newest first
 //
 // Corresponds with GET /orgs/{org}/databases/{db}/backups (the `GetOrgsOrgDatabasesDbBackups` operationId).
-func (c *Client) GetOrgsOrgDatabasesDbBackups(ctx context.Context, org string, db string, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewGetOrgsOrgDatabasesDbBackupsRequest(c.Server, org, db)
+func (c *Client) GetOrgsOrgDatabasesDbBackups(ctx context.Context, org string, db string, params *GetOrgsOrgDatabasesDbBackupsParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewGetOrgsOrgDatabasesDbBackupsRequest(c.Server, org, db, params)
 	if err != nil {
 		return nil, err
 	}
@@ -2455,11 +2859,11 @@ func (c *Client) PostOrgsOrgDatabasesDbStop(ctx context.Context, org string, db 
 	return c.Client.Do(req)
 }
 
-// GetOrgsOrgDomains List the organisation's domains
+// GetOrgsOrgDomains DNS zones the organisation holds
 //
 // Corresponds with GET /orgs/{org}/domains (the `GetOrgsOrgDomains` operationId).
-func (c *Client) GetOrgsOrgDomains(ctx context.Context, org string, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewGetOrgsOrgDomainsRequest(c.Server, org)
+func (c *Client) GetOrgsOrgDomains(ctx context.Context, org string, params *GetOrgsOrgDomainsParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewGetOrgsOrgDomainsRequest(c.Server, org, params)
 	if err != nil {
 		return nil, err
 	}
@@ -2470,11 +2874,11 @@ func (c *Client) GetOrgsOrgDomains(ctx context.Context, org string, reqEditors .
 	return c.Client.Do(req)
 }
 
-// GetOrgsOrgDomainsDomainRecords List a domain's DNS records
+// GetOrgsOrgDomainsDomainRecords DNS records of a zone
 //
 // Corresponds with GET /orgs/{org}/domains/{domain}/records (the `GetOrgsOrgDomainsDomainRecords` operationId).
-func (c *Client) GetOrgsOrgDomainsDomainRecords(ctx context.Context, org string, domain string, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewGetOrgsOrgDomainsDomainRecordsRequest(c.Server, org, domain)
+func (c *Client) GetOrgsOrgDomainsDomainRecords(ctx context.Context, org string, domain string, params *GetOrgsOrgDomainsDomainRecordsParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewGetOrgsOrgDomainsDomainRecordsRequest(c.Server, org, domain, params)
 	if err != nil {
 		return nil, err
 	}
@@ -2485,7 +2889,7 @@ func (c *Client) GetOrgsOrgDomainsDomainRecords(ctx context.Context, org string,
 	return c.Client.Do(req)
 }
 
-// PostOrgsOrgDomainsDomainRecordsWithBody Create a DNS record
+// PostOrgsOrgDomainsDomainRecordsWithBody Create a record (written to the name servers first; a refusal is the answer and nothing is saved)
 //
 // Takes any type of body and a specified content type.
 //
@@ -2502,7 +2906,7 @@ func (c *Client) PostOrgsOrgDomainsDomainRecordsWithBody(ctx context.Context, or
 	return c.Client.Do(req)
 }
 
-// PostOrgsOrgDomainsDomainRecords Create a DNS record
+// PostOrgsOrgDomainsDomainRecords Create a record (written to the name servers first; a refusal is the answer and nothing is saved)
 //
 // Takes a body of the `application/json` content type.
 //
@@ -2519,7 +2923,7 @@ func (c *Client) PostOrgsOrgDomainsDomainRecords(ctx context.Context, org string
 	return c.Client.Do(req)
 }
 
-// DeleteOrgsOrgDomainsDomainRecordsRecordId Delete a DNS record
+// DeleteOrgsOrgDomainsDomainRecordsRecordId Delete a record (name servers first; sibling values on the same name are kept)
 //
 // Corresponds with DELETE /orgs/{org}/domains/{domain}/records/{recordId} (the `DeleteOrgsOrgDomainsDomainRecordsRecordId` operationId).
 func (c *Client) DeleteOrgsOrgDomainsDomainRecordsRecordId(ctx context.Context, org string, domain string, recordId string, reqEditors ...RequestEditorFn) (*http.Response, error) {
@@ -2534,7 +2938,7 @@ func (c *Client) DeleteOrgsOrgDomainsDomainRecordsRecordId(ctx context.Context, 
 	return c.Client.Do(req)
 }
 
-// PatchOrgsOrgDomainsDomainRecordsRecordIdWithBody Change a DNS record (the current method; PUT is the older spelling)
+// PatchOrgsOrgDomainsDomainRecordsRecordIdWithBody Change a record (name servers first)
 //
 // Takes any type of body and a specified content type.
 //
@@ -2551,7 +2955,7 @@ func (c *Client) PatchOrgsOrgDomainsDomainRecordsRecordIdWithBody(ctx context.Co
 	return c.Client.Do(req)
 }
 
-// PatchOrgsOrgDomainsDomainRecordsRecordId Change a DNS record (the current method; PUT is the older spelling)
+// PatchOrgsOrgDomainsDomainRecordsRecordId Change a record (name servers first)
 //
 // Takes a body of the `application/json` content type.
 //
@@ -2568,13 +2972,11 @@ func (c *Client) PatchOrgsOrgDomainsDomainRecordsRecordId(ctx context.Context, o
 	return c.Client.Do(req)
 }
 
-// PutOrgsOrgDomainsDomainRecordsRecordIdWithBody Change a DNS record
+// GetOrgsOrgVms List VMs
 //
-// Takes any type of body and a specified content type.
-//
-// Corresponds with PUT /orgs/{org}/domains/{domain}/records/{recordId} (the `PutOrgsOrgDomainsDomainRecordsRecordId` operationId).
-func (c *Client) PutOrgsOrgDomainsDomainRecordsRecordIdWithBody(ctx context.Context, org string, domain string, recordId string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewPutOrgsOrgDomainsDomainRecordsRecordIdRequestWithBody(c.Server, org, domain, recordId, contentType, body)
+// Corresponds with GET /orgs/{org}/vms (the `GetOrgsOrgVms` operationId).
+func (c *Client) GetOrgsOrgVms(ctx context.Context, org string, params *GetOrgsOrgVmsParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewGetOrgsOrgVmsRequest(c.Server, org, params)
 	if err != nil {
 		return nil, err
 	}
@@ -2585,13 +2987,229 @@ func (c *Client) PutOrgsOrgDomainsDomainRecordsRecordIdWithBody(ctx context.Cont
 	return c.Client.Do(req)
 }
 
-// PutOrgsOrgDomainsDomainRecordsRecordId Change a DNS record
+// PostOrgsOrgVmsWithBody Create a VM
+//
+// Takes any type of body and a specified content type.
+//
+// Corresponds with POST /orgs/{org}/vms (the `PostOrgsOrgVms` operationId).
+func (c *Client) PostOrgsOrgVmsWithBody(ctx context.Context, org string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewPostOrgsOrgVmsRequestWithBody(c.Server, org, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// PostOrgsOrgVms Create a VM
 //
 // Takes a body of the `application/json` content type.
 //
-// Corresponds with PUT /orgs/{org}/domains/{domain}/records/{recordId} (the `PutOrgsOrgDomainsDomainRecordsRecordId` operationId).
-func (c *Client) PutOrgsOrgDomainsDomainRecordsRecordId(ctx context.Context, org string, domain string, recordId string, body PutOrgsOrgDomainsDomainRecordsRecordIdJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewPutOrgsOrgDomainsDomainRecordsRecordIdRequest(c.Server, org, domain, recordId, body)
+// Corresponds with POST /orgs/{org}/vms (the `PostOrgsOrgVms` operationId).
+func (c *Client) PostOrgsOrgVms(ctx context.Context, org string, body PostOrgsOrgVmsJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewPostOrgsOrgVmsRequest(c.Server, org, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// DeleteOrgsOrgVmsVm Delete a VM
+//
+// Corresponds with DELETE /orgs/{org}/vms/{vm} (the `DeleteOrgsOrgVmsVm` operationId).
+func (c *Client) DeleteOrgsOrgVmsVm(ctx context.Context, org string, vm string, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewDeleteOrgsOrgVmsVmRequest(c.Server, org, vm)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// GetOrgsOrgVmsVm Get a VM
+//
+// Corresponds with GET /orgs/{org}/vms/{vm} (the `GetOrgsOrgVmsVm` operationId).
+func (c *Client) GetOrgsOrgVmsVm(ctx context.Context, org string, vm string, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewGetOrgsOrgVmsVmRequest(c.Server, org, vm)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// GetOrgsOrgVmsVmConsole Get a short-lived SPICE console ticket
+//
+// Corresponds with GET /orgs/{org}/vms/{vm}/console (the `GetOrgsOrgVmsVmConsole` operationId).
+func (c *Client) GetOrgsOrgVmsVmConsole(ctx context.Context, org string, vm string, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewGetOrgsOrgVmsVmConsoleRequest(c.Server, org, vm)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// GetOrgsOrgVmsVmIp Public and private IP addresses
+//
+// Corresponds with GET /orgs/{org}/vms/{vm}/ip (the `GetOrgsOrgVmsVmIp` operationId).
+func (c *Client) GetOrgsOrgVmsVmIp(ctx context.Context, org string, vm string, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewGetOrgsOrgVmsVmIpRequest(c.Server, org, vm)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// PostOrgsOrgVmsVmIpAttach Attach a public IP address
+//
+// Corresponds with POST /orgs/{org}/vms/{vm}/ip/attach (the `PostOrgsOrgVmsVmIpAttach` operationId).
+func (c *Client) PostOrgsOrgVmsVmIpAttach(ctx context.Context, org string, vm string, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewPostOrgsOrgVmsVmIpAttachRequest(c.Server, org, vm)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// PostOrgsOrgVmsVmIpDetach Detach the public IP address
+//
+// Corresponds with POST /orgs/{org}/vms/{vm}/ip/detach (the `PostOrgsOrgVmsVmIpDetach` operationId).
+func (c *Client) PostOrgsOrgVmsVmIpDetach(ctx context.Context, org string, vm string, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewPostOrgsOrgVmsVmIpDetachRequest(c.Server, org, vm)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// PostOrgsOrgVmsVmRestart Restart a VM
+//
+// Corresponds with POST /orgs/{org}/vms/{vm}/restart (the `PostOrgsOrgVmsVmRestart` operationId).
+func (c *Client) PostOrgsOrgVmsVmRestart(ctx context.Context, org string, vm string, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewPostOrgsOrgVmsVmRestartRequest(c.Server, org, vm)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// GetOrgsOrgVmsVmSshKeys List SSH public keys on a VM
+//
+// Corresponds with GET /orgs/{org}/vms/{vm}/ssh-keys (the `GetOrgsOrgVmsVmSshKeys` operationId).
+func (c *Client) GetOrgsOrgVmsVmSshKeys(ctx context.Context, org string, vm string, params *GetOrgsOrgVmsVmSshKeysParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewGetOrgsOrgVmsVmSshKeysRequest(c.Server, org, vm, params)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// PostOrgsOrgVmsVmSshKeysWithBody Add an SSH public key
+//
+// Takes any type of body and a specified content type.
+//
+// Corresponds with POST /orgs/{org}/vms/{vm}/ssh-keys (the `PostOrgsOrgVmsVmSshKeys` operationId).
+func (c *Client) PostOrgsOrgVmsVmSshKeysWithBody(ctx context.Context, org string, vm string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewPostOrgsOrgVmsVmSshKeysRequestWithBody(c.Server, org, vm, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// PostOrgsOrgVmsVmSshKeys Add an SSH public key
+//
+// Takes a body of the `application/json` content type.
+//
+// Corresponds with POST /orgs/{org}/vms/{vm}/ssh-keys (the `PostOrgsOrgVmsVmSshKeys` operationId).
+func (c *Client) PostOrgsOrgVmsVmSshKeys(ctx context.Context, org string, vm string, body PostOrgsOrgVmsVmSshKeysJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewPostOrgsOrgVmsVmSshKeysRequest(c.Server, org, vm, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// DeleteOrgsOrgVmsVmSshKeysKeyId Remove an SSH public key
+//
+// Corresponds with DELETE /orgs/{org}/vms/{vm}/ssh-keys/{keyId} (the `DeleteOrgsOrgVmsVmSshKeysKeyId` operationId).
+func (c *Client) DeleteOrgsOrgVmsVmSshKeysKeyId(ctx context.Context, org string, vm string, keyId string, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewDeleteOrgsOrgVmsVmSshKeysKeyIdRequest(c.Server, org, vm, keyId)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// PostOrgsOrgVmsVmStart Start a stopped VM
+//
+// Corresponds with POST /orgs/{org}/vms/{vm}/start (the `PostOrgsOrgVmsVmStart` operationId).
+func (c *Client) PostOrgsOrgVmsVmStart(ctx context.Context, org string, vm string, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewPostOrgsOrgVmsVmStartRequest(c.Server, org, vm)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// PostOrgsOrgVmsVmStop Stop a running VM
+//
+// Corresponds with POST /orgs/{org}/vms/{vm}/stop (the `PostOrgsOrgVmsVmStop` operationId).
+func (c *Client) PostOrgsOrgVmsVmStop(ctx context.Context, org string, vm string, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewPostOrgsOrgVmsVmStopRequest(c.Server, org, vm)
 	if err != nil {
 		return nil, err
 	}
@@ -2605,8 +3223,8 @@ func (c *Client) PutOrgsOrgDomainsDomainRecordsRecordId(ctx context.Context, org
 // GetRegions Regions available for new resources
 //
 // Corresponds with GET /regions (the `GetRegions` operationId).
-func (c *Client) GetRegions(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewGetRegionsRequest(c.Server)
+func (c *Client) GetRegions(ctx context.Context, params *GetRegionsParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewGetRegionsRequest(c.Server, params)
 	if err != nil {
 		return nil, err
 	}
@@ -2618,7 +3236,7 @@ func (c *Client) GetRegions(ctx context.Context, reqEditors ...RequestEditorFn) 
 }
 
 // NewGetDatabaseEnginesRequest constructs an http.Request for the GetDatabaseEngines method
-func NewGetDatabaseEnginesRequest(server string) (*http.Request, error) {
+func NewGetDatabaseEnginesRequest(server string, params *GetDatabaseEnginesParams) (*http.Request, error) {
 	var err error
 
 	serverURL, err := url.Parse(server)
@@ -2634,6 +3252,45 @@ func NewGetDatabaseEnginesRequest(server string) (*http.Request, error) {
 	queryURL, err := serverURL.Parse(operationPath)
 	if err != nil {
 		return nil, err
+	}
+
+	if params != nil {
+		// queryValues collects non-styled parameters (passthrough, JSON)
+		// that are safe to round-trip through url.Values.Encode().
+		queryValues := queryURL.Query()
+		// rawQueryFragments collects pre-encoded query fragments from
+		// styled parameters, preserving literal commas as delimiters
+		// per the OpenAPI spec (e.g. "color=blue,black,brown").
+		var rawQueryFragments []string
+
+		if params.Limit != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "limit", *params.Limit, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "integer", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.Cursor != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "cursor", *params.Cursor, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if encoded := queryValues.Encode(); encoded != "" {
+			rawQueryFragments = append(rawQueryFragments, encoded)
+		}
+		queryURL.RawQuery = strings.Join(rawQueryFragments, "&")
 	}
 
 	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
@@ -2699,7 +3356,7 @@ func NewGetMeRequest(server string) (*http.Request, error) {
 }
 
 // NewGetOrgsRequest constructs an http.Request for the GetOrgs method
-func NewGetOrgsRequest(server string) (*http.Request, error) {
+func NewGetOrgsRequest(server string, params *GetOrgsParams) (*http.Request, error) {
 	var err error
 
 	serverURL, err := url.Parse(server)
@@ -2717,6 +3374,45 @@ func NewGetOrgsRequest(server string) (*http.Request, error) {
 		return nil, err
 	}
 
+	if params != nil {
+		// queryValues collects non-styled parameters (passthrough, JSON)
+		// that are safe to round-trip through url.Values.Encode().
+		queryValues := queryURL.Query()
+		// rawQueryFragments collects pre-encoded query fragments from
+		// styled parameters, preserving literal commas as delimiters
+		// per the OpenAPI spec (e.g. "color=blue,black,brown").
+		var rawQueryFragments []string
+
+		if params.Limit != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "limit", *params.Limit, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "integer", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.Cursor != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "cursor", *params.Cursor, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if encoded := queryValues.Encode(); encoded != "" {
+			rawQueryFragments = append(rawQueryFragments, encoded)
+		}
+		queryURL.RawQuery = strings.Join(rawQueryFragments, "&")
+	}
+
 	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
 	if err != nil {
 		return nil, err
@@ -2726,7 +3422,7 @@ func NewGetOrgsRequest(server string) (*http.Request, error) {
 }
 
 // NewGetOrgsOrgAppsRequest constructs an http.Request for the GetOrgsOrgApps method
-func NewGetOrgsOrgAppsRequest(server string, org string) (*http.Request, error) {
+func NewGetOrgsOrgAppsRequest(server string, org string, params *GetOrgsOrgAppsParams) (*http.Request, error) {
 	var err error
 
 	var pathParam0 string
@@ -2749,6 +3445,45 @@ func NewGetOrgsOrgAppsRequest(server string, org string) (*http.Request, error) 
 	queryURL, err := serverURL.Parse(operationPath)
 	if err != nil {
 		return nil, err
+	}
+
+	if params != nil {
+		// queryValues collects non-styled parameters (passthrough, JSON)
+		// that are safe to round-trip through url.Values.Encode().
+		queryValues := queryURL.Query()
+		// rawQueryFragments collects pre-encoded query fragments from
+		// styled parameters, preserving literal commas as delimiters
+		// per the OpenAPI spec (e.g. "color=blue,black,brown").
+		var rawQueryFragments []string
+
+		if params.Limit != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "limit", *params.Limit, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "integer", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.Cursor != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "cursor", *params.Cursor, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if encoded := queryValues.Encode(); encoded != "" {
+			rawQueryFragments = append(rawQueryFragments, encoded)
+		}
+		queryURL.RawQuery = strings.Join(rawQueryFragments, "&")
 	}
 
 	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
@@ -2997,7 +3732,7 @@ func NewPostOrgsOrgAppsAppDeployRequestWithBody(server string, org string, app s
 }
 
 // NewGetOrgsOrgAppsAppDeploymentsRequest constructs an http.Request for the GetOrgsOrgAppsAppDeployments method
-func NewGetOrgsOrgAppsAppDeploymentsRequest(server string, org string, app string) (*http.Request, error) {
+func NewGetOrgsOrgAppsAppDeploymentsRequest(server string, org string, app string, params *GetOrgsOrgAppsAppDeploymentsParams) (*http.Request, error) {
 	var err error
 
 	var pathParam0 string
@@ -3029,6 +3764,45 @@ func NewGetOrgsOrgAppsAppDeploymentsRequest(server string, org string, app strin
 		return nil, err
 	}
 
+	if params != nil {
+		// queryValues collects non-styled parameters (passthrough, JSON)
+		// that are safe to round-trip through url.Values.Encode().
+		queryValues := queryURL.Query()
+		// rawQueryFragments collects pre-encoded query fragments from
+		// styled parameters, preserving literal commas as delimiters
+		// per the OpenAPI spec (e.g. "color=blue,black,brown").
+		var rawQueryFragments []string
+
+		if params.Limit != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "limit", *params.Limit, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "integer", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.Cursor != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "cursor", *params.Cursor, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if encoded := queryValues.Encode(); encoded != "" {
+			rawQueryFragments = append(rawQueryFragments, encoded)
+		}
+		queryURL.RawQuery = strings.Join(rawQueryFragments, "&")
+	}
+
 	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
 	if err != nil {
 		return nil, err
@@ -3038,7 +3812,7 @@ func NewGetOrgsOrgAppsAppDeploymentsRequest(server string, org string, app strin
 }
 
 // NewGetOrgsOrgAppsAppDomainsRequest constructs an http.Request for the GetOrgsOrgAppsAppDomains method
-func NewGetOrgsOrgAppsAppDomainsRequest(server string, org string, app string) (*http.Request, error) {
+func NewGetOrgsOrgAppsAppDomainsRequest(server string, org string, app string, params *GetOrgsOrgAppsAppDomainsParams) (*http.Request, error) {
 	var err error
 
 	var pathParam0 string
@@ -3068,6 +3842,45 @@ func NewGetOrgsOrgAppsAppDomainsRequest(server string, org string, app string) (
 	queryURL, err := serverURL.Parse(operationPath)
 	if err != nil {
 		return nil, err
+	}
+
+	if params != nil {
+		// queryValues collects non-styled parameters (passthrough, JSON)
+		// that are safe to round-trip through url.Values.Encode().
+		queryValues := queryURL.Query()
+		// rawQueryFragments collects pre-encoded query fragments from
+		// styled parameters, preserving literal commas as delimiters
+		// per the OpenAPI spec (e.g. "color=blue,black,brown").
+		var rawQueryFragments []string
+
+		if params.Limit != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "limit", *params.Limit, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "integer", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.Cursor != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "cursor", *params.Cursor, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if encoded := queryValues.Encode(); encoded != "" {
+			rawQueryFragments = append(rawQueryFragments, encoded)
+		}
+		queryURL.RawQuery = strings.Join(rawQueryFragments, "&")
 	}
 
 	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
@@ -3273,7 +4086,7 @@ func NewGetOrgsOrgAppsAppLogsRequest(server string, org string, app string, para
 }
 
 // NewGetOrgsOrgBucketsRequest constructs an http.Request for the GetOrgsOrgBuckets method
-func NewGetOrgsOrgBucketsRequest(server string, org string) (*http.Request, error) {
+func NewGetOrgsOrgBucketsRequest(server string, org string, params *GetOrgsOrgBucketsParams) (*http.Request, error) {
 	var err error
 
 	var pathParam0 string
@@ -3296,6 +4109,45 @@ func NewGetOrgsOrgBucketsRequest(server string, org string) (*http.Request, erro
 	queryURL, err := serverURL.Parse(operationPath)
 	if err != nil {
 		return nil, err
+	}
+
+	if params != nil {
+		// queryValues collects non-styled parameters (passthrough, JSON)
+		// that are safe to round-trip through url.Values.Encode().
+		queryValues := queryURL.Query()
+		// rawQueryFragments collects pre-encoded query fragments from
+		// styled parameters, preserving literal commas as delimiters
+		// per the OpenAPI spec (e.g. "color=blue,black,brown").
+		var rawQueryFragments []string
+
+		if params.Limit != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "limit", *params.Limit, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "integer", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.Cursor != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "cursor", *params.Cursor, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if encoded := queryValues.Encode(); encoded != "" {
+			rawQueryFragments = append(rawQueryFragments, encoded)
+		}
+		queryURL.RawQuery = strings.Join(rawQueryFragments, "&")
 	}
 
 	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
@@ -3585,7 +4437,7 @@ func NewDeleteOrgsOrgBucketsBucketDomainsRequestWithBody(server string, org stri
 }
 
 // NewGetOrgsOrgBucketsBucketDomainsRequest constructs an http.Request for the GetOrgsOrgBucketsBucketDomains method
-func NewGetOrgsOrgBucketsBucketDomainsRequest(server string, org string, bucket string) (*http.Request, error) {
+func NewGetOrgsOrgBucketsBucketDomainsRequest(server string, org string, bucket string, params *GetOrgsOrgBucketsBucketDomainsParams) (*http.Request, error) {
 	var err error
 
 	var pathParam0 string
@@ -3615,6 +4467,45 @@ func NewGetOrgsOrgBucketsBucketDomainsRequest(server string, org string, bucket 
 	queryURL, err := serverURL.Parse(operationPath)
 	if err != nil {
 		return nil, err
+	}
+
+	if params != nil {
+		// queryValues collects non-styled parameters (passthrough, JSON)
+		// that are safe to round-trip through url.Values.Encode().
+		queryValues := queryURL.Query()
+		// rawQueryFragments collects pre-encoded query fragments from
+		// styled parameters, preserving literal commas as delimiters
+		// per the OpenAPI spec (e.g. "color=blue,black,brown").
+		var rawQueryFragments []string
+
+		if params.Limit != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "limit", *params.Limit, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "integer", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.Cursor != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "cursor", *params.Cursor, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if encoded := queryValues.Encode(); encoded != "" {
+			rawQueryFragments = append(rawQueryFragments, encoded)
+		}
+		queryURL.RawQuery = strings.Join(rawQueryFragments, "&")
 	}
 
 	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
@@ -3734,7 +4625,7 @@ func NewDeleteOrgsOrgBucketsBucketKeysRequestWithBody(server string, org string,
 }
 
 // NewGetOrgsOrgBucketsBucketKeysRequest constructs an http.Request for the GetOrgsOrgBucketsBucketKeys method
-func NewGetOrgsOrgBucketsBucketKeysRequest(server string, org string, bucket string) (*http.Request, error) {
+func NewGetOrgsOrgBucketsBucketKeysRequest(server string, org string, bucket string, params *GetOrgsOrgBucketsBucketKeysParams) (*http.Request, error) {
 	var err error
 
 	var pathParam0 string
@@ -3764,6 +4655,45 @@ func NewGetOrgsOrgBucketsBucketKeysRequest(server string, org string, bucket str
 	queryURL, err := serverURL.Parse(operationPath)
 	if err != nil {
 		return nil, err
+	}
+
+	if params != nil {
+		// queryValues collects non-styled parameters (passthrough, JSON)
+		// that are safe to round-trip through url.Values.Encode().
+		queryValues := queryURL.Query()
+		// rawQueryFragments collects pre-encoded query fragments from
+		// styled parameters, preserving literal commas as delimiters
+		// per the OpenAPI spec (e.g. "color=blue,black,brown").
+		var rawQueryFragments []string
+
+		if params.Limit != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "limit", *params.Limit, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "integer", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.Cursor != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "cursor", *params.Cursor, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if encoded := queryValues.Encode(); encoded != "" {
+			rawQueryFragments = append(rawQueryFragments, encoded)
+		}
+		queryURL.RawQuery = strings.Join(rawQueryFragments, "&")
 	}
 
 	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
@@ -3978,6 +4908,30 @@ func NewGetOrgsOrgBucketsBucketVersionsRequest(server string, org string, bucket
 		// per the OpenAPI spec (e.g. "color=blue,black,brown").
 		var rawQueryFragments []string
 
+		if params.Limit != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "limit", *params.Limit, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "integer", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.Cursor != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "cursor", *params.Cursor, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
 		if queryFrag, err := runtime.StyleParamWithOptions("form", true, "key", params.Key, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
 			return nil, err
 		} else {
@@ -4001,7 +4955,7 @@ func NewGetOrgsOrgBucketsBucketVersionsRequest(server string, org string, bucket
 }
 
 // NewGetOrgsOrgDatabasesRequest constructs an http.Request for the GetOrgsOrgDatabases method
-func NewGetOrgsOrgDatabasesRequest(server string, org string) (*http.Request, error) {
+func NewGetOrgsOrgDatabasesRequest(server string, org string, params *GetOrgsOrgDatabasesParams) (*http.Request, error) {
 	var err error
 
 	var pathParam0 string
@@ -4024,6 +4978,45 @@ func NewGetOrgsOrgDatabasesRequest(server string, org string) (*http.Request, er
 	queryURL, err := serverURL.Parse(operationPath)
 	if err != nil {
 		return nil, err
+	}
+
+	if params != nil {
+		// queryValues collects non-styled parameters (passthrough, JSON)
+		// that are safe to round-trip through url.Values.Encode().
+		queryValues := queryURL.Query()
+		// rawQueryFragments collects pre-encoded query fragments from
+		// styled parameters, preserving literal commas as delimiters
+		// per the OpenAPI spec (e.g. "color=blue,black,brown").
+		var rawQueryFragments []string
+
+		if params.Limit != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "limit", *params.Limit, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "integer", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.Cursor != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "cursor", *params.Cursor, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if encoded := queryValues.Encode(); encoded != "" {
+			rawQueryFragments = append(rawQueryFragments, encoded)
+		}
+		queryURL.RawQuery = strings.Join(rawQueryFragments, "&")
 	}
 
 	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
@@ -4164,7 +5157,7 @@ func NewGetOrgsOrgDatabasesDbRequest(server string, org string, db string) (*htt
 }
 
 // NewGetOrgsOrgDatabasesDbBackupsRequest constructs an http.Request for the GetOrgsOrgDatabasesDbBackups method
-func NewGetOrgsOrgDatabasesDbBackupsRequest(server string, org string, db string) (*http.Request, error) {
+func NewGetOrgsOrgDatabasesDbBackupsRequest(server string, org string, db string, params *GetOrgsOrgDatabasesDbBackupsParams) (*http.Request, error) {
 	var err error
 
 	var pathParam0 string
@@ -4194,6 +5187,45 @@ func NewGetOrgsOrgDatabasesDbBackupsRequest(server string, org string, db string
 	queryURL, err := serverURL.Parse(operationPath)
 	if err != nil {
 		return nil, err
+	}
+
+	if params != nil {
+		// queryValues collects non-styled parameters (passthrough, JSON)
+		// that are safe to round-trip through url.Values.Encode().
+		queryValues := queryURL.Query()
+		// rawQueryFragments collects pre-encoded query fragments from
+		// styled parameters, preserving literal commas as delimiters
+		// per the OpenAPI spec (e.g. "color=blue,black,brown").
+		var rawQueryFragments []string
+
+		if params.Limit != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "limit", *params.Limit, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "integer", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.Cursor != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "cursor", *params.Cursor, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if encoded := queryValues.Encode(); encoded != "" {
+			rawQueryFragments = append(rawQueryFragments, encoded)
+		}
+		queryURL.RawQuery = strings.Join(rawQueryFragments, "&")
 	}
 
 	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
@@ -4518,7 +5550,7 @@ func NewPostOrgsOrgDatabasesDbStopRequest(server string, org string, db string) 
 }
 
 // NewGetOrgsOrgDomainsRequest constructs an http.Request for the GetOrgsOrgDomains method
-func NewGetOrgsOrgDomainsRequest(server string, org string) (*http.Request, error) {
+func NewGetOrgsOrgDomainsRequest(server string, org string, params *GetOrgsOrgDomainsParams) (*http.Request, error) {
 	var err error
 
 	var pathParam0 string
@@ -4543,6 +5575,45 @@ func NewGetOrgsOrgDomainsRequest(server string, org string) (*http.Request, erro
 		return nil, err
 	}
 
+	if params != nil {
+		// queryValues collects non-styled parameters (passthrough, JSON)
+		// that are safe to round-trip through url.Values.Encode().
+		queryValues := queryURL.Query()
+		// rawQueryFragments collects pre-encoded query fragments from
+		// styled parameters, preserving literal commas as delimiters
+		// per the OpenAPI spec (e.g. "color=blue,black,brown").
+		var rawQueryFragments []string
+
+		if params.Limit != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "limit", *params.Limit, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "integer", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.Cursor != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "cursor", *params.Cursor, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if encoded := queryValues.Encode(); encoded != "" {
+			rawQueryFragments = append(rawQueryFragments, encoded)
+		}
+		queryURL.RawQuery = strings.Join(rawQueryFragments, "&")
+	}
+
 	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
 	if err != nil {
 		return nil, err
@@ -4552,7 +5623,7 @@ func NewGetOrgsOrgDomainsRequest(server string, org string) (*http.Request, erro
 }
 
 // NewGetOrgsOrgDomainsDomainRecordsRequest constructs an http.Request for the GetOrgsOrgDomainsDomainRecords method
-func NewGetOrgsOrgDomainsDomainRecordsRequest(server string, org string, domain string) (*http.Request, error) {
+func NewGetOrgsOrgDomainsDomainRecordsRequest(server string, org string, domain string, params *GetOrgsOrgDomainsDomainRecordsParams) (*http.Request, error) {
 	var err error
 
 	var pathParam0 string
@@ -4582,6 +5653,45 @@ func NewGetOrgsOrgDomainsDomainRecordsRequest(server string, org string, domain 
 	queryURL, err := serverURL.Parse(operationPath)
 	if err != nil {
 		return nil, err
+	}
+
+	if params != nil {
+		// queryValues collects non-styled parameters (passthrough, JSON)
+		// that are safe to round-trip through url.Values.Encode().
+		queryValues := queryURL.Query()
+		// rawQueryFragments collects pre-encoded query fragments from
+		// styled parameters, preserving literal commas as delimiters
+		// per the OpenAPI spec (e.g. "color=blue,black,brown").
+		var rawQueryFragments []string
+
+		if params.Limit != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "limit", *params.Limit, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "integer", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.Cursor != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "cursor", *params.Cursor, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if encoded := queryValues.Encode(); encoded != "" {
+			rawQueryFragments = append(rawQueryFragments, encoded)
+		}
+		queryURL.RawQuery = strings.Join(rawQueryFragments, "&")
 	}
 
 	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
@@ -4755,19 +5865,128 @@ func NewPatchOrgsOrgDomainsDomainRecordsRecordIdRequestWithBody(server string, o
 	return req, nil
 }
 
-// NewPutOrgsOrgDomainsDomainRecordsRecordIdRequest calls the generic PutOrgsOrgDomainsDomainRecordsRecordId builder with application/json body
-func NewPutOrgsOrgDomainsDomainRecordsRecordIdRequest(server string, org string, domain string, recordId string, body PutOrgsOrgDomainsDomainRecordsRecordIdJSONRequestBody) (*http.Request, error) {
+// NewGetOrgsOrgVmsRequest constructs an http.Request for the GetOrgsOrgVms method
+func NewGetOrgsOrgVmsRequest(server string, org string, params *GetOrgsOrgVmsParams) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "org", org, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/orgs/%s/vms", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	if params != nil {
+		// queryValues collects non-styled parameters (passthrough, JSON)
+		// that are safe to round-trip through url.Values.Encode().
+		queryValues := queryURL.Query()
+		// rawQueryFragments collects pre-encoded query fragments from
+		// styled parameters, preserving literal commas as delimiters
+		// per the OpenAPI spec (e.g. "color=blue,black,brown").
+		var rawQueryFragments []string
+
+		if params.Limit != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "limit", *params.Limit, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "integer", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.Cursor != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "cursor", *params.Cursor, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if encoded := queryValues.Encode(); encoded != "" {
+			rawQueryFragments = append(rawQueryFragments, encoded)
+		}
+		queryURL.RawQuery = strings.Join(rawQueryFragments, "&")
+	}
+
+	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewPostOrgsOrgVmsRequest calls the generic PostOrgsOrgVms builder with application/json body
+func NewPostOrgsOrgVmsRequest(server string, org string, body PostOrgsOrgVmsJSONRequestBody) (*http.Request, error) {
 	var bodyReader io.Reader
 	buf, err := json.Marshal(body)
 	if err != nil {
 		return nil, err
 	}
 	bodyReader = bytes.NewReader(buf)
-	return NewPutOrgsOrgDomainsDomainRecordsRecordIdRequestWithBody(server, org, domain, recordId, "application/json", bodyReader)
+	return NewPostOrgsOrgVmsRequestWithBody(server, org, "application/json", bodyReader)
 }
 
-// NewPutOrgsOrgDomainsDomainRecordsRecordIdRequestWithBody constructs an http.Request for the PutOrgsOrgDomainsDomainRecordsRecordId method, with any body, and a specified content type
-func NewPutOrgsOrgDomainsDomainRecordsRecordIdRequestWithBody(server string, org string, domain string, recordId string, contentType string, body io.Reader) (*http.Request, error) {
+// NewPostOrgsOrgVmsRequestWithBody constructs an http.Request for the PostOrgsOrgVms method, with any body, and a specified content type
+func NewPostOrgsOrgVmsRequestWithBody(server string, org string, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "org", org, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/orgs/%s/vms", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodPost, queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
+
+	return req, nil
+}
+
+// NewDeleteOrgsOrgVmsVmRequest constructs an http.Request for the DeleteOrgsOrgVmsVm method
+func NewDeleteOrgsOrgVmsVmRequest(server string, org string, vm string) (*http.Request, error) {
 	var err error
 
 	var pathParam0 string
@@ -4779,14 +5998,7 @@ func NewPutOrgsOrgDomainsDomainRecordsRecordIdRequestWithBody(server string, org
 
 	var pathParam1 string
 
-	pathParam1, err = runtime.StyleParamWithOptions("simple", false, "domain", domain, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
-	if err != nil {
-		return nil, err
-	}
-
-	var pathParam2 string
-
-	pathParam2, err = runtime.StyleParamWithOptions("simple", false, "recordId", recordId, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	pathParam1, err = runtime.StyleParamWithOptions("simple", false, "vm", vm, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
 	if err != nil {
 		return nil, err
 	}
@@ -4796,7 +6008,7 @@ func NewPutOrgsOrgDomainsDomainRecordsRecordIdRequestWithBody(server string, org
 		return nil, err
 	}
 
-	operationPath := fmt.Sprintf("/orgs/%s/domains/%s/records/%s", pathParam0, pathParam1, pathParam2)
+	operationPath := fmt.Sprintf("/orgs/%s/vms/%s", pathParam0, pathParam1)
 	if operationPath[0] == '/' {
 		operationPath = "." + operationPath
 	}
@@ -4806,7 +6018,385 @@ func NewPutOrgsOrgDomainsDomainRecordsRecordIdRequestWithBody(server string, org
 		return nil, err
 	}
 
-	req, err := http.NewRequest(http.MethodPut, queryURL.String(), body)
+	req, err := http.NewRequest(http.MethodDelete, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewGetOrgsOrgVmsVmRequest constructs an http.Request for the GetOrgsOrgVmsVm method
+func NewGetOrgsOrgVmsVmRequest(server string, org string, vm string) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "org", org, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam1 string
+
+	pathParam1, err = runtime.StyleParamWithOptions("simple", false, "vm", vm, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/orgs/%s/vms/%s", pathParam0, pathParam1)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewGetOrgsOrgVmsVmConsoleRequest constructs an http.Request for the GetOrgsOrgVmsVmConsole method
+func NewGetOrgsOrgVmsVmConsoleRequest(server string, org string, vm string) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "org", org, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam1 string
+
+	pathParam1, err = runtime.StyleParamWithOptions("simple", false, "vm", vm, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/orgs/%s/vms/%s/console", pathParam0, pathParam1)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewGetOrgsOrgVmsVmIpRequest constructs an http.Request for the GetOrgsOrgVmsVmIp method
+func NewGetOrgsOrgVmsVmIpRequest(server string, org string, vm string) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "org", org, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam1 string
+
+	pathParam1, err = runtime.StyleParamWithOptions("simple", false, "vm", vm, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/orgs/%s/vms/%s/ip", pathParam0, pathParam1)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewPostOrgsOrgVmsVmIpAttachRequest constructs an http.Request for the PostOrgsOrgVmsVmIpAttach method
+func NewPostOrgsOrgVmsVmIpAttachRequest(server string, org string, vm string) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "org", org, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam1 string
+
+	pathParam1, err = runtime.StyleParamWithOptions("simple", false, "vm", vm, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/orgs/%s/vms/%s/ip/attach", pathParam0, pathParam1)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodPost, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewPostOrgsOrgVmsVmIpDetachRequest constructs an http.Request for the PostOrgsOrgVmsVmIpDetach method
+func NewPostOrgsOrgVmsVmIpDetachRequest(server string, org string, vm string) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "org", org, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam1 string
+
+	pathParam1, err = runtime.StyleParamWithOptions("simple", false, "vm", vm, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/orgs/%s/vms/%s/ip/detach", pathParam0, pathParam1)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodPost, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewPostOrgsOrgVmsVmRestartRequest constructs an http.Request for the PostOrgsOrgVmsVmRestart method
+func NewPostOrgsOrgVmsVmRestartRequest(server string, org string, vm string) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "org", org, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam1 string
+
+	pathParam1, err = runtime.StyleParamWithOptions("simple", false, "vm", vm, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/orgs/%s/vms/%s/restart", pathParam0, pathParam1)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodPost, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewGetOrgsOrgVmsVmSshKeysRequest constructs an http.Request for the GetOrgsOrgVmsVmSshKeys method
+func NewGetOrgsOrgVmsVmSshKeysRequest(server string, org string, vm string, params *GetOrgsOrgVmsVmSshKeysParams) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "org", org, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam1 string
+
+	pathParam1, err = runtime.StyleParamWithOptions("simple", false, "vm", vm, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/orgs/%s/vms/%s/ssh-keys", pathParam0, pathParam1)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	if params != nil {
+		// queryValues collects non-styled parameters (passthrough, JSON)
+		// that are safe to round-trip through url.Values.Encode().
+		queryValues := queryURL.Query()
+		// rawQueryFragments collects pre-encoded query fragments from
+		// styled parameters, preserving literal commas as delimiters
+		// per the OpenAPI spec (e.g. "color=blue,black,brown").
+		var rawQueryFragments []string
+
+		if params.Limit != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "limit", *params.Limit, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "integer", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.Cursor != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "cursor", *params.Cursor, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if encoded := queryValues.Encode(); encoded != "" {
+			rawQueryFragments = append(rawQueryFragments, encoded)
+		}
+		queryURL.RawQuery = strings.Join(rawQueryFragments, "&")
+	}
+
+	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewPostOrgsOrgVmsVmSshKeysRequest calls the generic PostOrgsOrgVmsVmSshKeys builder with application/json body
+func NewPostOrgsOrgVmsVmSshKeysRequest(server string, org string, vm string, body PostOrgsOrgVmsVmSshKeysJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewPostOrgsOrgVmsVmSshKeysRequestWithBody(server, org, vm, "application/json", bodyReader)
+}
+
+// NewPostOrgsOrgVmsVmSshKeysRequestWithBody constructs an http.Request for the PostOrgsOrgVmsVmSshKeys method, with any body, and a specified content type
+func NewPostOrgsOrgVmsVmSshKeysRequestWithBody(server string, org string, vm string, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "org", org, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam1 string
+
+	pathParam1, err = runtime.StyleParamWithOptions("simple", false, "vm", vm, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/orgs/%s/vms/%s/ssh-keys", pathParam0, pathParam1)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodPost, queryURL.String(), body)
 	if err != nil {
 		return nil, err
 	}
@@ -4816,8 +6406,138 @@ func NewPutOrgsOrgDomainsDomainRecordsRecordIdRequestWithBody(server string, org
 	return req, nil
 }
 
+// NewDeleteOrgsOrgVmsVmSshKeysKeyIdRequest constructs an http.Request for the DeleteOrgsOrgVmsVmSshKeysKeyId method
+func NewDeleteOrgsOrgVmsVmSshKeysKeyIdRequest(server string, org string, vm string, keyId string) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "org", org, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam1 string
+
+	pathParam1, err = runtime.StyleParamWithOptions("simple", false, "vm", vm, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam2 string
+
+	pathParam2, err = runtime.StyleParamWithOptions("simple", false, "keyId", keyId, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/orgs/%s/vms/%s/ssh-keys/%s", pathParam0, pathParam1, pathParam2)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodDelete, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewPostOrgsOrgVmsVmStartRequest constructs an http.Request for the PostOrgsOrgVmsVmStart method
+func NewPostOrgsOrgVmsVmStartRequest(server string, org string, vm string) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "org", org, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam1 string
+
+	pathParam1, err = runtime.StyleParamWithOptions("simple", false, "vm", vm, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/orgs/%s/vms/%s/start", pathParam0, pathParam1)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodPost, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewPostOrgsOrgVmsVmStopRequest constructs an http.Request for the PostOrgsOrgVmsVmStop method
+func NewPostOrgsOrgVmsVmStopRequest(server string, org string, vm string) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "org", org, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam1 string
+
+	pathParam1, err = runtime.StyleParamWithOptions("simple", false, "vm", vm, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/orgs/%s/vms/%s/stop", pathParam0, pathParam1)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodPost, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
 // NewGetRegionsRequest constructs an http.Request for the GetRegions method
-func NewGetRegionsRequest(server string) (*http.Request, error) {
+func NewGetRegionsRequest(server string, params *GetRegionsParams) (*http.Request, error) {
 	var err error
 
 	serverURL, err := url.Parse(server)
@@ -4833,6 +6553,45 @@ func NewGetRegionsRequest(server string) (*http.Request, error) {
 	queryURL, err := serverURL.Parse(operationPath)
 	if err != nil {
 		return nil, err
+	}
+
+	if params != nil {
+		// queryValues collects non-styled parameters (passthrough, JSON)
+		// that are safe to round-trip through url.Values.Encode().
+		queryValues := queryURL.Query()
+		// rawQueryFragments collects pre-encoded query fragments from
+		// styled parameters, preserving literal commas as delimiters
+		// per the OpenAPI spec (e.g. "color=blue,black,brown").
+		var rawQueryFragments []string
+
+		if params.Limit != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "limit", *params.Limit, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "integer", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.Cursor != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "cursor", *params.Cursor, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if encoded := queryValues.Encode(); encoded != "" {
+			rawQueryFragments = append(rawQueryFragments, encoded)
+		}
+		queryURL.RawQuery = strings.Join(rawQueryFragments, "&")
 	}
 
 	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
@@ -4892,7 +6651,7 @@ type ClientWithResponsesInterface interface {
 	// Returns a wrapper object for the known response body format(s).
 	//
 	// Corresponds with GET /database-engines (the `GetDatabaseEngines` operationId).
-	GetDatabaseEnginesWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*GetDatabaseEnginesResponse, error)
+	GetDatabaseEnginesWithResponse(ctx context.Context, params *GetDatabaseEnginesParams, reqEditors ...RequestEditorFn) (*GetDatabaseEnginesResponse, error)
 
 	// GetHealthWithResponse Liveness, including worker heartbeat age
 	//
@@ -4913,14 +6672,14 @@ type ClientWithResponsesInterface interface {
 	// Returns a wrapper object for the known response body format(s).
 	//
 	// Corresponds with GET /orgs (the `GetOrgs` operationId).
-	GetOrgsWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*GetOrgsResponse, error)
+	GetOrgsWithResponse(ctx context.Context, params *GetOrgsParams, reqEditors ...RequestEditorFn) (*GetOrgsResponse, error)
 
 	// GetOrgsOrgAppsWithResponse List apps
 	//
 	// Returns a wrapper object for the known response body format(s).
 	//
 	// Corresponds with GET /orgs/{org}/apps (the `GetOrgsOrgApps` operationId).
-	GetOrgsOrgAppsWithResponse(ctx context.Context, org string, reqEditors ...RequestEditorFn) (*GetOrgsOrgAppsResponse, error)
+	GetOrgsOrgAppsWithResponse(ctx context.Context, org string, params *GetOrgsOrgAppsParams, reqEditors ...RequestEditorFn) (*GetOrgsOrgAppsResponse, error)
 
 	// PostOrgsOrgAppsWithBodyWithResponse Create an app
 	//
@@ -4983,14 +6742,14 @@ type ClientWithResponsesInterface interface {
 	// Returns a wrapper object for the known response body format(s).
 	//
 	// Corresponds with GET /orgs/{org}/apps/{app}/deployments (the `GetOrgsOrgAppsAppDeployments` operationId).
-	GetOrgsOrgAppsAppDeploymentsWithResponse(ctx context.Context, org string, app string, reqEditors ...RequestEditorFn) (*GetOrgsOrgAppsAppDeploymentsResponse, error)
+	GetOrgsOrgAppsAppDeploymentsWithResponse(ctx context.Context, org string, app string, params *GetOrgsOrgAppsAppDeploymentsParams, reqEditors ...RequestEditorFn) (*GetOrgsOrgAppsAppDeploymentsResponse, error)
 
 	// GetOrgsOrgAppsAppDomainsWithResponse Custom domains
 	//
 	// Returns a wrapper object for the known response body format(s).
 	//
 	// Corresponds with GET /orgs/{org}/apps/{app}/domains (the `GetOrgsOrgAppsAppDomains` operationId).
-	GetOrgsOrgAppsAppDomainsWithResponse(ctx context.Context, org string, app string, reqEditors ...RequestEditorFn) (*GetOrgsOrgAppsAppDomainsResponse, error)
+	GetOrgsOrgAppsAppDomainsWithResponse(ctx context.Context, org string, app string, params *GetOrgsOrgAppsAppDomainsParams, reqEditors ...RequestEditorFn) (*GetOrgsOrgAppsAppDomainsResponse, error)
 
 	// PostOrgsOrgAppsAppDomainsWithBodyWithResponse Attach a custom domain
 	//
@@ -5025,7 +6784,7 @@ type ClientWithResponsesInterface interface {
 	// Returns a wrapper object for the known response body format(s).
 	//
 	// Corresponds with GET /orgs/{org}/buckets (the `GetOrgsOrgBuckets` operationId).
-	GetOrgsOrgBucketsWithResponse(ctx context.Context, org string, reqEditors ...RequestEditorFn) (*GetOrgsOrgBucketsResponse, error)
+	GetOrgsOrgBucketsWithResponse(ctx context.Context, org string, params *GetOrgsOrgBucketsParams, reqEditors ...RequestEditorFn) (*GetOrgsOrgBucketsResponse, error)
 
 	// PostOrgsOrgBucketsWithBodyWithResponse Create a bucket (exists on the object store when this returns)
 	//
@@ -5055,14 +6814,14 @@ type ClientWithResponsesInterface interface {
 	// Corresponds with GET /orgs/{org}/buckets/{bucket} (the `GetOrgsOrgBucketsBucket` operationId).
 	GetOrgsOrgBucketsBucketWithResponse(ctx context.Context, org string, bucket string, reqEditors ...RequestEditorFn) (*GetOrgsOrgBucketsBucketResponse, error)
 
-	// PatchOrgsOrgBucketsBucketWithBodyWithResponse Change a bucket's versioning or public access
+	// PatchOrgsOrgBucketsBucketWithBodyWithResponse Change versioning or public access (applied on the storage service and verified before this returns)
 	//
 	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
 	//
 	// Corresponds with PATCH /orgs/{org}/buckets/{bucket} (the `PatchOrgsOrgBucketsBucket` operationId).
 	PatchOrgsOrgBucketsBucketWithBodyWithResponse(ctx context.Context, org string, bucket string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*PatchOrgsOrgBucketsBucketResponse, error)
 
-	// PatchOrgsOrgBucketsBucketWithResponse Change a bucket's versioning or public access
+	// PatchOrgsOrgBucketsBucketWithResponse Change versioning or public access (applied on the storage service and verified before this returns)
 	//
 	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
 	//
@@ -5076,70 +6835,70 @@ type ClientWithResponsesInterface interface {
 	// Corresponds with GET /orgs/{org}/buckets/{bucket}/credentials (the `GetOrgsOrgBucketsBucketCredentials` operationId).
 	GetOrgsOrgBucketsBucketCredentialsWithResponse(ctx context.Context, org string, bucket string, reqEditors ...RequestEditorFn) (*GetOrgsOrgBucketsBucketCredentialsResponse, error)
 
-	// DeleteOrgsOrgBucketsBucketDomainsWithBodyWithResponse Remove a custom hostname
+	// DeleteOrgsOrgBucketsBucketDomainsWithBodyWithResponse Remove a hostname, by id or by the hostname itself
 	//
 	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
 	//
 	// Corresponds with DELETE /orgs/{org}/buckets/{bucket}/domains (the `DeleteOrgsOrgBucketsBucketDomains` operationId).
 	DeleteOrgsOrgBucketsBucketDomainsWithBodyWithResponse(ctx context.Context, org string, bucket string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*DeleteOrgsOrgBucketsBucketDomainsResponse, error)
 
-	// DeleteOrgsOrgBucketsBucketDomainsWithResponse Remove a custom hostname
+	// DeleteOrgsOrgBucketsBucketDomainsWithResponse Remove a hostname, by id or by the hostname itself
 	//
 	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
 	//
 	// Corresponds with DELETE /orgs/{org}/buckets/{bucket}/domains (the `DeleteOrgsOrgBucketsBucketDomains` operationId).
 	DeleteOrgsOrgBucketsBucketDomainsWithResponse(ctx context.Context, org string, bucket string, body DeleteOrgsOrgBucketsBucketDomainsJSONRequestBody, reqEditors ...RequestEditorFn) (*DeleteOrgsOrgBucketsBucketDomainsResponse, error)
 
-	// GetOrgsOrgBucketsBucketDomainsWithResponse List custom hostnames on a bucket
+	// GetOrgsOrgBucketsBucketDomainsWithResponse Custom hostnames in front of a public bucket
 	//
 	// Returns a wrapper object for the known response body format(s).
 	//
 	// Corresponds with GET /orgs/{org}/buckets/{bucket}/domains (the `GetOrgsOrgBucketsBucketDomains` operationId).
-	GetOrgsOrgBucketsBucketDomainsWithResponse(ctx context.Context, org string, bucket string, reqEditors ...RequestEditorFn) (*GetOrgsOrgBucketsBucketDomainsResponse, error)
+	GetOrgsOrgBucketsBucketDomainsWithResponse(ctx context.Context, org string, bucket string, params *GetOrgsOrgBucketsBucketDomainsParams, reqEditors ...RequestEditorFn) (*GetOrgsOrgBucketsBucketDomainsResponse, error)
 
-	// PostOrgsOrgBucketsBucketDomainsWithBodyWithResponse Attach a custom hostname to a public bucket
+	// PostOrgsOrgBucketsBucketDomainsWithBodyWithResponse Attach a hostname (the bucket, or a folder in it, must be public)
 	//
 	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
 	//
 	// Corresponds with POST /orgs/{org}/buckets/{bucket}/domains (the `PostOrgsOrgBucketsBucketDomains` operationId).
 	PostOrgsOrgBucketsBucketDomainsWithBodyWithResponse(ctx context.Context, org string, bucket string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*PostOrgsOrgBucketsBucketDomainsResponse, error)
 
-	// PostOrgsOrgBucketsBucketDomainsWithResponse Attach a custom hostname to a public bucket
+	// PostOrgsOrgBucketsBucketDomainsWithResponse Attach a hostname (the bucket, or a folder in it, must be public)
 	//
 	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
 	//
 	// Corresponds with POST /orgs/{org}/buckets/{bucket}/domains (the `PostOrgsOrgBucketsBucketDomains` operationId).
 	PostOrgsOrgBucketsBucketDomainsWithResponse(ctx context.Context, org string, bucket string, body PostOrgsOrgBucketsBucketDomainsJSONRequestBody, reqEditors ...RequestEditorFn) (*PostOrgsOrgBucketsBucketDomainsResponse, error)
 
-	// DeleteOrgsOrgBucketsBucketKeysWithBodyWithResponse Revoke an access key pair
+	// DeleteOrgsOrgBucketsBucketKeysWithBodyWithResponse Revoke a key pair (at least one must remain). Stops working within about a minute.
 	//
 	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
 	//
 	// Corresponds with DELETE /orgs/{org}/buckets/{bucket}/keys (the `DeleteOrgsOrgBucketsBucketKeys` operationId).
 	DeleteOrgsOrgBucketsBucketKeysWithBodyWithResponse(ctx context.Context, org string, bucket string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*DeleteOrgsOrgBucketsBucketKeysResponse, error)
 
-	// DeleteOrgsOrgBucketsBucketKeysWithResponse Revoke an access key pair
+	// DeleteOrgsOrgBucketsBucketKeysWithResponse Revoke a key pair (at least one must remain). Stops working within about a minute.
 	//
 	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
 	//
 	// Corresponds with DELETE /orgs/{org}/buckets/{bucket}/keys (the `DeleteOrgsOrgBucketsBucketKeys` operationId).
 	DeleteOrgsOrgBucketsBucketKeysWithResponse(ctx context.Context, org string, bucket string, body DeleteOrgsOrgBucketsBucketKeysJSONRequestBody, reqEditors ...RequestEditorFn) (*DeleteOrgsOrgBucketsBucketKeysResponse, error)
 
-	// GetOrgsOrgBucketsBucketKeysWithResponse List the organisation's active access keys
+	// GetOrgsOrgBucketsBucketKeysWithResponse Active access keys on the organisation's storage identity
 	//
 	// Returns a wrapper object for the known response body format(s).
 	//
 	// Corresponds with GET /orgs/{org}/buckets/{bucket}/keys (the `GetOrgsOrgBucketsBucketKeys` operationId).
-	GetOrgsOrgBucketsBucketKeysWithResponse(ctx context.Context, org string, bucket string, reqEditors ...RequestEditorFn) (*GetOrgsOrgBucketsBucketKeysResponse, error)
+	GetOrgsOrgBucketsBucketKeysWithResponse(ctx context.Context, org string, bucket string, params *GetOrgsOrgBucketsBucketKeysParams, reqEditors ...RequestEditorFn) (*GetOrgsOrgBucketsBucketKeysResponse, error)
 
-	// PostOrgsOrgBucketsBucketKeysWithBodyWithResponse Add an access key pair
+	// PostOrgsOrgBucketsBucketKeysWithBodyWithResponse Add a key pair (two active at most). Usable within about a minute; the secret is shown once.
 	//
 	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
 	//
 	// Corresponds with POST /orgs/{org}/buckets/{bucket}/keys (the `PostOrgsOrgBucketsBucketKeys` operationId).
 	PostOrgsOrgBucketsBucketKeysWithBodyWithResponse(ctx context.Context, org string, bucket string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*PostOrgsOrgBucketsBucketKeysResponse, error)
 
-	// PostOrgsOrgBucketsBucketKeysWithResponse Add an access key pair
+	// PostOrgsOrgBucketsBucketKeysWithResponse Add a key pair (two active at most). Usable within about a minute; the secret is shown once.
 	//
 	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
 	//
@@ -5160,21 +6919,21 @@ type ClientWithResponsesInterface interface {
 	// Corresponds with POST /orgs/{org}/buckets/{bucket}/presign (the `PostOrgsOrgBucketsBucketPresign` operationId).
 	PostOrgsOrgBucketsBucketPresignWithResponse(ctx context.Context, org string, bucket string, body PostOrgsOrgBucketsBucketPresignJSONRequestBody, reqEditors ...RequestEditorFn) (*PostOrgsOrgBucketsBucketPresignResponse, error)
 
-	// PostOrgsOrgBucketsBucketRestoreWithBodyWithResponse Copy a previous version back onto the key
+	// PostOrgsOrgBucketsBucketRestoreWithBodyWithResponse Make an older version current (a copy of it; nothing is lost)
 	//
 	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
 	//
 	// Corresponds with POST /orgs/{org}/buckets/{bucket}/restore (the `PostOrgsOrgBucketsBucketRestore` operationId).
 	PostOrgsOrgBucketsBucketRestoreWithBodyWithResponse(ctx context.Context, org string, bucket string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*PostOrgsOrgBucketsBucketRestoreResponse, error)
 
-	// PostOrgsOrgBucketsBucketRestoreWithResponse Copy a previous version back onto the key
+	// PostOrgsOrgBucketsBucketRestoreWithResponse Make an older version current (a copy of it; nothing is lost)
 	//
 	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
 	//
 	// Corresponds with POST /orgs/{org}/buckets/{bucket}/restore (the `PostOrgsOrgBucketsBucketRestore` operationId).
 	PostOrgsOrgBucketsBucketRestoreWithResponse(ctx context.Context, org string, bucket string, body PostOrgsOrgBucketsBucketRestoreJSONRequestBody, reqEditors ...RequestEditorFn) (*PostOrgsOrgBucketsBucketRestoreResponse, error)
 
-	// GetOrgsOrgBucketsBucketVersionsWithResponse List an object's versions, newest first
+	// GetOrgsOrgBucketsBucketVersionsWithResponse Versions of one object, newest first (empty unless versioning is on)
 	//
 	// Returns a wrapper object for the known response body format(s).
 	//
@@ -5186,7 +6945,7 @@ type ClientWithResponsesInterface interface {
 	// Returns a wrapper object for the known response body format(s).
 	//
 	// Corresponds with GET /orgs/{org}/databases (the `GetOrgsOrgDatabases` operationId).
-	GetOrgsOrgDatabasesWithResponse(ctx context.Context, org string, reqEditors ...RequestEditorFn) (*GetOrgsOrgDatabasesResponse, error)
+	GetOrgsOrgDatabasesWithResponse(ctx context.Context, org string, params *GetOrgsOrgDatabasesParams, reqEditors ...RequestEditorFn) (*GetOrgsOrgDatabasesResponse, error)
 
 	// PostOrgsOrgDatabasesWithBodyWithResponse Create a database
 	//
@@ -5221,7 +6980,7 @@ type ClientWithResponsesInterface interface {
 	// Returns a wrapper object for the known response body format(s).
 	//
 	// Corresponds with GET /orgs/{org}/databases/{db}/backups (the `GetOrgsOrgDatabasesDbBackups` operationId).
-	GetOrgsOrgDatabasesDbBackupsWithResponse(ctx context.Context, org string, db string, reqEditors ...RequestEditorFn) (*GetOrgsOrgDatabasesDbBackupsResponse, error)
+	GetOrgsOrgDatabasesDbBackupsWithResponse(ctx context.Context, org string, db string, params *GetOrgsOrgDatabasesDbBackupsParams, reqEditors ...RequestEditorFn) (*GetOrgsOrgDatabasesDbBackupsResponse, error)
 
 	// PostOrgsOrgDatabasesDbBackupsWithResponse Take a backup now (PostgreSQL only)
 	//
@@ -5286,75 +7045,173 @@ type ClientWithResponsesInterface interface {
 	// Corresponds with POST /orgs/{org}/databases/{db}/stop (the `PostOrgsOrgDatabasesDbStop` operationId).
 	PostOrgsOrgDatabasesDbStopWithResponse(ctx context.Context, org string, db string, reqEditors ...RequestEditorFn) (*PostOrgsOrgDatabasesDbStopResponse, error)
 
-	// GetOrgsOrgDomainsWithResponse List the organisation's domains
+	// GetOrgsOrgDomainsWithResponse DNS zones the organisation holds
 	//
 	// Returns a wrapper object for the known response body format(s).
 	//
 	// Corresponds with GET /orgs/{org}/domains (the `GetOrgsOrgDomains` operationId).
-	GetOrgsOrgDomainsWithResponse(ctx context.Context, org string, reqEditors ...RequestEditorFn) (*GetOrgsOrgDomainsResponse, error)
+	GetOrgsOrgDomainsWithResponse(ctx context.Context, org string, params *GetOrgsOrgDomainsParams, reqEditors ...RequestEditorFn) (*GetOrgsOrgDomainsResponse, error)
 
-	// GetOrgsOrgDomainsDomainRecordsWithResponse List a domain's DNS records
+	// GetOrgsOrgDomainsDomainRecordsWithResponse DNS records of a zone
 	//
 	// Returns a wrapper object for the known response body format(s).
 	//
 	// Corresponds with GET /orgs/{org}/domains/{domain}/records (the `GetOrgsOrgDomainsDomainRecords` operationId).
-	GetOrgsOrgDomainsDomainRecordsWithResponse(ctx context.Context, org string, domain string, reqEditors ...RequestEditorFn) (*GetOrgsOrgDomainsDomainRecordsResponse, error)
+	GetOrgsOrgDomainsDomainRecordsWithResponse(ctx context.Context, org string, domain string, params *GetOrgsOrgDomainsDomainRecordsParams, reqEditors ...RequestEditorFn) (*GetOrgsOrgDomainsDomainRecordsResponse, error)
 
-	// PostOrgsOrgDomainsDomainRecordsWithBodyWithResponse Create a DNS record
+	// PostOrgsOrgDomainsDomainRecordsWithBodyWithResponse Create a record (written to the name servers first; a refusal is the answer and nothing is saved)
 	//
 	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
 	//
 	// Corresponds with POST /orgs/{org}/domains/{domain}/records (the `PostOrgsOrgDomainsDomainRecords` operationId).
 	PostOrgsOrgDomainsDomainRecordsWithBodyWithResponse(ctx context.Context, org string, domain string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*PostOrgsOrgDomainsDomainRecordsResponse, error)
 
-	// PostOrgsOrgDomainsDomainRecordsWithResponse Create a DNS record
+	// PostOrgsOrgDomainsDomainRecordsWithResponse Create a record (written to the name servers first; a refusal is the answer and nothing is saved)
 	//
 	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
 	//
 	// Corresponds with POST /orgs/{org}/domains/{domain}/records (the `PostOrgsOrgDomainsDomainRecords` operationId).
 	PostOrgsOrgDomainsDomainRecordsWithResponse(ctx context.Context, org string, domain string, body PostOrgsOrgDomainsDomainRecordsJSONRequestBody, reqEditors ...RequestEditorFn) (*PostOrgsOrgDomainsDomainRecordsResponse, error)
 
-	// DeleteOrgsOrgDomainsDomainRecordsRecordIdWithResponse Delete a DNS record
+	// DeleteOrgsOrgDomainsDomainRecordsRecordIdWithResponse Delete a record (name servers first; sibling values on the same name are kept)
 	//
 	// Returns a wrapper object for the known response body format(s).
 	//
 	// Corresponds with DELETE /orgs/{org}/domains/{domain}/records/{recordId} (the `DeleteOrgsOrgDomainsDomainRecordsRecordId` operationId).
 	DeleteOrgsOrgDomainsDomainRecordsRecordIdWithResponse(ctx context.Context, org string, domain string, recordId string, reqEditors ...RequestEditorFn) (*DeleteOrgsOrgDomainsDomainRecordsRecordIdResponse, error)
 
-	// PatchOrgsOrgDomainsDomainRecordsRecordIdWithBodyWithResponse Change a DNS record (the current method; PUT is the older spelling)
+	// PatchOrgsOrgDomainsDomainRecordsRecordIdWithBodyWithResponse Change a record (name servers first)
 	//
 	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
 	//
 	// Corresponds with PATCH /orgs/{org}/domains/{domain}/records/{recordId} (the `PatchOrgsOrgDomainsDomainRecordsRecordId` operationId).
 	PatchOrgsOrgDomainsDomainRecordsRecordIdWithBodyWithResponse(ctx context.Context, org string, domain string, recordId string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*PatchOrgsOrgDomainsDomainRecordsRecordIdResponse, error)
 
-	// PatchOrgsOrgDomainsDomainRecordsRecordIdWithResponse Change a DNS record (the current method; PUT is the older spelling)
+	// PatchOrgsOrgDomainsDomainRecordsRecordIdWithResponse Change a record (name servers first)
 	//
 	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
 	//
 	// Corresponds with PATCH /orgs/{org}/domains/{domain}/records/{recordId} (the `PatchOrgsOrgDomainsDomainRecordsRecordId` operationId).
 	PatchOrgsOrgDomainsDomainRecordsRecordIdWithResponse(ctx context.Context, org string, domain string, recordId string, body PatchOrgsOrgDomainsDomainRecordsRecordIdJSONRequestBody, reqEditors ...RequestEditorFn) (*PatchOrgsOrgDomainsDomainRecordsRecordIdResponse, error)
 
-	// PutOrgsOrgDomainsDomainRecordsRecordIdWithBodyWithResponse Change a DNS record
+	// GetOrgsOrgVmsWithResponse List VMs
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with GET /orgs/{org}/vms (the `GetOrgsOrgVms` operationId).
+	GetOrgsOrgVmsWithResponse(ctx context.Context, org string, params *GetOrgsOrgVmsParams, reqEditors ...RequestEditorFn) (*GetOrgsOrgVmsResponse, error)
+
+	// PostOrgsOrgVmsWithBodyWithResponse Create a VM
 	//
 	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
 	//
-	// Corresponds with PUT /orgs/{org}/domains/{domain}/records/{recordId} (the `PutOrgsOrgDomainsDomainRecordsRecordId` operationId).
-	PutOrgsOrgDomainsDomainRecordsRecordIdWithBodyWithResponse(ctx context.Context, org string, domain string, recordId string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*PutOrgsOrgDomainsDomainRecordsRecordIdResponse, error)
+	// Corresponds with POST /orgs/{org}/vms (the `PostOrgsOrgVms` operationId).
+	PostOrgsOrgVmsWithBodyWithResponse(ctx context.Context, org string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*PostOrgsOrgVmsResponse, error)
 
-	// PutOrgsOrgDomainsDomainRecordsRecordIdWithResponse Change a DNS record
+	// PostOrgsOrgVmsWithResponse Create a VM
 	//
 	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
 	//
-	// Corresponds with PUT /orgs/{org}/domains/{domain}/records/{recordId} (the `PutOrgsOrgDomainsDomainRecordsRecordId` operationId).
-	PutOrgsOrgDomainsDomainRecordsRecordIdWithResponse(ctx context.Context, org string, domain string, recordId string, body PutOrgsOrgDomainsDomainRecordsRecordIdJSONRequestBody, reqEditors ...RequestEditorFn) (*PutOrgsOrgDomainsDomainRecordsRecordIdResponse, error)
+	// Corresponds with POST /orgs/{org}/vms (the `PostOrgsOrgVms` operationId).
+	PostOrgsOrgVmsWithResponse(ctx context.Context, org string, body PostOrgsOrgVmsJSONRequestBody, reqEditors ...RequestEditorFn) (*PostOrgsOrgVmsResponse, error)
+
+	// DeleteOrgsOrgVmsVmWithResponse Delete a VM
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with DELETE /orgs/{org}/vms/{vm} (the `DeleteOrgsOrgVmsVm` operationId).
+	DeleteOrgsOrgVmsVmWithResponse(ctx context.Context, org string, vm string, reqEditors ...RequestEditorFn) (*DeleteOrgsOrgVmsVmResponse, error)
+
+	// GetOrgsOrgVmsVmWithResponse Get a VM
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with GET /orgs/{org}/vms/{vm} (the `GetOrgsOrgVmsVm` operationId).
+	GetOrgsOrgVmsVmWithResponse(ctx context.Context, org string, vm string, reqEditors ...RequestEditorFn) (*GetOrgsOrgVmsVmResponse, error)
+
+	// GetOrgsOrgVmsVmConsoleWithResponse Get a short-lived SPICE console ticket
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with GET /orgs/{org}/vms/{vm}/console (the `GetOrgsOrgVmsVmConsole` operationId).
+	GetOrgsOrgVmsVmConsoleWithResponse(ctx context.Context, org string, vm string, reqEditors ...RequestEditorFn) (*GetOrgsOrgVmsVmConsoleResponse, error)
+
+	// GetOrgsOrgVmsVmIpWithResponse Public and private IP addresses
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with GET /orgs/{org}/vms/{vm}/ip (the `GetOrgsOrgVmsVmIp` operationId).
+	GetOrgsOrgVmsVmIpWithResponse(ctx context.Context, org string, vm string, reqEditors ...RequestEditorFn) (*GetOrgsOrgVmsVmIpResponse, error)
+
+	// PostOrgsOrgVmsVmIpAttachWithResponse Attach a public IP address
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with POST /orgs/{org}/vms/{vm}/ip/attach (the `PostOrgsOrgVmsVmIpAttach` operationId).
+	PostOrgsOrgVmsVmIpAttachWithResponse(ctx context.Context, org string, vm string, reqEditors ...RequestEditorFn) (*PostOrgsOrgVmsVmIpAttachResponse, error)
+
+	// PostOrgsOrgVmsVmIpDetachWithResponse Detach the public IP address
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with POST /orgs/{org}/vms/{vm}/ip/detach (the `PostOrgsOrgVmsVmIpDetach` operationId).
+	PostOrgsOrgVmsVmIpDetachWithResponse(ctx context.Context, org string, vm string, reqEditors ...RequestEditorFn) (*PostOrgsOrgVmsVmIpDetachResponse, error)
+
+	// PostOrgsOrgVmsVmRestartWithResponse Restart a VM
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with POST /orgs/{org}/vms/{vm}/restart (the `PostOrgsOrgVmsVmRestart` operationId).
+	PostOrgsOrgVmsVmRestartWithResponse(ctx context.Context, org string, vm string, reqEditors ...RequestEditorFn) (*PostOrgsOrgVmsVmRestartResponse, error)
+
+	// GetOrgsOrgVmsVmSshKeysWithResponse List SSH public keys on a VM
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with GET /orgs/{org}/vms/{vm}/ssh-keys (the `GetOrgsOrgVmsVmSshKeys` operationId).
+	GetOrgsOrgVmsVmSshKeysWithResponse(ctx context.Context, org string, vm string, params *GetOrgsOrgVmsVmSshKeysParams, reqEditors ...RequestEditorFn) (*GetOrgsOrgVmsVmSshKeysResponse, error)
+
+	// PostOrgsOrgVmsVmSshKeysWithBodyWithResponse Add an SSH public key
+	//
+	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with POST /orgs/{org}/vms/{vm}/ssh-keys (the `PostOrgsOrgVmsVmSshKeys` operationId).
+	PostOrgsOrgVmsVmSshKeysWithBodyWithResponse(ctx context.Context, org string, vm string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*PostOrgsOrgVmsVmSshKeysResponse, error)
+
+	// PostOrgsOrgVmsVmSshKeysWithResponse Add an SSH public key
+	//
+	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with POST /orgs/{org}/vms/{vm}/ssh-keys (the `PostOrgsOrgVmsVmSshKeys` operationId).
+	PostOrgsOrgVmsVmSshKeysWithResponse(ctx context.Context, org string, vm string, body PostOrgsOrgVmsVmSshKeysJSONRequestBody, reqEditors ...RequestEditorFn) (*PostOrgsOrgVmsVmSshKeysResponse, error)
+
+	// DeleteOrgsOrgVmsVmSshKeysKeyIdWithResponse Remove an SSH public key
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with DELETE /orgs/{org}/vms/{vm}/ssh-keys/{keyId} (the `DeleteOrgsOrgVmsVmSshKeysKeyId` operationId).
+	DeleteOrgsOrgVmsVmSshKeysKeyIdWithResponse(ctx context.Context, org string, vm string, keyId string, reqEditors ...RequestEditorFn) (*DeleteOrgsOrgVmsVmSshKeysKeyIdResponse, error)
+
+	// PostOrgsOrgVmsVmStartWithResponse Start a stopped VM
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with POST /orgs/{org}/vms/{vm}/start (the `PostOrgsOrgVmsVmStart` operationId).
+	PostOrgsOrgVmsVmStartWithResponse(ctx context.Context, org string, vm string, reqEditors ...RequestEditorFn) (*PostOrgsOrgVmsVmStartResponse, error)
+
+	// PostOrgsOrgVmsVmStopWithResponse Stop a running VM
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with POST /orgs/{org}/vms/{vm}/stop (the `PostOrgsOrgVmsVmStop` operationId).
+	PostOrgsOrgVmsVmStopWithResponse(ctx context.Context, org string, vm string, reqEditors ...RequestEditorFn) (*PostOrgsOrgVmsVmStopResponse, error)
 
 	// GetRegionsWithResponse Regions available for new resources
 	//
 	// Returns a wrapper object for the known response body format(s).
 	//
 	// Corresponds with GET /regions (the `GetRegions` operationId).
-	GetRegionsWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*GetRegionsResponse, error)
+	GetRegionsWithResponse(ctx context.Context, params *GetRegionsParams, reqEditors ...RequestEditorFn) (*GetRegionsResponse, error)
 }
 
 type GetDatabaseEnginesResponse struct {
@@ -7321,6 +9178,8 @@ type PostOrgsOrgBucketsBucketRestoreResponse struct {
 	ApplicationproblemJSON403 *Problem
 	// ApplicationproblemJSON404 the response for an HTTP 404 `application/problem+json` response
 	ApplicationproblemJSON404 *Problem
+	// ApplicationproblemJSON409 the response for an HTTP 409 `application/problem+json` response
+	ApplicationproblemJSON409 *Problem
 }
 
 // GetApplicationproblemJSON400 returns the response for an HTTP 400 `application/problem+json` response
@@ -7341,6 +9200,11 @@ func (r PostOrgsOrgBucketsBucketRestoreResponse) GetApplicationproblemJSON403() 
 // GetApplicationproblemJSON404 returns the response for an HTTP 404 `application/problem+json` response
 func (r PostOrgsOrgBucketsBucketRestoreResponse) GetApplicationproblemJSON404() *Problem {
 	return r.ApplicationproblemJSON404
+}
+
+// GetApplicationproblemJSON409 returns the response for an HTTP 409 `application/problem+json` response
+func (r PostOrgsOrgBucketsBucketRestoreResponse) GetApplicationproblemJSON409() *Problem {
+	return r.ApplicationproblemJSON409
 }
 
 // GetBody returns the raw response body bytes
@@ -8448,6 +10312,8 @@ type PostOrgsOrgDomainsDomainRecordsResponse struct {
 	ApplicationproblemJSON403 *Problem
 	// ApplicationproblemJSON404 the response for an HTTP 404 `application/problem+json` response
 	ApplicationproblemJSON404 *Problem
+	// ApplicationproblemJSON409 the response for an HTTP 409 `application/problem+json` response
+	ApplicationproblemJSON409 *Problem
 }
 
 // GetJSON201 returns the response for an HTTP 201 `application/json` response
@@ -8473,6 +10339,11 @@ func (r PostOrgsOrgDomainsDomainRecordsResponse) GetApplicationproblemJSON403() 
 // GetApplicationproblemJSON404 returns the response for an HTTP 404 `application/problem+json` response
 func (r PostOrgsOrgDomainsDomainRecordsResponse) GetApplicationproblemJSON404() *Problem {
 	return r.ApplicationproblemJSON404
+}
+
+// GetApplicationproblemJSON409 returns the response for an HTTP 409 `application/problem+json` response
+func (r PostOrgsOrgDomainsDomainRecordsResponse) GetApplicationproblemJSON409() *Problem {
+	return r.ApplicationproblemJSON409
 }
 
 // GetBody returns the raw response body bytes
@@ -8579,6 +10450,8 @@ type PatchOrgsOrgDomainsDomainRecordsRecordIdResponse struct {
 	ApplicationproblemJSON403 *Problem
 	// ApplicationproblemJSON404 the response for an HTTP 404 `application/problem+json` response
 	ApplicationproblemJSON404 *Problem
+	// ApplicationproblemJSON409 the response for an HTTP 409 `application/problem+json` response
+	ApplicationproblemJSON409 *Problem
 }
 
 // GetJSON200 returns the response for an HTTP 200 `application/json` response
@@ -8604,6 +10477,11 @@ func (r PatchOrgsOrgDomainsDomainRecordsRecordIdResponse) GetApplicationproblemJ
 // GetApplicationproblemJSON404 returns the response for an HTTP 404 `application/problem+json` response
 func (r PatchOrgsOrgDomainsDomainRecordsRecordIdResponse) GetApplicationproblemJSON404() *Problem {
 	return r.ApplicationproblemJSON404
+}
+
+// GetApplicationproblemJSON409 returns the response for an HTTP 409 `application/problem+json` response
+func (r PatchOrgsOrgDomainsDomainRecordsRecordIdResponse) GetApplicationproblemJSON409() *Problem {
+	return r.ApplicationproblemJSON409
 }
 
 // GetBody returns the raw response body bytes
@@ -8635,11 +10513,11 @@ func (r PatchOrgsOrgDomainsDomainRecordsRecordIdResponse) ContentType() string {
 	return ""
 }
 
-type PutOrgsOrgDomainsDomainRecordsRecordIdResponse struct {
+type GetOrgsOrgVmsResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
 	// JSON200 the response for an HTTP 200 `application/json` response
-	JSON200 *DnsRecord
+	JSON200 *VmList
 	// ApplicationproblemJSON400 the response for an HTTP 400 `application/problem+json` response
 	ApplicationproblemJSON400 *Problem
 	// ApplicationproblemJSON401 the response for an HTTP 401 `application/problem+json` response
@@ -8651,37 +10529,37 @@ type PutOrgsOrgDomainsDomainRecordsRecordIdResponse struct {
 }
 
 // GetJSON200 returns the response for an HTTP 200 `application/json` response
-func (r PutOrgsOrgDomainsDomainRecordsRecordIdResponse) GetJSON200() *DnsRecord {
+func (r GetOrgsOrgVmsResponse) GetJSON200() *VmList {
 	return r.JSON200
 }
 
 // GetApplicationproblemJSON400 returns the response for an HTTP 400 `application/problem+json` response
-func (r PutOrgsOrgDomainsDomainRecordsRecordIdResponse) GetApplicationproblemJSON400() *Problem {
+func (r GetOrgsOrgVmsResponse) GetApplicationproblemJSON400() *Problem {
 	return r.ApplicationproblemJSON400
 }
 
 // GetApplicationproblemJSON401 returns the response for an HTTP 401 `application/problem+json` response
-func (r PutOrgsOrgDomainsDomainRecordsRecordIdResponse) GetApplicationproblemJSON401() *Problem {
+func (r GetOrgsOrgVmsResponse) GetApplicationproblemJSON401() *Problem {
 	return r.ApplicationproblemJSON401
 }
 
 // GetApplicationproblemJSON403 returns the response for an HTTP 403 `application/problem+json` response
-func (r PutOrgsOrgDomainsDomainRecordsRecordIdResponse) GetApplicationproblemJSON403() *Problem {
+func (r GetOrgsOrgVmsResponse) GetApplicationproblemJSON403() *Problem {
 	return r.ApplicationproblemJSON403
 }
 
 // GetApplicationproblemJSON404 returns the response for an HTTP 404 `application/problem+json` response
-func (r PutOrgsOrgDomainsDomainRecordsRecordIdResponse) GetApplicationproblemJSON404() *Problem {
+func (r GetOrgsOrgVmsResponse) GetApplicationproblemJSON404() *Problem {
 	return r.ApplicationproblemJSON404
 }
 
 // GetBody returns the raw response body bytes
-func (r PutOrgsOrgDomainsDomainRecordsRecordIdResponse) GetBody() []byte {
+func (r GetOrgsOrgVmsResponse) GetBody() []byte {
 	return r.Body
 }
 
 // Status returns HTTPResponse.Status
-func (r PutOrgsOrgDomainsDomainRecordsRecordIdResponse) Status() string {
+func (r GetOrgsOrgVmsResponse) Status() string {
 	if r.HTTPResponse != nil {
 		return r.HTTPResponse.Status
 	}
@@ -8689,7 +10567,7 @@ func (r PutOrgsOrgDomainsDomainRecordsRecordIdResponse) Status() string {
 }
 
 // StatusCode returns HTTPResponse.StatusCode
-func (r PutOrgsOrgDomainsDomainRecordsRecordIdResponse) StatusCode() int {
+func (r GetOrgsOrgVmsResponse) StatusCode() int {
 	if r.HTTPResponse != nil {
 		return r.HTTPResponse.StatusCode
 	}
@@ -8697,7 +10575,897 @@ func (r PutOrgsOrgDomainsDomainRecordsRecordIdResponse) StatusCode() int {
 }
 
 // ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
-func (r PutOrgsOrgDomainsDomainRecordsRecordIdResponse) ContentType() string {
+func (r GetOrgsOrgVmsResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type PostOrgsOrgVmsResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON201 the response for an HTTP 201 `application/json` response
+	JSON201 *Vm
+	// ApplicationproblemJSON400 the response for an HTTP 400 `application/problem+json` response
+	ApplicationproblemJSON400 *Problem
+	// ApplicationproblemJSON401 the response for an HTTP 401 `application/problem+json` response
+	ApplicationproblemJSON401 *Problem
+	// ApplicationproblemJSON402 the response for an HTTP 402 `application/problem+json` response
+	ApplicationproblemJSON402 *Problem
+	// ApplicationproblemJSON403 the response for an HTTP 403 `application/problem+json` response
+	ApplicationproblemJSON403 *Problem
+	// ApplicationproblemJSON404 the response for an HTTP 404 `application/problem+json` response
+	ApplicationproblemJSON404 *Problem
+	// ApplicationproblemJSON409 the response for an HTTP 409 `application/problem+json` response
+	ApplicationproblemJSON409 *Problem
+}
+
+// GetJSON201 returns the response for an HTTP 201 `application/json` response
+func (r PostOrgsOrgVmsResponse) GetJSON201() *Vm {
+	return r.JSON201
+}
+
+// GetApplicationproblemJSON400 returns the response for an HTTP 400 `application/problem+json` response
+func (r PostOrgsOrgVmsResponse) GetApplicationproblemJSON400() *Problem {
+	return r.ApplicationproblemJSON400
+}
+
+// GetApplicationproblemJSON401 returns the response for an HTTP 401 `application/problem+json` response
+func (r PostOrgsOrgVmsResponse) GetApplicationproblemJSON401() *Problem {
+	return r.ApplicationproblemJSON401
+}
+
+// GetApplicationproblemJSON402 returns the response for an HTTP 402 `application/problem+json` response
+func (r PostOrgsOrgVmsResponse) GetApplicationproblemJSON402() *Problem {
+	return r.ApplicationproblemJSON402
+}
+
+// GetApplicationproblemJSON403 returns the response for an HTTP 403 `application/problem+json` response
+func (r PostOrgsOrgVmsResponse) GetApplicationproblemJSON403() *Problem {
+	return r.ApplicationproblemJSON403
+}
+
+// GetApplicationproblemJSON404 returns the response for an HTTP 404 `application/problem+json` response
+func (r PostOrgsOrgVmsResponse) GetApplicationproblemJSON404() *Problem {
+	return r.ApplicationproblemJSON404
+}
+
+// GetApplicationproblemJSON409 returns the response for an HTTP 409 `application/problem+json` response
+func (r PostOrgsOrgVmsResponse) GetApplicationproblemJSON409() *Problem {
+	return r.ApplicationproblemJSON409
+}
+
+// GetBody returns the raw response body bytes
+func (r PostOrgsOrgVmsResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r PostOrgsOrgVmsResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r PostOrgsOrgVmsResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r PostOrgsOrgVmsResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type DeleteOrgsOrgVmsVmResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// ApplicationproblemJSON400 the response for an HTTP 400 `application/problem+json` response
+	ApplicationproblemJSON400 *Problem
+	// ApplicationproblemJSON401 the response for an HTTP 401 `application/problem+json` response
+	ApplicationproblemJSON401 *Problem
+	// ApplicationproblemJSON403 the response for an HTTP 403 `application/problem+json` response
+	ApplicationproblemJSON403 *Problem
+	// ApplicationproblemJSON404 the response for an HTTP 404 `application/problem+json` response
+	ApplicationproblemJSON404 *Problem
+}
+
+// GetApplicationproblemJSON400 returns the response for an HTTP 400 `application/problem+json` response
+func (r DeleteOrgsOrgVmsVmResponse) GetApplicationproblemJSON400() *Problem {
+	return r.ApplicationproblemJSON400
+}
+
+// GetApplicationproblemJSON401 returns the response for an HTTP 401 `application/problem+json` response
+func (r DeleteOrgsOrgVmsVmResponse) GetApplicationproblemJSON401() *Problem {
+	return r.ApplicationproblemJSON401
+}
+
+// GetApplicationproblemJSON403 returns the response for an HTTP 403 `application/problem+json` response
+func (r DeleteOrgsOrgVmsVmResponse) GetApplicationproblemJSON403() *Problem {
+	return r.ApplicationproblemJSON403
+}
+
+// GetApplicationproblemJSON404 returns the response for an HTTP 404 `application/problem+json` response
+func (r DeleteOrgsOrgVmsVmResponse) GetApplicationproblemJSON404() *Problem {
+	return r.ApplicationproblemJSON404
+}
+
+// GetBody returns the raw response body bytes
+func (r DeleteOrgsOrgVmsVmResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r DeleteOrgsOrgVmsVmResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r DeleteOrgsOrgVmsVmResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r DeleteOrgsOrgVmsVmResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type GetOrgsOrgVmsVmResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *Vm
+	// ApplicationproblemJSON400 the response for an HTTP 400 `application/problem+json` response
+	ApplicationproblemJSON400 *Problem
+	// ApplicationproblemJSON401 the response for an HTTP 401 `application/problem+json` response
+	ApplicationproblemJSON401 *Problem
+	// ApplicationproblemJSON403 the response for an HTTP 403 `application/problem+json` response
+	ApplicationproblemJSON403 *Problem
+	// ApplicationproblemJSON404 the response for an HTTP 404 `application/problem+json` response
+	ApplicationproblemJSON404 *Problem
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r GetOrgsOrgVmsVmResponse) GetJSON200() *Vm {
+	return r.JSON200
+}
+
+// GetApplicationproblemJSON400 returns the response for an HTTP 400 `application/problem+json` response
+func (r GetOrgsOrgVmsVmResponse) GetApplicationproblemJSON400() *Problem {
+	return r.ApplicationproblemJSON400
+}
+
+// GetApplicationproblemJSON401 returns the response for an HTTP 401 `application/problem+json` response
+func (r GetOrgsOrgVmsVmResponse) GetApplicationproblemJSON401() *Problem {
+	return r.ApplicationproblemJSON401
+}
+
+// GetApplicationproblemJSON403 returns the response for an HTTP 403 `application/problem+json` response
+func (r GetOrgsOrgVmsVmResponse) GetApplicationproblemJSON403() *Problem {
+	return r.ApplicationproblemJSON403
+}
+
+// GetApplicationproblemJSON404 returns the response for an HTTP 404 `application/problem+json` response
+func (r GetOrgsOrgVmsVmResponse) GetApplicationproblemJSON404() *Problem {
+	return r.ApplicationproblemJSON404
+}
+
+// GetBody returns the raw response body bytes
+func (r GetOrgsOrgVmsVmResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r GetOrgsOrgVmsVmResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r GetOrgsOrgVmsVmResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r GetOrgsOrgVmsVmResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type GetOrgsOrgVmsVmConsoleResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *VmConsole
+	// ApplicationproblemJSON400 the response for an HTTP 400 `application/problem+json` response
+	ApplicationproblemJSON400 *Problem
+	// ApplicationproblemJSON401 the response for an HTTP 401 `application/problem+json` response
+	ApplicationproblemJSON401 *Problem
+	// ApplicationproblemJSON403 the response for an HTTP 403 `application/problem+json` response
+	ApplicationproblemJSON403 *Problem
+	// ApplicationproblemJSON404 the response for an HTTP 404 `application/problem+json` response
+	ApplicationproblemJSON404 *Problem
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r GetOrgsOrgVmsVmConsoleResponse) GetJSON200() *VmConsole {
+	return r.JSON200
+}
+
+// GetApplicationproblemJSON400 returns the response for an HTTP 400 `application/problem+json` response
+func (r GetOrgsOrgVmsVmConsoleResponse) GetApplicationproblemJSON400() *Problem {
+	return r.ApplicationproblemJSON400
+}
+
+// GetApplicationproblemJSON401 returns the response for an HTTP 401 `application/problem+json` response
+func (r GetOrgsOrgVmsVmConsoleResponse) GetApplicationproblemJSON401() *Problem {
+	return r.ApplicationproblemJSON401
+}
+
+// GetApplicationproblemJSON403 returns the response for an HTTP 403 `application/problem+json` response
+func (r GetOrgsOrgVmsVmConsoleResponse) GetApplicationproblemJSON403() *Problem {
+	return r.ApplicationproblemJSON403
+}
+
+// GetApplicationproblemJSON404 returns the response for an HTTP 404 `application/problem+json` response
+func (r GetOrgsOrgVmsVmConsoleResponse) GetApplicationproblemJSON404() *Problem {
+	return r.ApplicationproblemJSON404
+}
+
+// GetBody returns the raw response body bytes
+func (r GetOrgsOrgVmsVmConsoleResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r GetOrgsOrgVmsVmConsoleResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r GetOrgsOrgVmsVmConsoleResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r GetOrgsOrgVmsVmConsoleResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type GetOrgsOrgVmsVmIpResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *VmIp
+	// ApplicationproblemJSON400 the response for an HTTP 400 `application/problem+json` response
+	ApplicationproblemJSON400 *Problem
+	// ApplicationproblemJSON401 the response for an HTTP 401 `application/problem+json` response
+	ApplicationproblemJSON401 *Problem
+	// ApplicationproblemJSON403 the response for an HTTP 403 `application/problem+json` response
+	ApplicationproblemJSON403 *Problem
+	// ApplicationproblemJSON404 the response for an HTTP 404 `application/problem+json` response
+	ApplicationproblemJSON404 *Problem
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r GetOrgsOrgVmsVmIpResponse) GetJSON200() *VmIp {
+	return r.JSON200
+}
+
+// GetApplicationproblemJSON400 returns the response for an HTTP 400 `application/problem+json` response
+func (r GetOrgsOrgVmsVmIpResponse) GetApplicationproblemJSON400() *Problem {
+	return r.ApplicationproblemJSON400
+}
+
+// GetApplicationproblemJSON401 returns the response for an HTTP 401 `application/problem+json` response
+func (r GetOrgsOrgVmsVmIpResponse) GetApplicationproblemJSON401() *Problem {
+	return r.ApplicationproblemJSON401
+}
+
+// GetApplicationproblemJSON403 returns the response for an HTTP 403 `application/problem+json` response
+func (r GetOrgsOrgVmsVmIpResponse) GetApplicationproblemJSON403() *Problem {
+	return r.ApplicationproblemJSON403
+}
+
+// GetApplicationproblemJSON404 returns the response for an HTTP 404 `application/problem+json` response
+func (r GetOrgsOrgVmsVmIpResponse) GetApplicationproblemJSON404() *Problem {
+	return r.ApplicationproblemJSON404
+}
+
+// GetBody returns the raw response body bytes
+func (r GetOrgsOrgVmsVmIpResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r GetOrgsOrgVmsVmIpResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r GetOrgsOrgVmsVmIpResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r GetOrgsOrgVmsVmIpResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type PostOrgsOrgVmsVmIpAttachResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// ApplicationproblemJSON400 the response for an HTTP 400 `application/problem+json` response
+	ApplicationproblemJSON400 *Problem
+	// ApplicationproblemJSON401 the response for an HTTP 401 `application/problem+json` response
+	ApplicationproblemJSON401 *Problem
+	// ApplicationproblemJSON402 the response for an HTTP 402 `application/problem+json` response
+	ApplicationproblemJSON402 *Problem
+	// ApplicationproblemJSON403 the response for an HTTP 403 `application/problem+json` response
+	ApplicationproblemJSON403 *Problem
+	// ApplicationproblemJSON404 the response for an HTTP 404 `application/problem+json` response
+	ApplicationproblemJSON404 *Problem
+}
+
+// GetApplicationproblemJSON400 returns the response for an HTTP 400 `application/problem+json` response
+func (r PostOrgsOrgVmsVmIpAttachResponse) GetApplicationproblemJSON400() *Problem {
+	return r.ApplicationproblemJSON400
+}
+
+// GetApplicationproblemJSON401 returns the response for an HTTP 401 `application/problem+json` response
+func (r PostOrgsOrgVmsVmIpAttachResponse) GetApplicationproblemJSON401() *Problem {
+	return r.ApplicationproblemJSON401
+}
+
+// GetApplicationproblemJSON402 returns the response for an HTTP 402 `application/problem+json` response
+func (r PostOrgsOrgVmsVmIpAttachResponse) GetApplicationproblemJSON402() *Problem {
+	return r.ApplicationproblemJSON402
+}
+
+// GetApplicationproblemJSON403 returns the response for an HTTP 403 `application/problem+json` response
+func (r PostOrgsOrgVmsVmIpAttachResponse) GetApplicationproblemJSON403() *Problem {
+	return r.ApplicationproblemJSON403
+}
+
+// GetApplicationproblemJSON404 returns the response for an HTTP 404 `application/problem+json` response
+func (r PostOrgsOrgVmsVmIpAttachResponse) GetApplicationproblemJSON404() *Problem {
+	return r.ApplicationproblemJSON404
+}
+
+// GetBody returns the raw response body bytes
+func (r PostOrgsOrgVmsVmIpAttachResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r PostOrgsOrgVmsVmIpAttachResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r PostOrgsOrgVmsVmIpAttachResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r PostOrgsOrgVmsVmIpAttachResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type PostOrgsOrgVmsVmIpDetachResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// ApplicationproblemJSON400 the response for an HTTP 400 `application/problem+json` response
+	ApplicationproblemJSON400 *Problem
+	// ApplicationproblemJSON401 the response for an HTTP 401 `application/problem+json` response
+	ApplicationproblemJSON401 *Problem
+	// ApplicationproblemJSON403 the response for an HTTP 403 `application/problem+json` response
+	ApplicationproblemJSON403 *Problem
+	// ApplicationproblemJSON404 the response for an HTTP 404 `application/problem+json` response
+	ApplicationproblemJSON404 *Problem
+}
+
+// GetApplicationproblemJSON400 returns the response for an HTTP 400 `application/problem+json` response
+func (r PostOrgsOrgVmsVmIpDetachResponse) GetApplicationproblemJSON400() *Problem {
+	return r.ApplicationproblemJSON400
+}
+
+// GetApplicationproblemJSON401 returns the response for an HTTP 401 `application/problem+json` response
+func (r PostOrgsOrgVmsVmIpDetachResponse) GetApplicationproblemJSON401() *Problem {
+	return r.ApplicationproblemJSON401
+}
+
+// GetApplicationproblemJSON403 returns the response for an HTTP 403 `application/problem+json` response
+func (r PostOrgsOrgVmsVmIpDetachResponse) GetApplicationproblemJSON403() *Problem {
+	return r.ApplicationproblemJSON403
+}
+
+// GetApplicationproblemJSON404 returns the response for an HTTP 404 `application/problem+json` response
+func (r PostOrgsOrgVmsVmIpDetachResponse) GetApplicationproblemJSON404() *Problem {
+	return r.ApplicationproblemJSON404
+}
+
+// GetBody returns the raw response body bytes
+func (r PostOrgsOrgVmsVmIpDetachResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r PostOrgsOrgVmsVmIpDetachResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r PostOrgsOrgVmsVmIpDetachResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r PostOrgsOrgVmsVmIpDetachResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type PostOrgsOrgVmsVmRestartResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON202 the response for an HTTP 202 `application/json` response
+	JSON202 *Vm
+	// ApplicationproblemJSON400 the response for an HTTP 400 `application/problem+json` response
+	ApplicationproblemJSON400 *Problem
+	// ApplicationproblemJSON401 the response for an HTTP 401 `application/problem+json` response
+	ApplicationproblemJSON401 *Problem
+	// ApplicationproblemJSON403 the response for an HTTP 403 `application/problem+json` response
+	ApplicationproblemJSON403 *Problem
+	// ApplicationproblemJSON404 the response for an HTTP 404 `application/problem+json` response
+	ApplicationproblemJSON404 *Problem
+}
+
+// GetJSON202 returns the response for an HTTP 202 `application/json` response
+func (r PostOrgsOrgVmsVmRestartResponse) GetJSON202() *Vm {
+	return r.JSON202
+}
+
+// GetApplicationproblemJSON400 returns the response for an HTTP 400 `application/problem+json` response
+func (r PostOrgsOrgVmsVmRestartResponse) GetApplicationproblemJSON400() *Problem {
+	return r.ApplicationproblemJSON400
+}
+
+// GetApplicationproblemJSON401 returns the response for an HTTP 401 `application/problem+json` response
+func (r PostOrgsOrgVmsVmRestartResponse) GetApplicationproblemJSON401() *Problem {
+	return r.ApplicationproblemJSON401
+}
+
+// GetApplicationproblemJSON403 returns the response for an HTTP 403 `application/problem+json` response
+func (r PostOrgsOrgVmsVmRestartResponse) GetApplicationproblemJSON403() *Problem {
+	return r.ApplicationproblemJSON403
+}
+
+// GetApplicationproblemJSON404 returns the response for an HTTP 404 `application/problem+json` response
+func (r PostOrgsOrgVmsVmRestartResponse) GetApplicationproblemJSON404() *Problem {
+	return r.ApplicationproblemJSON404
+}
+
+// GetBody returns the raw response body bytes
+func (r PostOrgsOrgVmsVmRestartResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r PostOrgsOrgVmsVmRestartResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r PostOrgsOrgVmsVmRestartResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r PostOrgsOrgVmsVmRestartResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type GetOrgsOrgVmsVmSshKeysResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *VmSshKeyList
+	// ApplicationproblemJSON400 the response for an HTTP 400 `application/problem+json` response
+	ApplicationproblemJSON400 *Problem
+	// ApplicationproblemJSON401 the response for an HTTP 401 `application/problem+json` response
+	ApplicationproblemJSON401 *Problem
+	// ApplicationproblemJSON403 the response for an HTTP 403 `application/problem+json` response
+	ApplicationproblemJSON403 *Problem
+	// ApplicationproblemJSON404 the response for an HTTP 404 `application/problem+json` response
+	ApplicationproblemJSON404 *Problem
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r GetOrgsOrgVmsVmSshKeysResponse) GetJSON200() *VmSshKeyList {
+	return r.JSON200
+}
+
+// GetApplicationproblemJSON400 returns the response for an HTTP 400 `application/problem+json` response
+func (r GetOrgsOrgVmsVmSshKeysResponse) GetApplicationproblemJSON400() *Problem {
+	return r.ApplicationproblemJSON400
+}
+
+// GetApplicationproblemJSON401 returns the response for an HTTP 401 `application/problem+json` response
+func (r GetOrgsOrgVmsVmSshKeysResponse) GetApplicationproblemJSON401() *Problem {
+	return r.ApplicationproblemJSON401
+}
+
+// GetApplicationproblemJSON403 returns the response for an HTTP 403 `application/problem+json` response
+func (r GetOrgsOrgVmsVmSshKeysResponse) GetApplicationproblemJSON403() *Problem {
+	return r.ApplicationproblemJSON403
+}
+
+// GetApplicationproblemJSON404 returns the response for an HTTP 404 `application/problem+json` response
+func (r GetOrgsOrgVmsVmSshKeysResponse) GetApplicationproblemJSON404() *Problem {
+	return r.ApplicationproblemJSON404
+}
+
+// GetBody returns the raw response body bytes
+func (r GetOrgsOrgVmsVmSshKeysResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r GetOrgsOrgVmsVmSshKeysResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r GetOrgsOrgVmsVmSshKeysResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r GetOrgsOrgVmsVmSshKeysResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type PostOrgsOrgVmsVmSshKeysResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON201 the response for an HTTP 201 `application/json` response
+	JSON201 *VmSshKey
+	// ApplicationproblemJSON400 the response for an HTTP 400 `application/problem+json` response
+	ApplicationproblemJSON400 *Problem
+	// ApplicationproblemJSON401 the response for an HTTP 401 `application/problem+json` response
+	ApplicationproblemJSON401 *Problem
+	// ApplicationproblemJSON403 the response for an HTTP 403 `application/problem+json` response
+	ApplicationproblemJSON403 *Problem
+	// ApplicationproblemJSON404 the response for an HTTP 404 `application/problem+json` response
+	ApplicationproblemJSON404 *Problem
+}
+
+// GetJSON201 returns the response for an HTTP 201 `application/json` response
+func (r PostOrgsOrgVmsVmSshKeysResponse) GetJSON201() *VmSshKey {
+	return r.JSON201
+}
+
+// GetApplicationproblemJSON400 returns the response for an HTTP 400 `application/problem+json` response
+func (r PostOrgsOrgVmsVmSshKeysResponse) GetApplicationproblemJSON400() *Problem {
+	return r.ApplicationproblemJSON400
+}
+
+// GetApplicationproblemJSON401 returns the response for an HTTP 401 `application/problem+json` response
+func (r PostOrgsOrgVmsVmSshKeysResponse) GetApplicationproblemJSON401() *Problem {
+	return r.ApplicationproblemJSON401
+}
+
+// GetApplicationproblemJSON403 returns the response for an HTTP 403 `application/problem+json` response
+func (r PostOrgsOrgVmsVmSshKeysResponse) GetApplicationproblemJSON403() *Problem {
+	return r.ApplicationproblemJSON403
+}
+
+// GetApplicationproblemJSON404 returns the response for an HTTP 404 `application/problem+json` response
+func (r PostOrgsOrgVmsVmSshKeysResponse) GetApplicationproblemJSON404() *Problem {
+	return r.ApplicationproblemJSON404
+}
+
+// GetBody returns the raw response body bytes
+func (r PostOrgsOrgVmsVmSshKeysResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r PostOrgsOrgVmsVmSshKeysResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r PostOrgsOrgVmsVmSshKeysResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r PostOrgsOrgVmsVmSshKeysResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type DeleteOrgsOrgVmsVmSshKeysKeyIdResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// ApplicationproblemJSON400 the response for an HTTP 400 `application/problem+json` response
+	ApplicationproblemJSON400 *Problem
+	// ApplicationproblemJSON401 the response for an HTTP 401 `application/problem+json` response
+	ApplicationproblemJSON401 *Problem
+	// ApplicationproblemJSON403 the response for an HTTP 403 `application/problem+json` response
+	ApplicationproblemJSON403 *Problem
+	// ApplicationproblemJSON404 the response for an HTTP 404 `application/problem+json` response
+	ApplicationproblemJSON404 *Problem
+}
+
+// GetApplicationproblemJSON400 returns the response for an HTTP 400 `application/problem+json` response
+func (r DeleteOrgsOrgVmsVmSshKeysKeyIdResponse) GetApplicationproblemJSON400() *Problem {
+	return r.ApplicationproblemJSON400
+}
+
+// GetApplicationproblemJSON401 returns the response for an HTTP 401 `application/problem+json` response
+func (r DeleteOrgsOrgVmsVmSshKeysKeyIdResponse) GetApplicationproblemJSON401() *Problem {
+	return r.ApplicationproblemJSON401
+}
+
+// GetApplicationproblemJSON403 returns the response for an HTTP 403 `application/problem+json` response
+func (r DeleteOrgsOrgVmsVmSshKeysKeyIdResponse) GetApplicationproblemJSON403() *Problem {
+	return r.ApplicationproblemJSON403
+}
+
+// GetApplicationproblemJSON404 returns the response for an HTTP 404 `application/problem+json` response
+func (r DeleteOrgsOrgVmsVmSshKeysKeyIdResponse) GetApplicationproblemJSON404() *Problem {
+	return r.ApplicationproblemJSON404
+}
+
+// GetBody returns the raw response body bytes
+func (r DeleteOrgsOrgVmsVmSshKeysKeyIdResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r DeleteOrgsOrgVmsVmSshKeysKeyIdResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r DeleteOrgsOrgVmsVmSshKeysKeyIdResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r DeleteOrgsOrgVmsVmSshKeysKeyIdResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type PostOrgsOrgVmsVmStartResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON202 the response for an HTTP 202 `application/json` response
+	JSON202 *Vm
+	// ApplicationproblemJSON400 the response for an HTTP 400 `application/problem+json` response
+	ApplicationproblemJSON400 *Problem
+	// ApplicationproblemJSON401 the response for an HTTP 401 `application/problem+json` response
+	ApplicationproblemJSON401 *Problem
+	// ApplicationproblemJSON403 the response for an HTTP 403 `application/problem+json` response
+	ApplicationproblemJSON403 *Problem
+	// ApplicationproblemJSON404 the response for an HTTP 404 `application/problem+json` response
+	ApplicationproblemJSON404 *Problem
+}
+
+// GetJSON202 returns the response for an HTTP 202 `application/json` response
+func (r PostOrgsOrgVmsVmStartResponse) GetJSON202() *Vm {
+	return r.JSON202
+}
+
+// GetApplicationproblemJSON400 returns the response for an HTTP 400 `application/problem+json` response
+func (r PostOrgsOrgVmsVmStartResponse) GetApplicationproblemJSON400() *Problem {
+	return r.ApplicationproblemJSON400
+}
+
+// GetApplicationproblemJSON401 returns the response for an HTTP 401 `application/problem+json` response
+func (r PostOrgsOrgVmsVmStartResponse) GetApplicationproblemJSON401() *Problem {
+	return r.ApplicationproblemJSON401
+}
+
+// GetApplicationproblemJSON403 returns the response for an HTTP 403 `application/problem+json` response
+func (r PostOrgsOrgVmsVmStartResponse) GetApplicationproblemJSON403() *Problem {
+	return r.ApplicationproblemJSON403
+}
+
+// GetApplicationproblemJSON404 returns the response for an HTTP 404 `application/problem+json` response
+func (r PostOrgsOrgVmsVmStartResponse) GetApplicationproblemJSON404() *Problem {
+	return r.ApplicationproblemJSON404
+}
+
+// GetBody returns the raw response body bytes
+func (r PostOrgsOrgVmsVmStartResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r PostOrgsOrgVmsVmStartResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r PostOrgsOrgVmsVmStartResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r PostOrgsOrgVmsVmStartResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type PostOrgsOrgVmsVmStopResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON202 the response for an HTTP 202 `application/json` response
+	JSON202 *Vm
+	// ApplicationproblemJSON400 the response for an HTTP 400 `application/problem+json` response
+	ApplicationproblemJSON400 *Problem
+	// ApplicationproblemJSON401 the response for an HTTP 401 `application/problem+json` response
+	ApplicationproblemJSON401 *Problem
+	// ApplicationproblemJSON403 the response for an HTTP 403 `application/problem+json` response
+	ApplicationproblemJSON403 *Problem
+	// ApplicationproblemJSON404 the response for an HTTP 404 `application/problem+json` response
+	ApplicationproblemJSON404 *Problem
+}
+
+// GetJSON202 returns the response for an HTTP 202 `application/json` response
+func (r PostOrgsOrgVmsVmStopResponse) GetJSON202() *Vm {
+	return r.JSON202
+}
+
+// GetApplicationproblemJSON400 returns the response for an HTTP 400 `application/problem+json` response
+func (r PostOrgsOrgVmsVmStopResponse) GetApplicationproblemJSON400() *Problem {
+	return r.ApplicationproblemJSON400
+}
+
+// GetApplicationproblemJSON401 returns the response for an HTTP 401 `application/problem+json` response
+func (r PostOrgsOrgVmsVmStopResponse) GetApplicationproblemJSON401() *Problem {
+	return r.ApplicationproblemJSON401
+}
+
+// GetApplicationproblemJSON403 returns the response for an HTTP 403 `application/problem+json` response
+func (r PostOrgsOrgVmsVmStopResponse) GetApplicationproblemJSON403() *Problem {
+	return r.ApplicationproblemJSON403
+}
+
+// GetApplicationproblemJSON404 returns the response for an HTTP 404 `application/problem+json` response
+func (r PostOrgsOrgVmsVmStopResponse) GetApplicationproblemJSON404() *Problem {
+	return r.ApplicationproblemJSON404
+}
+
+// GetBody returns the raw response body bytes
+func (r PostOrgsOrgVmsVmStopResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r PostOrgsOrgVmsVmStopResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r PostOrgsOrgVmsVmStopResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r PostOrgsOrgVmsVmStopResponse) ContentType() string {
 	if r.HTTPResponse != nil {
 		return r.HTTPResponse.Header.Get("Content-Type")
 	}
@@ -8778,8 +11546,8 @@ func (r GetRegionsResponse) ContentType() string {
 // Returns a wrapper object for the known response body format(s).
 //
 // Corresponds with GET /database-engines (the `GetDatabaseEngines` operationId).
-func (c *ClientWithResponses) GetDatabaseEnginesWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*GetDatabaseEnginesResponse, error) {
-	rsp, err := c.GetDatabaseEngines(ctx, reqEditors...)
+func (c *ClientWithResponses) GetDatabaseEnginesWithResponse(ctx context.Context, params *GetDatabaseEnginesParams, reqEditors ...RequestEditorFn) (*GetDatabaseEnginesResponse, error) {
+	rsp, err := c.GetDatabaseEngines(ctx, params, reqEditors...)
 	if err != nil {
 		return nil, err
 	}
@@ -8817,8 +11585,8 @@ func (c *ClientWithResponses) GetMeWithResponse(ctx context.Context, reqEditors 
 // Returns a wrapper object for the known response body format(s).
 //
 // Corresponds with GET /orgs (the `GetOrgs` operationId).
-func (c *ClientWithResponses) GetOrgsWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*GetOrgsResponse, error) {
-	rsp, err := c.GetOrgs(ctx, reqEditors...)
+func (c *ClientWithResponses) GetOrgsWithResponse(ctx context.Context, params *GetOrgsParams, reqEditors ...RequestEditorFn) (*GetOrgsResponse, error) {
+	rsp, err := c.GetOrgs(ctx, params, reqEditors...)
 	if err != nil {
 		return nil, err
 	}
@@ -8830,8 +11598,8 @@ func (c *ClientWithResponses) GetOrgsWithResponse(ctx context.Context, reqEditor
 // Returns a wrapper object for the known response body format(s).
 //
 // Corresponds with GET /orgs/{org}/apps (the `GetOrgsOrgApps` operationId).
-func (c *ClientWithResponses) GetOrgsOrgAppsWithResponse(ctx context.Context, org string, reqEditors ...RequestEditorFn) (*GetOrgsOrgAppsResponse, error) {
-	rsp, err := c.GetOrgsOrgApps(ctx, org, reqEditors...)
+func (c *ClientWithResponses) GetOrgsOrgAppsWithResponse(ctx context.Context, org string, params *GetOrgsOrgAppsParams, reqEditors ...RequestEditorFn) (*GetOrgsOrgAppsResponse, error) {
+	rsp, err := c.GetOrgsOrgApps(ctx, org, params, reqEditors...)
 	if err != nil {
 		return nil, err
 	}
@@ -8947,8 +11715,8 @@ func (c *ClientWithResponses) PostOrgsOrgAppsAppDeployWithResponse(ctx context.C
 // Returns a wrapper object for the known response body format(s).
 //
 // Corresponds with GET /orgs/{org}/apps/{app}/deployments (the `GetOrgsOrgAppsAppDeployments` operationId).
-func (c *ClientWithResponses) GetOrgsOrgAppsAppDeploymentsWithResponse(ctx context.Context, org string, app string, reqEditors ...RequestEditorFn) (*GetOrgsOrgAppsAppDeploymentsResponse, error) {
-	rsp, err := c.GetOrgsOrgAppsAppDeployments(ctx, org, app, reqEditors...)
+func (c *ClientWithResponses) GetOrgsOrgAppsAppDeploymentsWithResponse(ctx context.Context, org string, app string, params *GetOrgsOrgAppsAppDeploymentsParams, reqEditors ...RequestEditorFn) (*GetOrgsOrgAppsAppDeploymentsResponse, error) {
+	rsp, err := c.GetOrgsOrgAppsAppDeployments(ctx, org, app, params, reqEditors...)
 	if err != nil {
 		return nil, err
 	}
@@ -8960,8 +11728,8 @@ func (c *ClientWithResponses) GetOrgsOrgAppsAppDeploymentsWithResponse(ctx conte
 // Returns a wrapper object for the known response body format(s).
 //
 // Corresponds with GET /orgs/{org}/apps/{app}/domains (the `GetOrgsOrgAppsAppDomains` operationId).
-func (c *ClientWithResponses) GetOrgsOrgAppsAppDomainsWithResponse(ctx context.Context, org string, app string, reqEditors ...RequestEditorFn) (*GetOrgsOrgAppsAppDomainsResponse, error) {
-	rsp, err := c.GetOrgsOrgAppsAppDomains(ctx, org, app, reqEditors...)
+func (c *ClientWithResponses) GetOrgsOrgAppsAppDomainsWithResponse(ctx context.Context, org string, app string, params *GetOrgsOrgAppsAppDomainsParams, reqEditors ...RequestEditorFn) (*GetOrgsOrgAppsAppDomainsResponse, error) {
+	rsp, err := c.GetOrgsOrgAppsAppDomains(ctx, org, app, params, reqEditors...)
 	if err != nil {
 		return nil, err
 	}
@@ -9025,8 +11793,8 @@ func (c *ClientWithResponses) GetOrgsOrgAppsAppLogsWithResponse(ctx context.Cont
 // Returns a wrapper object for the known response body format(s).
 //
 // Corresponds with GET /orgs/{org}/buckets (the `GetOrgsOrgBuckets` operationId).
-func (c *ClientWithResponses) GetOrgsOrgBucketsWithResponse(ctx context.Context, org string, reqEditors ...RequestEditorFn) (*GetOrgsOrgBucketsResponse, error) {
-	rsp, err := c.GetOrgsOrgBuckets(ctx, org, reqEditors...)
+func (c *ClientWithResponses) GetOrgsOrgBucketsWithResponse(ctx context.Context, org string, params *GetOrgsOrgBucketsParams, reqEditors ...RequestEditorFn) (*GetOrgsOrgBucketsResponse, error) {
+	rsp, err := c.GetOrgsOrgBuckets(ctx, org, params, reqEditors...)
 	if err != nil {
 		return nil, err
 	}
@@ -9085,7 +11853,7 @@ func (c *ClientWithResponses) GetOrgsOrgBucketsBucketWithResponse(ctx context.Co
 	return ParseGetOrgsOrgBucketsBucketResponse(rsp)
 }
 
-// PatchOrgsOrgBucketsBucketWithBodyWithResponse Change a bucket's versioning or public access
+// PatchOrgsOrgBucketsBucketWithBodyWithResponse Change versioning or public access (applied on the storage service and verified before this returns)
 //
 // Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
 //
@@ -9098,7 +11866,7 @@ func (c *ClientWithResponses) PatchOrgsOrgBucketsBucketWithBodyWithResponse(ctx 
 	return ParsePatchOrgsOrgBucketsBucketResponse(rsp)
 }
 
-// PatchOrgsOrgBucketsBucketWithResponse Change a bucket's versioning or public access
+// PatchOrgsOrgBucketsBucketWithResponse Change versioning or public access (applied on the storage service and verified before this returns)
 //
 // Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
 //
@@ -9124,7 +11892,7 @@ func (c *ClientWithResponses) GetOrgsOrgBucketsBucketCredentialsWithResponse(ctx
 	return ParseGetOrgsOrgBucketsBucketCredentialsResponse(rsp)
 }
 
-// DeleteOrgsOrgBucketsBucketDomainsWithBodyWithResponse Remove a custom hostname
+// DeleteOrgsOrgBucketsBucketDomainsWithBodyWithResponse Remove a hostname, by id or by the hostname itself
 //
 // Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
 //
@@ -9137,7 +11905,7 @@ func (c *ClientWithResponses) DeleteOrgsOrgBucketsBucketDomainsWithBodyWithRespo
 	return ParseDeleteOrgsOrgBucketsBucketDomainsResponse(rsp)
 }
 
-// DeleteOrgsOrgBucketsBucketDomainsWithResponse Remove a custom hostname
+// DeleteOrgsOrgBucketsBucketDomainsWithResponse Remove a hostname, by id or by the hostname itself
 //
 // Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
 //
@@ -9150,20 +11918,20 @@ func (c *ClientWithResponses) DeleteOrgsOrgBucketsBucketDomainsWithResponse(ctx 
 	return ParseDeleteOrgsOrgBucketsBucketDomainsResponse(rsp)
 }
 
-// GetOrgsOrgBucketsBucketDomainsWithResponse List custom hostnames on a bucket
+// GetOrgsOrgBucketsBucketDomainsWithResponse Custom hostnames in front of a public bucket
 //
 // Returns a wrapper object for the known response body format(s).
 //
 // Corresponds with GET /orgs/{org}/buckets/{bucket}/domains (the `GetOrgsOrgBucketsBucketDomains` operationId).
-func (c *ClientWithResponses) GetOrgsOrgBucketsBucketDomainsWithResponse(ctx context.Context, org string, bucket string, reqEditors ...RequestEditorFn) (*GetOrgsOrgBucketsBucketDomainsResponse, error) {
-	rsp, err := c.GetOrgsOrgBucketsBucketDomains(ctx, org, bucket, reqEditors...)
+func (c *ClientWithResponses) GetOrgsOrgBucketsBucketDomainsWithResponse(ctx context.Context, org string, bucket string, params *GetOrgsOrgBucketsBucketDomainsParams, reqEditors ...RequestEditorFn) (*GetOrgsOrgBucketsBucketDomainsResponse, error) {
+	rsp, err := c.GetOrgsOrgBucketsBucketDomains(ctx, org, bucket, params, reqEditors...)
 	if err != nil {
 		return nil, err
 	}
 	return ParseGetOrgsOrgBucketsBucketDomainsResponse(rsp)
 }
 
-// PostOrgsOrgBucketsBucketDomainsWithBodyWithResponse Attach a custom hostname to a public bucket
+// PostOrgsOrgBucketsBucketDomainsWithBodyWithResponse Attach a hostname (the bucket, or a folder in it, must be public)
 //
 // Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
 //
@@ -9176,7 +11944,7 @@ func (c *ClientWithResponses) PostOrgsOrgBucketsBucketDomainsWithBodyWithRespons
 	return ParsePostOrgsOrgBucketsBucketDomainsResponse(rsp)
 }
 
-// PostOrgsOrgBucketsBucketDomainsWithResponse Attach a custom hostname to a public bucket
+// PostOrgsOrgBucketsBucketDomainsWithResponse Attach a hostname (the bucket, or a folder in it, must be public)
 //
 // Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
 //
@@ -9189,7 +11957,7 @@ func (c *ClientWithResponses) PostOrgsOrgBucketsBucketDomainsWithResponse(ctx co
 	return ParsePostOrgsOrgBucketsBucketDomainsResponse(rsp)
 }
 
-// DeleteOrgsOrgBucketsBucketKeysWithBodyWithResponse Revoke an access key pair
+// DeleteOrgsOrgBucketsBucketKeysWithBodyWithResponse Revoke a key pair (at least one must remain). Stops working within about a minute.
 //
 // Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
 //
@@ -9202,7 +11970,7 @@ func (c *ClientWithResponses) DeleteOrgsOrgBucketsBucketKeysWithBodyWithResponse
 	return ParseDeleteOrgsOrgBucketsBucketKeysResponse(rsp)
 }
 
-// DeleteOrgsOrgBucketsBucketKeysWithResponse Revoke an access key pair
+// DeleteOrgsOrgBucketsBucketKeysWithResponse Revoke a key pair (at least one must remain). Stops working within about a minute.
 //
 // Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
 //
@@ -9215,20 +11983,20 @@ func (c *ClientWithResponses) DeleteOrgsOrgBucketsBucketKeysWithResponse(ctx con
 	return ParseDeleteOrgsOrgBucketsBucketKeysResponse(rsp)
 }
 
-// GetOrgsOrgBucketsBucketKeysWithResponse List the organisation's active access keys
+// GetOrgsOrgBucketsBucketKeysWithResponse Active access keys on the organisation's storage identity
 //
 // Returns a wrapper object for the known response body format(s).
 //
 // Corresponds with GET /orgs/{org}/buckets/{bucket}/keys (the `GetOrgsOrgBucketsBucketKeys` operationId).
-func (c *ClientWithResponses) GetOrgsOrgBucketsBucketKeysWithResponse(ctx context.Context, org string, bucket string, reqEditors ...RequestEditorFn) (*GetOrgsOrgBucketsBucketKeysResponse, error) {
-	rsp, err := c.GetOrgsOrgBucketsBucketKeys(ctx, org, bucket, reqEditors...)
+func (c *ClientWithResponses) GetOrgsOrgBucketsBucketKeysWithResponse(ctx context.Context, org string, bucket string, params *GetOrgsOrgBucketsBucketKeysParams, reqEditors ...RequestEditorFn) (*GetOrgsOrgBucketsBucketKeysResponse, error) {
+	rsp, err := c.GetOrgsOrgBucketsBucketKeys(ctx, org, bucket, params, reqEditors...)
 	if err != nil {
 		return nil, err
 	}
 	return ParseGetOrgsOrgBucketsBucketKeysResponse(rsp)
 }
 
-// PostOrgsOrgBucketsBucketKeysWithBodyWithResponse Add an access key pair
+// PostOrgsOrgBucketsBucketKeysWithBodyWithResponse Add a key pair (two active at most). Usable within about a minute; the secret is shown once.
 //
 // Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
 //
@@ -9241,7 +12009,7 @@ func (c *ClientWithResponses) PostOrgsOrgBucketsBucketKeysWithBodyWithResponse(c
 	return ParsePostOrgsOrgBucketsBucketKeysResponse(rsp)
 }
 
-// PostOrgsOrgBucketsBucketKeysWithResponse Add an access key pair
+// PostOrgsOrgBucketsBucketKeysWithResponse Add a key pair (two active at most). Usable within about a minute; the secret is shown once.
 //
 // Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
 //
@@ -9280,7 +12048,7 @@ func (c *ClientWithResponses) PostOrgsOrgBucketsBucketPresignWithResponse(ctx co
 	return ParsePostOrgsOrgBucketsBucketPresignResponse(rsp)
 }
 
-// PostOrgsOrgBucketsBucketRestoreWithBodyWithResponse Copy a previous version back onto the key
+// PostOrgsOrgBucketsBucketRestoreWithBodyWithResponse Make an older version current (a copy of it; nothing is lost)
 //
 // Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
 //
@@ -9293,7 +12061,7 @@ func (c *ClientWithResponses) PostOrgsOrgBucketsBucketRestoreWithBodyWithRespons
 	return ParsePostOrgsOrgBucketsBucketRestoreResponse(rsp)
 }
 
-// PostOrgsOrgBucketsBucketRestoreWithResponse Copy a previous version back onto the key
+// PostOrgsOrgBucketsBucketRestoreWithResponse Make an older version current (a copy of it; nothing is lost)
 //
 // Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
 //
@@ -9306,7 +12074,7 @@ func (c *ClientWithResponses) PostOrgsOrgBucketsBucketRestoreWithResponse(ctx co
 	return ParsePostOrgsOrgBucketsBucketRestoreResponse(rsp)
 }
 
-// GetOrgsOrgBucketsBucketVersionsWithResponse List an object's versions, newest first
+// GetOrgsOrgBucketsBucketVersionsWithResponse Versions of one object, newest first (empty unless versioning is on)
 //
 // Returns a wrapper object for the known response body format(s).
 //
@@ -9324,8 +12092,8 @@ func (c *ClientWithResponses) GetOrgsOrgBucketsBucketVersionsWithResponse(ctx co
 // Returns a wrapper object for the known response body format(s).
 //
 // Corresponds with GET /orgs/{org}/databases (the `GetOrgsOrgDatabases` operationId).
-func (c *ClientWithResponses) GetOrgsOrgDatabasesWithResponse(ctx context.Context, org string, reqEditors ...RequestEditorFn) (*GetOrgsOrgDatabasesResponse, error) {
-	rsp, err := c.GetOrgsOrgDatabases(ctx, org, reqEditors...)
+func (c *ClientWithResponses) GetOrgsOrgDatabasesWithResponse(ctx context.Context, org string, params *GetOrgsOrgDatabasesParams, reqEditors ...RequestEditorFn) (*GetOrgsOrgDatabasesResponse, error) {
+	rsp, err := c.GetOrgsOrgDatabases(ctx, org, params, reqEditors...)
 	if err != nil {
 		return nil, err
 	}
@@ -9389,8 +12157,8 @@ func (c *ClientWithResponses) GetOrgsOrgDatabasesDbWithResponse(ctx context.Cont
 // Returns a wrapper object for the known response body format(s).
 //
 // Corresponds with GET /orgs/{org}/databases/{db}/backups (the `GetOrgsOrgDatabasesDbBackups` operationId).
-func (c *ClientWithResponses) GetOrgsOrgDatabasesDbBackupsWithResponse(ctx context.Context, org string, db string, reqEditors ...RequestEditorFn) (*GetOrgsOrgDatabasesDbBackupsResponse, error) {
-	rsp, err := c.GetOrgsOrgDatabasesDbBackups(ctx, org, db, reqEditors...)
+func (c *ClientWithResponses) GetOrgsOrgDatabasesDbBackupsWithResponse(ctx context.Context, org string, db string, params *GetOrgsOrgDatabasesDbBackupsParams, reqEditors ...RequestEditorFn) (*GetOrgsOrgDatabasesDbBackupsResponse, error) {
+	rsp, err := c.GetOrgsOrgDatabasesDbBackups(ctx, org, db, params, reqEditors...)
 	if err != nil {
 		return nil, err
 	}
@@ -9514,33 +12282,33 @@ func (c *ClientWithResponses) PostOrgsOrgDatabasesDbStopWithResponse(ctx context
 	return ParsePostOrgsOrgDatabasesDbStopResponse(rsp)
 }
 
-// GetOrgsOrgDomainsWithResponse List the organisation's domains
+// GetOrgsOrgDomainsWithResponse DNS zones the organisation holds
 //
 // Returns a wrapper object for the known response body format(s).
 //
 // Corresponds with GET /orgs/{org}/domains (the `GetOrgsOrgDomains` operationId).
-func (c *ClientWithResponses) GetOrgsOrgDomainsWithResponse(ctx context.Context, org string, reqEditors ...RequestEditorFn) (*GetOrgsOrgDomainsResponse, error) {
-	rsp, err := c.GetOrgsOrgDomains(ctx, org, reqEditors...)
+func (c *ClientWithResponses) GetOrgsOrgDomainsWithResponse(ctx context.Context, org string, params *GetOrgsOrgDomainsParams, reqEditors ...RequestEditorFn) (*GetOrgsOrgDomainsResponse, error) {
+	rsp, err := c.GetOrgsOrgDomains(ctx, org, params, reqEditors...)
 	if err != nil {
 		return nil, err
 	}
 	return ParseGetOrgsOrgDomainsResponse(rsp)
 }
 
-// GetOrgsOrgDomainsDomainRecordsWithResponse List a domain's DNS records
+// GetOrgsOrgDomainsDomainRecordsWithResponse DNS records of a zone
 //
 // Returns a wrapper object for the known response body format(s).
 //
 // Corresponds with GET /orgs/{org}/domains/{domain}/records (the `GetOrgsOrgDomainsDomainRecords` operationId).
-func (c *ClientWithResponses) GetOrgsOrgDomainsDomainRecordsWithResponse(ctx context.Context, org string, domain string, reqEditors ...RequestEditorFn) (*GetOrgsOrgDomainsDomainRecordsResponse, error) {
-	rsp, err := c.GetOrgsOrgDomainsDomainRecords(ctx, org, domain, reqEditors...)
+func (c *ClientWithResponses) GetOrgsOrgDomainsDomainRecordsWithResponse(ctx context.Context, org string, domain string, params *GetOrgsOrgDomainsDomainRecordsParams, reqEditors ...RequestEditorFn) (*GetOrgsOrgDomainsDomainRecordsResponse, error) {
+	rsp, err := c.GetOrgsOrgDomainsDomainRecords(ctx, org, domain, params, reqEditors...)
 	if err != nil {
 		return nil, err
 	}
 	return ParseGetOrgsOrgDomainsDomainRecordsResponse(rsp)
 }
 
-// PostOrgsOrgDomainsDomainRecordsWithBodyWithResponse Create a DNS record
+// PostOrgsOrgDomainsDomainRecordsWithBodyWithResponse Create a record (written to the name servers first; a refusal is the answer and nothing is saved)
 //
 // Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
 //
@@ -9553,7 +12321,7 @@ func (c *ClientWithResponses) PostOrgsOrgDomainsDomainRecordsWithBodyWithRespons
 	return ParsePostOrgsOrgDomainsDomainRecordsResponse(rsp)
 }
 
-// PostOrgsOrgDomainsDomainRecordsWithResponse Create a DNS record
+// PostOrgsOrgDomainsDomainRecordsWithResponse Create a record (written to the name servers first; a refusal is the answer and nothing is saved)
 //
 // Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
 //
@@ -9566,7 +12334,7 @@ func (c *ClientWithResponses) PostOrgsOrgDomainsDomainRecordsWithResponse(ctx co
 	return ParsePostOrgsOrgDomainsDomainRecordsResponse(rsp)
 }
 
-// DeleteOrgsOrgDomainsDomainRecordsRecordIdWithResponse Delete a DNS record
+// DeleteOrgsOrgDomainsDomainRecordsRecordIdWithResponse Delete a record (name servers first; sibling values on the same name are kept)
 //
 // Returns a wrapper object for the known response body format(s).
 //
@@ -9579,7 +12347,7 @@ func (c *ClientWithResponses) DeleteOrgsOrgDomainsDomainRecordsRecordIdWithRespo
 	return ParseDeleteOrgsOrgDomainsDomainRecordsRecordIdResponse(rsp)
 }
 
-// PatchOrgsOrgDomainsDomainRecordsRecordIdWithBodyWithResponse Change a DNS record (the current method; PUT is the older spelling)
+// PatchOrgsOrgDomainsDomainRecordsRecordIdWithBodyWithResponse Change a record (name servers first)
 //
 // Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
 //
@@ -9592,7 +12360,7 @@ func (c *ClientWithResponses) PatchOrgsOrgDomainsDomainRecordsRecordIdWithBodyWi
 	return ParsePatchOrgsOrgDomainsDomainRecordsRecordIdResponse(rsp)
 }
 
-// PatchOrgsOrgDomainsDomainRecordsRecordIdWithResponse Change a DNS record (the current method; PUT is the older spelling)
+// PatchOrgsOrgDomainsDomainRecordsRecordIdWithResponse Change a record (name servers first)
 //
 // Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
 //
@@ -9605,30 +12373,212 @@ func (c *ClientWithResponses) PatchOrgsOrgDomainsDomainRecordsRecordIdWithRespon
 	return ParsePatchOrgsOrgDomainsDomainRecordsRecordIdResponse(rsp)
 }
 
-// PutOrgsOrgDomainsDomainRecordsRecordIdWithBodyWithResponse Change a DNS record
+// GetOrgsOrgVmsWithResponse List VMs
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with GET /orgs/{org}/vms (the `GetOrgsOrgVms` operationId).
+func (c *ClientWithResponses) GetOrgsOrgVmsWithResponse(ctx context.Context, org string, params *GetOrgsOrgVmsParams, reqEditors ...RequestEditorFn) (*GetOrgsOrgVmsResponse, error) {
+	rsp, err := c.GetOrgsOrgVms(ctx, org, params, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseGetOrgsOrgVmsResponse(rsp)
+}
+
+// PostOrgsOrgVmsWithBodyWithResponse Create a VM
 //
 // Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
 //
-// Corresponds with PUT /orgs/{org}/domains/{domain}/records/{recordId} (the `PutOrgsOrgDomainsDomainRecordsRecordId` operationId).
-func (c *ClientWithResponses) PutOrgsOrgDomainsDomainRecordsRecordIdWithBodyWithResponse(ctx context.Context, org string, domain string, recordId string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*PutOrgsOrgDomainsDomainRecordsRecordIdResponse, error) {
-	rsp, err := c.PutOrgsOrgDomainsDomainRecordsRecordIdWithBody(ctx, org, domain, recordId, contentType, body, reqEditors...)
+// Corresponds with POST /orgs/{org}/vms (the `PostOrgsOrgVms` operationId).
+func (c *ClientWithResponses) PostOrgsOrgVmsWithBodyWithResponse(ctx context.Context, org string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*PostOrgsOrgVmsResponse, error) {
+	rsp, err := c.PostOrgsOrgVmsWithBody(ctx, org, contentType, body, reqEditors...)
 	if err != nil {
 		return nil, err
 	}
-	return ParsePutOrgsOrgDomainsDomainRecordsRecordIdResponse(rsp)
+	return ParsePostOrgsOrgVmsResponse(rsp)
 }
 
-// PutOrgsOrgDomainsDomainRecordsRecordIdWithResponse Change a DNS record
+// PostOrgsOrgVmsWithResponse Create a VM
 //
 // Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
 //
-// Corresponds with PUT /orgs/{org}/domains/{domain}/records/{recordId} (the `PutOrgsOrgDomainsDomainRecordsRecordId` operationId).
-func (c *ClientWithResponses) PutOrgsOrgDomainsDomainRecordsRecordIdWithResponse(ctx context.Context, org string, domain string, recordId string, body PutOrgsOrgDomainsDomainRecordsRecordIdJSONRequestBody, reqEditors ...RequestEditorFn) (*PutOrgsOrgDomainsDomainRecordsRecordIdResponse, error) {
-	rsp, err := c.PutOrgsOrgDomainsDomainRecordsRecordId(ctx, org, domain, recordId, body, reqEditors...)
+// Corresponds with POST /orgs/{org}/vms (the `PostOrgsOrgVms` operationId).
+func (c *ClientWithResponses) PostOrgsOrgVmsWithResponse(ctx context.Context, org string, body PostOrgsOrgVmsJSONRequestBody, reqEditors ...RequestEditorFn) (*PostOrgsOrgVmsResponse, error) {
+	rsp, err := c.PostOrgsOrgVms(ctx, org, body, reqEditors...)
 	if err != nil {
 		return nil, err
 	}
-	return ParsePutOrgsOrgDomainsDomainRecordsRecordIdResponse(rsp)
+	return ParsePostOrgsOrgVmsResponse(rsp)
+}
+
+// DeleteOrgsOrgVmsVmWithResponse Delete a VM
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with DELETE /orgs/{org}/vms/{vm} (the `DeleteOrgsOrgVmsVm` operationId).
+func (c *ClientWithResponses) DeleteOrgsOrgVmsVmWithResponse(ctx context.Context, org string, vm string, reqEditors ...RequestEditorFn) (*DeleteOrgsOrgVmsVmResponse, error) {
+	rsp, err := c.DeleteOrgsOrgVmsVm(ctx, org, vm, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseDeleteOrgsOrgVmsVmResponse(rsp)
+}
+
+// GetOrgsOrgVmsVmWithResponse Get a VM
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with GET /orgs/{org}/vms/{vm} (the `GetOrgsOrgVmsVm` operationId).
+func (c *ClientWithResponses) GetOrgsOrgVmsVmWithResponse(ctx context.Context, org string, vm string, reqEditors ...RequestEditorFn) (*GetOrgsOrgVmsVmResponse, error) {
+	rsp, err := c.GetOrgsOrgVmsVm(ctx, org, vm, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseGetOrgsOrgVmsVmResponse(rsp)
+}
+
+// GetOrgsOrgVmsVmConsoleWithResponse Get a short-lived SPICE console ticket
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with GET /orgs/{org}/vms/{vm}/console (the `GetOrgsOrgVmsVmConsole` operationId).
+func (c *ClientWithResponses) GetOrgsOrgVmsVmConsoleWithResponse(ctx context.Context, org string, vm string, reqEditors ...RequestEditorFn) (*GetOrgsOrgVmsVmConsoleResponse, error) {
+	rsp, err := c.GetOrgsOrgVmsVmConsole(ctx, org, vm, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseGetOrgsOrgVmsVmConsoleResponse(rsp)
+}
+
+// GetOrgsOrgVmsVmIpWithResponse Public and private IP addresses
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with GET /orgs/{org}/vms/{vm}/ip (the `GetOrgsOrgVmsVmIp` operationId).
+func (c *ClientWithResponses) GetOrgsOrgVmsVmIpWithResponse(ctx context.Context, org string, vm string, reqEditors ...RequestEditorFn) (*GetOrgsOrgVmsVmIpResponse, error) {
+	rsp, err := c.GetOrgsOrgVmsVmIp(ctx, org, vm, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseGetOrgsOrgVmsVmIpResponse(rsp)
+}
+
+// PostOrgsOrgVmsVmIpAttachWithResponse Attach a public IP address
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with POST /orgs/{org}/vms/{vm}/ip/attach (the `PostOrgsOrgVmsVmIpAttach` operationId).
+func (c *ClientWithResponses) PostOrgsOrgVmsVmIpAttachWithResponse(ctx context.Context, org string, vm string, reqEditors ...RequestEditorFn) (*PostOrgsOrgVmsVmIpAttachResponse, error) {
+	rsp, err := c.PostOrgsOrgVmsVmIpAttach(ctx, org, vm, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParsePostOrgsOrgVmsVmIpAttachResponse(rsp)
+}
+
+// PostOrgsOrgVmsVmIpDetachWithResponse Detach the public IP address
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with POST /orgs/{org}/vms/{vm}/ip/detach (the `PostOrgsOrgVmsVmIpDetach` operationId).
+func (c *ClientWithResponses) PostOrgsOrgVmsVmIpDetachWithResponse(ctx context.Context, org string, vm string, reqEditors ...RequestEditorFn) (*PostOrgsOrgVmsVmIpDetachResponse, error) {
+	rsp, err := c.PostOrgsOrgVmsVmIpDetach(ctx, org, vm, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParsePostOrgsOrgVmsVmIpDetachResponse(rsp)
+}
+
+// PostOrgsOrgVmsVmRestartWithResponse Restart a VM
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with POST /orgs/{org}/vms/{vm}/restart (the `PostOrgsOrgVmsVmRestart` operationId).
+func (c *ClientWithResponses) PostOrgsOrgVmsVmRestartWithResponse(ctx context.Context, org string, vm string, reqEditors ...RequestEditorFn) (*PostOrgsOrgVmsVmRestartResponse, error) {
+	rsp, err := c.PostOrgsOrgVmsVmRestart(ctx, org, vm, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParsePostOrgsOrgVmsVmRestartResponse(rsp)
+}
+
+// GetOrgsOrgVmsVmSshKeysWithResponse List SSH public keys on a VM
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with GET /orgs/{org}/vms/{vm}/ssh-keys (the `GetOrgsOrgVmsVmSshKeys` operationId).
+func (c *ClientWithResponses) GetOrgsOrgVmsVmSshKeysWithResponse(ctx context.Context, org string, vm string, params *GetOrgsOrgVmsVmSshKeysParams, reqEditors ...RequestEditorFn) (*GetOrgsOrgVmsVmSshKeysResponse, error) {
+	rsp, err := c.GetOrgsOrgVmsVmSshKeys(ctx, org, vm, params, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseGetOrgsOrgVmsVmSshKeysResponse(rsp)
+}
+
+// PostOrgsOrgVmsVmSshKeysWithBodyWithResponse Add an SSH public key
+//
+// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with POST /orgs/{org}/vms/{vm}/ssh-keys (the `PostOrgsOrgVmsVmSshKeys` operationId).
+func (c *ClientWithResponses) PostOrgsOrgVmsVmSshKeysWithBodyWithResponse(ctx context.Context, org string, vm string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*PostOrgsOrgVmsVmSshKeysResponse, error) {
+	rsp, err := c.PostOrgsOrgVmsVmSshKeysWithBody(ctx, org, vm, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParsePostOrgsOrgVmsVmSshKeysResponse(rsp)
+}
+
+// PostOrgsOrgVmsVmSshKeysWithResponse Add an SSH public key
+//
+// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with POST /orgs/{org}/vms/{vm}/ssh-keys (the `PostOrgsOrgVmsVmSshKeys` operationId).
+func (c *ClientWithResponses) PostOrgsOrgVmsVmSshKeysWithResponse(ctx context.Context, org string, vm string, body PostOrgsOrgVmsVmSshKeysJSONRequestBody, reqEditors ...RequestEditorFn) (*PostOrgsOrgVmsVmSshKeysResponse, error) {
+	rsp, err := c.PostOrgsOrgVmsVmSshKeys(ctx, org, vm, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParsePostOrgsOrgVmsVmSshKeysResponse(rsp)
+}
+
+// DeleteOrgsOrgVmsVmSshKeysKeyIdWithResponse Remove an SSH public key
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with DELETE /orgs/{org}/vms/{vm}/ssh-keys/{keyId} (the `DeleteOrgsOrgVmsVmSshKeysKeyId` operationId).
+func (c *ClientWithResponses) DeleteOrgsOrgVmsVmSshKeysKeyIdWithResponse(ctx context.Context, org string, vm string, keyId string, reqEditors ...RequestEditorFn) (*DeleteOrgsOrgVmsVmSshKeysKeyIdResponse, error) {
+	rsp, err := c.DeleteOrgsOrgVmsVmSshKeysKeyId(ctx, org, vm, keyId, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseDeleteOrgsOrgVmsVmSshKeysKeyIdResponse(rsp)
+}
+
+// PostOrgsOrgVmsVmStartWithResponse Start a stopped VM
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with POST /orgs/{org}/vms/{vm}/start (the `PostOrgsOrgVmsVmStart` operationId).
+func (c *ClientWithResponses) PostOrgsOrgVmsVmStartWithResponse(ctx context.Context, org string, vm string, reqEditors ...RequestEditorFn) (*PostOrgsOrgVmsVmStartResponse, error) {
+	rsp, err := c.PostOrgsOrgVmsVmStart(ctx, org, vm, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParsePostOrgsOrgVmsVmStartResponse(rsp)
+}
+
+// PostOrgsOrgVmsVmStopWithResponse Stop a running VM
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with POST /orgs/{org}/vms/{vm}/stop (the `PostOrgsOrgVmsVmStop` operationId).
+func (c *ClientWithResponses) PostOrgsOrgVmsVmStopWithResponse(ctx context.Context, org string, vm string, reqEditors ...RequestEditorFn) (*PostOrgsOrgVmsVmStopResponse, error) {
+	rsp, err := c.PostOrgsOrgVmsVmStop(ctx, org, vm, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParsePostOrgsOrgVmsVmStopResponse(rsp)
 }
 
 // GetRegionsWithResponse Regions available for new resources
@@ -9636,8 +12586,8 @@ func (c *ClientWithResponses) PutOrgsOrgDomainsDomainRecordsRecordIdWithResponse
 // Returns a wrapper object for the known response body format(s).
 //
 // Corresponds with GET /regions (the `GetRegions` operationId).
-func (c *ClientWithResponses) GetRegionsWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*GetRegionsResponse, error) {
-	rsp, err := c.GetRegions(ctx, reqEditors...)
+func (c *ClientWithResponses) GetRegionsWithResponse(ctx context.Context, params *GetRegionsParams, reqEditors ...RequestEditorFn) (*GetRegionsResponse, error) {
+	rsp, err := c.GetRegions(ctx, params, reqEditors...)
 	if err != nil {
 		return nil, err
 	}
@@ -11237,6 +14187,13 @@ func ParsePostOrgsOrgBucketsBucketRestoreResponse(rsp *http.Response) (*PostOrgs
 		}
 		response.ApplicationproblemJSON404 = &dest
 
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON409 = &dest
+
 	}
 
 	return response, nil
@@ -12132,6 +15089,13 @@ func ParsePostOrgsOrgDomainsDomainRecordsResponse(rsp *http.Response) (*PostOrgs
 		}
 		response.ApplicationproblemJSON404 = &dest
 
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON409 = &dest
+
 	}
 
 	return response, nil
@@ -12236,31 +15200,745 @@ func ParsePatchOrgsOrgDomainsDomainRecordsRecordIdResponse(rsp *http.Response) (
 		}
 		response.ApplicationproblemJSON404 = &dest
 
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON409 = &dest
+
 	}
 
 	return response, nil
 }
 
-// ParsePutOrgsOrgDomainsDomainRecordsRecordIdResponse parses an HTTP response from a PutOrgsOrgDomainsDomainRecordsRecordIdWithResponse call
-func ParsePutOrgsOrgDomainsDomainRecordsRecordIdResponse(rsp *http.Response) (*PutOrgsOrgDomainsDomainRecordsRecordIdResponse, error) {
+// ParseGetOrgsOrgVmsResponse parses an HTTP response from a GetOrgsOrgVmsWithResponse call
+func ParseGetOrgsOrgVmsResponse(rsp *http.Response) (*GetOrgsOrgVmsResponse, error) {
 	bodyBytes, err := io.ReadAll(rsp.Body)
 	defer func() { _ = rsp.Body.Close() }()
 	if err != nil {
 		return nil, err
 	}
 
-	response := &PutOrgsOrgDomainsDomainRecordsRecordIdResponse{
+	response := &GetOrgsOrgVmsResponse{
 		Body:         bodyBytes,
 		HTTPResponse: rsp,
 	}
 
 	switch {
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
-		var dest DnsRecord
+		var dest VmList
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
 			return nil, err
 		}
 		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON404 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParsePostOrgsOrgVmsResponse parses an HTTP response from a PostOrgsOrgVmsWithResponse call
+func ParsePostOrgsOrgVmsResponse(rsp *http.Response) (*PostOrgsOrgVmsResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &PostOrgsOrgVmsResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 201:
+		var dest Vm
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON201 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 402:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON402 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON409 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseDeleteOrgsOrgVmsVmResponse parses an HTTP response from a DeleteOrgsOrgVmsVmWithResponse call
+func ParseDeleteOrgsOrgVmsVmResponse(rsp *http.Response) (*DeleteOrgsOrgVmsVmResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &DeleteOrgsOrgVmsVmResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case rsp.StatusCode == 204:
+		break // No content-type
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON404 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseGetOrgsOrgVmsVmResponse parses an HTTP response from a GetOrgsOrgVmsVmWithResponse call
+func ParseGetOrgsOrgVmsVmResponse(rsp *http.Response) (*GetOrgsOrgVmsVmResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &GetOrgsOrgVmsVmResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest Vm
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON404 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseGetOrgsOrgVmsVmConsoleResponse parses an HTTP response from a GetOrgsOrgVmsVmConsoleWithResponse call
+func ParseGetOrgsOrgVmsVmConsoleResponse(rsp *http.Response) (*GetOrgsOrgVmsVmConsoleResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &GetOrgsOrgVmsVmConsoleResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest VmConsole
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON404 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseGetOrgsOrgVmsVmIpResponse parses an HTTP response from a GetOrgsOrgVmsVmIpWithResponse call
+func ParseGetOrgsOrgVmsVmIpResponse(rsp *http.Response) (*GetOrgsOrgVmsVmIpResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &GetOrgsOrgVmsVmIpResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest VmIp
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON404 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParsePostOrgsOrgVmsVmIpAttachResponse parses an HTTP response from a PostOrgsOrgVmsVmIpAttachWithResponse call
+func ParsePostOrgsOrgVmsVmIpAttachResponse(rsp *http.Response) (*PostOrgsOrgVmsVmIpAttachResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &PostOrgsOrgVmsVmIpAttachResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case rsp.StatusCode == 202:
+		break // No content-type
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 402:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON402 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON404 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParsePostOrgsOrgVmsVmIpDetachResponse parses an HTTP response from a PostOrgsOrgVmsVmIpDetachWithResponse call
+func ParsePostOrgsOrgVmsVmIpDetachResponse(rsp *http.Response) (*PostOrgsOrgVmsVmIpDetachResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &PostOrgsOrgVmsVmIpDetachResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case rsp.StatusCode == 202:
+		break // No content-type
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON404 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParsePostOrgsOrgVmsVmRestartResponse parses an HTTP response from a PostOrgsOrgVmsVmRestartWithResponse call
+func ParsePostOrgsOrgVmsVmRestartResponse(rsp *http.Response) (*PostOrgsOrgVmsVmRestartResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &PostOrgsOrgVmsVmRestartResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 202:
+		var dest Vm
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON202 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON404 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseGetOrgsOrgVmsVmSshKeysResponse parses an HTTP response from a GetOrgsOrgVmsVmSshKeysWithResponse call
+func ParseGetOrgsOrgVmsVmSshKeysResponse(rsp *http.Response) (*GetOrgsOrgVmsVmSshKeysResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &GetOrgsOrgVmsVmSshKeysResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest VmSshKeyList
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON404 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParsePostOrgsOrgVmsVmSshKeysResponse parses an HTTP response from a PostOrgsOrgVmsVmSshKeysWithResponse call
+func ParsePostOrgsOrgVmsVmSshKeysResponse(rsp *http.Response) (*PostOrgsOrgVmsVmSshKeysResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &PostOrgsOrgVmsVmSshKeysResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 201:
+		var dest VmSshKey
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON201 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON404 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseDeleteOrgsOrgVmsVmSshKeysKeyIdResponse parses an HTTP response from a DeleteOrgsOrgVmsVmSshKeysKeyIdWithResponse call
+func ParseDeleteOrgsOrgVmsVmSshKeysKeyIdResponse(rsp *http.Response) (*DeleteOrgsOrgVmsVmSshKeysKeyIdResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &DeleteOrgsOrgVmsVmSshKeysKeyIdResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case rsp.StatusCode == 204:
+		break // No content-type
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON404 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParsePostOrgsOrgVmsVmStartResponse parses an HTTP response from a PostOrgsOrgVmsVmStartWithResponse call
+func ParsePostOrgsOrgVmsVmStartResponse(rsp *http.Response) (*PostOrgsOrgVmsVmStartResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &PostOrgsOrgVmsVmStartResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 202:
+		var dest Vm
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON202 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON404 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParsePostOrgsOrgVmsVmStopResponse parses an HTTP response from a PostOrgsOrgVmsVmStopWithResponse call
+func ParsePostOrgsOrgVmsVmStopResponse(rsp *http.Response) (*PostOrgsOrgVmsVmStopResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &PostOrgsOrgVmsVmStopResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 202:
+		var dest Vm
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON202 = &dest
 
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
 		var dest Problem

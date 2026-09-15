@@ -86,7 +86,7 @@ var appListCmd = &cobra.Command{
 		if err != nil {
 			return err
 		}
-		res, err := c.GetOrgsOrgAppsWithResponse(cmd.Context(), org)
+		res, err := c.GetOrgsOrgAppsWithResponse(cmd.Context(), org, nil)
 		if err != nil {
 			return reachErr(err)
 		}
@@ -512,7 +512,7 @@ lists every hostname on the app called "demo".`,
 		if err != nil {
 			return err
 		}
-		res, err := c.GetOrgsOrgAppsAppDomainsWithResponse(cmd.Context(), org, args[0])
+		res, err := c.GetOrgsOrgAppsAppDomainsWithResponse(cmd.Context(), org, args[0], nil)
 		if err != nil {
 			return reachErr(err)
 		}

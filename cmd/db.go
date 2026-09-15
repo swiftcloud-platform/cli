@@ -332,7 +332,7 @@ which version is the default when --version is left out.`,
 		if err != nil {
 			return err
 		}
-		res, err := c.GetDatabaseEnginesWithResponse(cmd.Context())
+		res, err := c.GetDatabaseEnginesWithResponse(cmd.Context(), nil)
 		if err != nil {
 			return reachErr(err)
 		}
@@ -363,7 +363,7 @@ var dbListCmd = &cobra.Command{
 		if err != nil {
 			return err
 		}
-		res, err := c.GetOrgsOrgDatabasesWithResponse(cmd.Context(), org)
+		res, err := c.GetOrgsOrgDatabasesWithResponse(cmd.Context(), org, nil)
 		if err != nil {
 			return reachErr(err)
 		}
@@ -753,7 +753,7 @@ base backup has not run yet.`,
 		if err != nil {
 			return err
 		}
-		res, err := c.GetOrgsOrgDatabasesDbBackupsWithResponse(cmd.Context(), org, args[0])
+		res, err := c.GetOrgsOrgDatabasesDbBackupsWithResponse(cmd.Context(), org, args[0], nil)
 		if err != nil {
 			return reachErr(err)
 		}

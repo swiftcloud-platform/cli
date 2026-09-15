@@ -20,12 +20,9 @@ what the name servers would refuse rather than spending a round trip on it.
 type dnsFake struct {
 	records []api.DnsRecord
 	posted  map[string]any
-	putBody map[string]any
+	patchBody map[string]any
 	deleted string
-	// method records which spelling the CLI actually used, and rejectPatch
-	// simulates a platform that predates the PATCH route.
-	method      string
-	rejectPatch bool
+	method  string
 }
 
 func dnsSetup(t *testing.T, records []api.DnsRecord) *dnsFake {
@@ -51,16 +48,8 @@ func dnsSetup(t *testing.T, records []api.DnsRecord) *dnsFake {
 	mux.HandleFunc("/api/v1/orgs/acme/domains/example.com/records/r1", func(w http.ResponseWriter, r *http.Request) {
 		switch r.Method {
 		case http.MethodPatch:
-			if f.rejectPatch {
-				w.WriteHeader(http.StatusMethodNotAllowed)
-				return
-			}
 			f.method = r.Method
-			_ = json.NewDecoder(r.Body).Decode(&f.putBody)
-			fmt.Fprint(w, `{"id":"r1","name":"www","type":"A","content":"203.0.113.20","ttl":300,"priority":0,"createdAt":"2026-09-01T00:00:00Z","updatedAt":"2026-09-01T00:00:00Z"}`)
-		case http.MethodPut:
-			f.method = r.Method
-			_ = json.NewDecoder(r.Body).Decode(&f.putBody)
+			_ = json.NewDecoder(r.Body).Decode(&f.patchBody)
 			fmt.Fprint(w, `{"id":"r1","name":"www","type":"A","content":"203.0.113.20","ttl":300,"priority":0,"createdAt":"2026-09-01T00:00:00Z","updatedAt":"2026-09-01T00:00:00Z"}`)
 		case http.MethodDelete:
 			f.deleted = "r1"
@@ -186,12 +175,12 @@ func TestDnsRecordsUpdate_SendsOnlyWhatChanged(t *testing.T) {
 	if _, err := run(t, "dns", "records", "update", "example.com", "r1", "--content", "203.0.113.20"); err != nil {
 		t.Fatal(err)
 	}
-	if f.putBody["content"] != "203.0.113.20" {
-		t.Errorf("content not sent: %v", f.putBody)
+	if f.patchBody["content"] != "203.0.113.20" {
+		t.Errorf("content not sent: %v", f.patchBody)
 	}
 	for _, absent := range []string{"name", "type", "ttl", "priority"} {
-		if _, present := f.putBody[absent]; present {
-			t.Errorf("%s was sent but not asked for: %v", absent, f.putBody)
+		if _, present := f.patchBody[absent]; present {
+			t.Errorf("%s was sent but not asked for: %v", absent, f.patchBody)
 		}
 	}
 }
@@ -239,16 +228,15 @@ func TestDnsRecordsUpdate_PrefersPatch(t *testing.T) {
 	}
 }
 
-func TestDnsRecordsUpdate_FallsBackToPutOn405(t *testing.T) {
+func TestDnsRecordsUpdate_PatchOnly(t *testing.T) {
 	f := dnsSetup(t, nil)
-	f.rejectPatch = true // a platform that predates the PATCH route
 	if _, err := run(t, "dns", "records", "update", "example.com", "r1", "--ttl", "600"); err != nil {
 		t.Fatal(err)
 	}
-	if f.method != http.MethodPut {
-		t.Errorf("used %s, want a PUT fallback when PATCH is not allowed", f.method)
+	if f.method != http.MethodPatch {
+		t.Errorf("used %s, want PATCH", f.method)
 	}
-	if f.putBody["ttl"] != float64(600) {
-		t.Errorf("the body must survive the fallback: %v", f.putBody)
+	if f.patchBody["ttl"] != float64(600) {
+		t.Errorf("unexpected body: %v", f.patchBody)
 	}
 }
