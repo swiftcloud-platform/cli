@@ -67,7 +67,7 @@ func fakeVMPlatform(t *testing.T) *httptest.Server {
 		_, _ = w.Write([]byte(`{"items":[` + vmJSON + `]}`))
 	})
 
-	// VM item + power + console + ssh-keys + ip
+	// VM item + power + ssh-keys + ip
 	handleVM := func(w http.ResponseWriter, r *http.Request) {
 		if !guard(w, r) {
 			return
@@ -79,9 +79,6 @@ func fakeVMPlatform(t *testing.T) *httptest.Server {
 				return
 			}
 			w.WriteHeader(204)
-			return
-		case r.URL.Path == "/api/v1/orgs/acme/vms/web/console":
-			_, _ = w.Write([]byte(`{"wsUrl":"wss://proxy.example.com/spice","ticket":"tk_abc123","expiresAt":"2026-09-01T00:05:00Z"}`))
 			return
 		case r.URL.Path == "/api/v1/orgs/acme/vms/web/ssh-keys":
 			if r.Method == http.MethodPost {
@@ -339,11 +336,4 @@ func TestVMIPDetach_Table(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-}
-
-func TestVMConsole_NeedsTicket(t *testing.T) {
-	vmSetup(t, "owner-token")
-	// Console tries to open a browser — can't fully test interactively.
-	// Just verify the command exists and the API call doesn't fail.
-	// The test will fail at browser-open, which is expected.
 }

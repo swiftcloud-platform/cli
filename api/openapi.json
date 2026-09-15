@@ -2074,31 +2074,6 @@
         ],
         "additionalProperties": false
       },
-      "VmConsole": {
-        "type": "object",
-        "properties": {
-          "wsUrl": {
-            "type": "string",
-            "format": "uri",
-            "description": "WebSocket URL for the SPICE proxy"
-          },
-          "ticket": {
-            "type": "string",
-            "description": "Short-lived authentication ticket"
-          },
-          "expiresAt": {
-            "type": "string",
-            "format": "date-time",
-            "description": "When the ticket expires"
-          }
-        },
-        "required": [
-          "wsUrl",
-          "ticket",
-          "expiresAt"
-        ],
-        "additionalProperties": false
-      },
       "VmSshKey": {
         "type": "object",
         "properties": {
@@ -7157,89 +7132,6 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/Vm"
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "Validation failed",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Problem"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "Not signed in",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Problem"
-                }
-              }
-            }
-          },
-          "403": {
-            "description": "Role does not allow this, or API token bound to another organisation",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Problem"
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "Not found (or not yours)",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Problem"
-                }
-              }
-            }
-          }
-        },
-        "security": [
-          {
-            "bearer": []
-          }
-        ]
-      }
-    },
-    "/orgs/{org}/vms/{vm}/console": {
-      "get": {
-        "summary": "Get a short-lived SPICE console ticket",
-        "x-permission": "VIEW_RESOURCE",
-        "parameters": [
-          {
-            "name": "org",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string"
-            },
-            "description": "Organisation slug or id"
-          },
-          {
-            "name": "vm",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string"
-            },
-            "description": "VM name or id"
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "OK",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/VmConsole"
                 }
               }
             }

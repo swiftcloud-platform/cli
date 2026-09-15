@@ -1089,18 +1089,6 @@ type Vm struct {
 	UpdatedAt time.Time `json:"updatedAt"`
 }
 
-// VmConsole defines model for VmConsole.
-type VmConsole struct {
-	// ExpiresAt When the ticket expires
-	ExpiresAt time.Time `json:"expiresAt"`
-
-	// Ticket Short-lived authentication ticket
-	Ticket string `json:"ticket"`
-
-	// WsUrl WebSocket URL for the SPICE proxy
-	WsUrl string `json:"wsUrl"`
-}
-
 // VmCreate defines model for VmCreate.
 type VmCreate struct {
 	Description *string `json:"description,omitempty"`
@@ -1878,11 +1866,6 @@ type ClientInterface interface {
 	//
 	// Corresponds with GET /orgs/{org}/vms/{vm} (the `GetOrgsOrgVmsVm` operationId).
 	GetOrgsOrgVmsVm(ctx context.Context, org string, vm string, reqEditors ...RequestEditorFn) (*http.Response, error)
-
-	// GetOrgsOrgVmsVmConsole Get a short-lived SPICE console ticket
-	//
-	// Corresponds with GET /orgs/{org}/vms/{vm}/console (the `GetOrgsOrgVmsVmConsole` operationId).
-	GetOrgsOrgVmsVmConsole(ctx context.Context, org string, vm string, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// GetOrgsOrgVmsVmIp Public and private IP addresses
 	//
@@ -3041,21 +3024,6 @@ func (c *Client) DeleteOrgsOrgVmsVm(ctx context.Context, org string, vm string, 
 // Corresponds with GET /orgs/{org}/vms/{vm} (the `GetOrgsOrgVmsVm` operationId).
 func (c *Client) GetOrgsOrgVmsVm(ctx context.Context, org string, vm string, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewGetOrgsOrgVmsVmRequest(c.Server, org, vm)
-	if err != nil {
-		return nil, err
-	}
-	req = req.WithContext(ctx)
-	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
-		return nil, err
-	}
-	return c.Client.Do(req)
-}
-
-// GetOrgsOrgVmsVmConsole Get a short-lived SPICE console ticket
-//
-// Corresponds with GET /orgs/{org}/vms/{vm}/console (the `GetOrgsOrgVmsVmConsole` operationId).
-func (c *Client) GetOrgsOrgVmsVmConsole(ctx context.Context, org string, vm string, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewGetOrgsOrgVmsVmConsoleRequest(c.Server, org, vm)
 	if err != nil {
 		return nil, err
 	}
@@ -6067,47 +6035,6 @@ func NewGetOrgsOrgVmsVmRequest(server string, org string, vm string) (*http.Requ
 	return req, nil
 }
 
-// NewGetOrgsOrgVmsVmConsoleRequest constructs an http.Request for the GetOrgsOrgVmsVmConsole method
-func NewGetOrgsOrgVmsVmConsoleRequest(server string, org string, vm string) (*http.Request, error) {
-	var err error
-
-	var pathParam0 string
-
-	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "org", org, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
-	if err != nil {
-		return nil, err
-	}
-
-	var pathParam1 string
-
-	pathParam1, err = runtime.StyleParamWithOptions("simple", false, "vm", vm, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
-	if err != nil {
-		return nil, err
-	}
-
-	serverURL, err := url.Parse(server)
-	if err != nil {
-		return nil, err
-	}
-
-	operationPath := fmt.Sprintf("/orgs/%s/vms/%s/console", pathParam0, pathParam1)
-	if operationPath[0] == '/' {
-		operationPath = "." + operationPath
-	}
-
-	queryURL, err := serverURL.Parse(operationPath)
-	if err != nil {
-		return nil, err
-	}
-
-	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
-	if err != nil {
-		return nil, err
-	}
-
-	return req, nil
-}
-
 // NewGetOrgsOrgVmsVmIpRequest constructs an http.Request for the GetOrgsOrgVmsVmIp method
 func NewGetOrgsOrgVmsVmIpRequest(server string, org string, vm string) (*http.Request, error) {
 	var err error
@@ -7128,13 +7055,6 @@ type ClientWithResponsesInterface interface {
 	//
 	// Corresponds with GET /orgs/{org}/vms/{vm} (the `GetOrgsOrgVmsVm` operationId).
 	GetOrgsOrgVmsVmWithResponse(ctx context.Context, org string, vm string, reqEditors ...RequestEditorFn) (*GetOrgsOrgVmsVmResponse, error)
-
-	// GetOrgsOrgVmsVmConsoleWithResponse Get a short-lived SPICE console ticket
-	//
-	// Returns a wrapper object for the known response body format(s).
-	//
-	// Corresponds with GET /orgs/{org}/vms/{vm}/console (the `GetOrgsOrgVmsVmConsole` operationId).
-	GetOrgsOrgVmsVmConsoleWithResponse(ctx context.Context, org string, vm string, reqEditors ...RequestEditorFn) (*GetOrgsOrgVmsVmConsoleResponse, error)
 
 	// GetOrgsOrgVmsVmIpWithResponse Public and private IP addresses
 	//
@@ -10796,75 +10716,6 @@ func (r GetOrgsOrgVmsVmResponse) ContentType() string {
 	return ""
 }
 
-type GetOrgsOrgVmsVmConsoleResponse struct {
-	Body         []byte
-	HTTPResponse *http.Response
-	// JSON200 the response for an HTTP 200 `application/json` response
-	JSON200 *VmConsole
-	// ApplicationproblemJSON400 the response for an HTTP 400 `application/problem+json` response
-	ApplicationproblemJSON400 *Problem
-	// ApplicationproblemJSON401 the response for an HTTP 401 `application/problem+json` response
-	ApplicationproblemJSON401 *Problem
-	// ApplicationproblemJSON403 the response for an HTTP 403 `application/problem+json` response
-	ApplicationproblemJSON403 *Problem
-	// ApplicationproblemJSON404 the response for an HTTP 404 `application/problem+json` response
-	ApplicationproblemJSON404 *Problem
-}
-
-// GetJSON200 returns the response for an HTTP 200 `application/json` response
-func (r GetOrgsOrgVmsVmConsoleResponse) GetJSON200() *VmConsole {
-	return r.JSON200
-}
-
-// GetApplicationproblemJSON400 returns the response for an HTTP 400 `application/problem+json` response
-func (r GetOrgsOrgVmsVmConsoleResponse) GetApplicationproblemJSON400() *Problem {
-	return r.ApplicationproblemJSON400
-}
-
-// GetApplicationproblemJSON401 returns the response for an HTTP 401 `application/problem+json` response
-func (r GetOrgsOrgVmsVmConsoleResponse) GetApplicationproblemJSON401() *Problem {
-	return r.ApplicationproblemJSON401
-}
-
-// GetApplicationproblemJSON403 returns the response for an HTTP 403 `application/problem+json` response
-func (r GetOrgsOrgVmsVmConsoleResponse) GetApplicationproblemJSON403() *Problem {
-	return r.ApplicationproblemJSON403
-}
-
-// GetApplicationproblemJSON404 returns the response for an HTTP 404 `application/problem+json` response
-func (r GetOrgsOrgVmsVmConsoleResponse) GetApplicationproblemJSON404() *Problem {
-	return r.ApplicationproblemJSON404
-}
-
-// GetBody returns the raw response body bytes
-func (r GetOrgsOrgVmsVmConsoleResponse) GetBody() []byte {
-	return r.Body
-}
-
-// Status returns HTTPResponse.Status
-func (r GetOrgsOrgVmsVmConsoleResponse) Status() string {
-	if r.HTTPResponse != nil {
-		return r.HTTPResponse.Status
-	}
-	return http.StatusText(0)
-}
-
-// StatusCode returns HTTPResponse.StatusCode
-func (r GetOrgsOrgVmsVmConsoleResponse) StatusCode() int {
-	if r.HTTPResponse != nil {
-		return r.HTTPResponse.StatusCode
-	}
-	return 0
-}
-
-// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
-func (r GetOrgsOrgVmsVmConsoleResponse) ContentType() string {
-	if r.HTTPResponse != nil {
-		return r.HTTPResponse.Header.Get("Content-Type")
-	}
-	return ""
-}
-
 type GetOrgsOrgVmsVmIpResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
@@ -12436,19 +12287,6 @@ func (c *ClientWithResponses) GetOrgsOrgVmsVmWithResponse(ctx context.Context, o
 		return nil, err
 	}
 	return ParseGetOrgsOrgVmsVmResponse(rsp)
-}
-
-// GetOrgsOrgVmsVmConsoleWithResponse Get a short-lived SPICE console ticket
-//
-// Returns a wrapper object for the known response body format(s).
-//
-// Corresponds with GET /orgs/{org}/vms/{vm}/console (the `GetOrgsOrgVmsVmConsole` operationId).
-func (c *ClientWithResponses) GetOrgsOrgVmsVmConsoleWithResponse(ctx context.Context, org string, vm string, reqEditors ...RequestEditorFn) (*GetOrgsOrgVmsVmConsoleResponse, error) {
-	rsp, err := c.GetOrgsOrgVmsVmConsole(ctx, org, vm, reqEditors...)
-	if err != nil {
-		return nil, err
-	}
-	return ParseGetOrgsOrgVmsVmConsoleResponse(rsp)
 }
 
 // GetOrgsOrgVmsVmIpWithResponse Public and private IP addresses
@@ -15400,60 +15238,6 @@ func ParseGetOrgsOrgVmsVmResponse(rsp *http.Response) (*GetOrgsOrgVmsVmResponse,
 	switch {
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
 		var dest Vm
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.JSON200 = &dest
-
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
-		var dest Problem
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.ApplicationproblemJSON400 = &dest
-
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
-		var dest Problem
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.ApplicationproblemJSON401 = &dest
-
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
-		var dest Problem
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.ApplicationproblemJSON403 = &dest
-
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
-		var dest Problem
-		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
-			return nil, err
-		}
-		response.ApplicationproblemJSON404 = &dest
-
-	}
-
-	return response, nil
-}
-
-// ParseGetOrgsOrgVmsVmConsoleResponse parses an HTTP response from a GetOrgsOrgVmsVmConsoleWithResponse call
-func ParseGetOrgsOrgVmsVmConsoleResponse(rsp *http.Response) (*GetOrgsOrgVmsVmConsoleResponse, error) {
-	bodyBytes, err := io.ReadAll(rsp.Body)
-	defer func() { _ = rsp.Body.Close() }()
-	if err != nil {
-		return nil, err
-	}
-
-	response := &GetOrgsOrgVmsVmConsoleResponse{
-		Body:         bodyBytes,
-		HTTPResponse: rsp,
-	}
-
-	switch {
-	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
-		var dest VmConsole
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
 			return nil, err
 		}

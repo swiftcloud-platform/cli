@@ -42,7 +42,7 @@ page appears first.`,
 		// API: https://cloud.co.zm/api/v1 → Dashboard: https://cloud.co.zm
 		baseURL := strings.TrimSuffix(cfg.APIURL, "/api/v1")
 		baseURL = strings.TrimSuffix(baseURL, "/api/v1") // idempotent
-		dashboardURL := baseURL + "/(authenticated)/dash/vms/" + vm.Id
+		dashboardURL := baseURL + "/dash/vms/" + vm.Id + "/console"
 
 		if !flagQuiet {
 			fmt.Fprintf(cmd.ErrOrStderr(), "Opening console for %s…\n", args[0])

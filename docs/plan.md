@@ -176,7 +176,7 @@ cloud vm    delete  <name> [--yes]
 cloud vm    start   <name> [--wait]
 cloud vm    stop    <name> [--wait]
 cloud vm    restart <name> [--wait]
-cloud vm    console <name>                    opens browser with embedded SPICE client
+cloud vm    console <name>                    opens dashboard console in browser
 cloud vm    ssh-key list   <name>
 cloud vm    ssh-key add    <name> <path-or-key> [--label <l>]
 cloud vm    ssh-key remove <name> <key-id> [--yes]
@@ -233,6 +233,6 @@ Estimates are working days for one engineer with the platform already running lo
 
 ## Later
 
-- v1.1: virtual machines — done. CLI: vm list/create/get/delete, vm start/stop/restart, vm console (SPICE), vm ssh-key list/add/remove, vm ip get/attach/detach, 20 tests. Platform: 11 API routes under `/api/v1/orgs/[org]/vms/`, Zod schemas + serializers, WebSocket console proxy (console-ws.ts, console-proxy.ts), OpenAPI synced. Pushed to `343a54b` (platform) and `ebb5fe6` (cli).
+- v1.1: virtual machines — done. CLI: vm list/create/get/delete, vm start/stop/restart, vm console (dashboard xterm.js), vm ssh-key list/add/remove, vm ip get/attach/detach, 20 tests. Platform: 11 API routes under `/api/v1/orgs/[org]/vms/`, Zod schemas + serializers, SSE console with VmConsoleViewer, OpenAPI synced. Pushed to `343a54b` (platform) and `ebb5fe6` (cli). Removed SPICE console proxy (console-ws.ts, console-proxy.ts, VmConsole schema); console now uses the dashboard's xterm.js page at `/dash/vms/[id]/console`.
 - Deploy from source via buildpacks and a platform registry.
 - `cloud db sql <name>` wrapping the SQL editor endpoint.
