@@ -3990,7 +3990,7 @@
     },
     "/orgs/{org}/databases/{db}/stop": {
       "post": {
-        "summary": "Stop a database (billing continues for storage)",
+        "summary": "Stop a database (billing continues unchanged)",
         "x-permission": "UPDATE_RESOURCE",
         "parameters": [
           {

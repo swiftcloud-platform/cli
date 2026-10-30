@@ -609,7 +609,8 @@ stopped, so the data is exactly as it was.`,
 
 var dbStopCmd = powerCmd("stop", "Stop a database, keeping its data",
 	`Stop a database. The cluster is scaled to zero and its storage kept, so
-starting it again brings the same data back.`,
+starting it again brings the same data back. A stopped database is billed the
+same as a running one; delete it to stop paying.`,
 	`  cloud db stop orders
   cloud db stop orders --wait`,
 	func(ctx context.Context, c *api.ClientWithResponses, org, name string) (*api.Database, int, []byte, error) {

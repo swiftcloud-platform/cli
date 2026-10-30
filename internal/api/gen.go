@@ -1790,7 +1790,7 @@ type ClientInterface interface {
 	// Corresponds with POST /orgs/{org}/databases/{db}/start (the `PostOrgsOrgDatabasesDbStart` operationId).
 	PostOrgsOrgDatabasesDbStart(ctx context.Context, org string, db string, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	// PostOrgsOrgDatabasesDbStop Stop a database (billing continues for storage)
+	// PostOrgsOrgDatabasesDbStop Stop a database (billing continues unchanged)
 	//
 	// Corresponds with POST /orgs/{org}/databases/{db}/stop (the `PostOrgsOrgDatabasesDbStop` operationId).
 	PostOrgsOrgDatabasesDbStop(ctx context.Context, org string, db string, reqEditors ...RequestEditorFn) (*http.Response, error)
@@ -2827,7 +2827,7 @@ func (c *Client) PostOrgsOrgDatabasesDbStart(ctx context.Context, org string, db
 	return c.Client.Do(req)
 }
 
-// PostOrgsOrgDatabasesDbStop Stop a database (billing continues for storage)
+// PostOrgsOrgDatabasesDbStop Stop a database (billing continues unchanged)
 //
 // Corresponds with POST /orgs/{org}/databases/{db}/stop (the `PostOrgsOrgDatabasesDbStop` operationId).
 func (c *Client) PostOrgsOrgDatabasesDbStop(ctx context.Context, org string, db string, reqEditors ...RequestEditorFn) (*http.Response, error) {
@@ -6965,7 +6965,7 @@ type ClientWithResponsesInterface interface {
 	// Corresponds with POST /orgs/{org}/databases/{db}/start (the `PostOrgsOrgDatabasesDbStart` operationId).
 	PostOrgsOrgDatabasesDbStartWithResponse(ctx context.Context, org string, db string, reqEditors ...RequestEditorFn) (*PostOrgsOrgDatabasesDbStartResponse, error)
 
-	// PostOrgsOrgDatabasesDbStopWithResponse Stop a database (billing continues for storage)
+	// PostOrgsOrgDatabasesDbStopWithResponse Stop a database (billing continues unchanged)
 	//
 	// Returns a wrapper object for the known response body format(s).
 	//
@@ -12120,7 +12120,7 @@ func (c *ClientWithResponses) PostOrgsOrgDatabasesDbStartWithResponse(ctx contex
 	return ParsePostOrgsOrgDatabasesDbStartResponse(rsp)
 }
 
-// PostOrgsOrgDatabasesDbStopWithResponse Stop a database (billing continues for storage)
+// PostOrgsOrgDatabasesDbStopWithResponse Stop a database (billing continues unchanged)
 //
 // Returns a wrapper object for the known response body format(s).
 //
