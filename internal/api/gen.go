@@ -34,15 +34,12 @@ func (e BucketCreateStorageClass) Valid() bool {
 
 // Defines values for DatabaseCreateEngine.
 const (
-	DatabaseCreateEngineMariadb    DatabaseCreateEngine = "mariadb"
 	DatabaseCreateEnginePostgresql DatabaseCreateEngine = "postgresql"
 )
 
 // Valid indicates whether the value is a known member of the DatabaseCreateEngine enum.
 func (e DatabaseCreateEngine) Valid() bool {
 	switch e {
-	case DatabaseCreateEngineMariadb:
-		return true
 	case DatabaseCreateEnginePostgresql:
 		return true
 	default:
@@ -169,15 +166,12 @@ func (e DnsRecordUpdateType) Valid() bool {
 
 // Defines values for EngineVersionEngine.
 const (
-	EngineVersionEngineMariadb    EngineVersionEngine = "mariadb"
 	EngineVersionEnginePostgresql EngineVersionEngine = "postgresql"
 )
 
 // Valid indicates whether the value is a known member of the EngineVersionEngine enum.
 func (e EngineVersionEngine) Valid() bool {
 	switch e {
-	case EngineVersionEngineMariadb:
-		return true
 	case EngineVersionEnginePostgresql:
 		return true
 	default:
@@ -393,7 +387,7 @@ type App struct {
 	ServingRevision string `json:"servingRevision"`
 	Size            string `json:"size"`
 
-	// Status deploying | ready | stopped | suspended | failed | delete_failed | deleting. `ready` is the healthy state. Advanced by the platform worker; poll until terminal (ready, stopped, suspended, failed, delete_failed).
+	// Status deploying | ready | suspended | failed | delete_failed. `ready` is the healthy state. Advanced by the platform worker; poll until terminal (ready, suspended, failed, delete_failed).
 	Status    string    `json:"status"`
 	UpdatedAt time.Time `json:"updatedAt"`
 
@@ -486,6 +480,12 @@ type Backup struct {
 	Status string `json:"status"`
 }
 
+// BackupDelete defines model for BackupDelete.
+type BackupDelete struct {
+	// Id Backup id, from the backup list
+	Id string `json:"id"`
+}
+
 // BackupList defines model for BackupList.
 type BackupList struct {
 	// HasMore Whether another page exists.
@@ -494,6 +494,12 @@ type BackupList struct {
 
 	// NextCursor Pass as ?cursor= to fetch the next page. Null when there are no more.
 	NextCursor *string `json:"nextCursor,omitempty"`
+}
+
+// BackupsDisabled defines model for BackupsDisabled.
+type BackupsDisabled struct {
+	BackupsKept bool `json:"backupsKept"`
+	Enabled     bool `json:"enabled"`
 }
 
 // BackupsEnable defines model for BackupsEnable.
@@ -682,7 +688,7 @@ type CustomDomain struct {
 	// Message Why TLS or routing is not active, when it is not — including the CNAME target to set.
 	Message string `json:"message"`
 
-	// Status pending | active | failed
+	// Status pending | pending_dns | active | failed. `pending_dns` means the domain does not point here yet; `message` names the CNAME target to set.
 	Status string `json:"status"`
 
 	// Tls TLS state as the platform reports it. "active" only when a certificate really exists.
@@ -1064,7 +1070,7 @@ type Vm struct {
 	ErrorMessage string `json:"errorMessage"`
 	Id           string `json:"id"`
 
-	// Image VM image slug, e.g. ubuntu-24.04
+	// Image VM image slug, e.g. ubuntu-24-04
 	Image string `json:"image"`
 
 	// Name Unique within the organisation. Lowercase letters, digits and hyphens.
@@ -1077,7 +1083,7 @@ type Vm struct {
 	// PublicIp Public IP address, once attached. Empty when not attached.
 	PublicIp string `json:"publicIp"`
 
-	// Region Region name, e.g. zm-lusaka-central-1
+	// Region Region name, e.g. zm-lsk-1
 	Region   string `json:"region"`
 	RegionId string `json:"regionId"`
 
@@ -1093,19 +1099,19 @@ type Vm struct {
 type VmCreate struct {
 	Description *string `json:"description,omitempty"`
 
-	// Image VM image slug, e.g. ubuntu-24.04
+	// Image VM image slug, e.g. ubuntu-24-04
 	Image string `json:"image"`
 
 	// Name Unique within the organisation. Lowercase letters, digits and hyphens.
 	Name string `json:"name"`
 
-	// Region Region id or name, e.g. zm-lusaka-central-1
+	// Region Region id or name, e.g. zm-lsk-1
 	Region string `json:"region"`
 
-	// Size Pricing tier name. Defaults to the smallest.
+	// Size Pricing tier name. Defaults to the smallest tier the image fits on.
 	Size *string `json:"size,omitempty"`
 
-	// SshPublicKey Optional SSH public key to install on first boot.
+	// SshPublicKey Optional SSH public key to install on first boot. Refused for Windows images: those are signed in to over Remote Desktop with a generated password, shown on the machine's dashboard page.
 	SshPublicKey *string `json:"sshPublicKey,omitempty"`
 }
 
@@ -1128,7 +1134,7 @@ type VmList struct {
 	NextCursor *string `json:"nextCursor,omitempty"`
 }
 
-// VmSshKey defines model for VmSshKey.
+// VmSshKey An SSH public key recorded on the machine. Keys given at creation are installed on its first boot; a key added later is recorded only and must be added to ~/.ssh/authorized_keys on the machine.
 type VmSshKey struct {
 	AddedAt time.Time `json:"addedAt"`
 
@@ -1137,11 +1143,14 @@ type VmSshKey struct {
 	Id          string `json:"id"`
 	Label       string `json:"label"`
 
+	// Notice Present when a key is added: what the platform did with it. Show it to the user.
+	Notice *string `json:"notice,omitempty"`
+
 	// PublicKey The public key content
 	PublicKey string `json:"publicKey"`
 }
 
-// VmSshKeyCreate defines model for VmSshKeyCreate.
+// VmSshKeyCreate Records an SSH public key on the machine. Keys are installed only on a machine's first boot, so on a machine that is already set up the key is NOT installed — add it to ~/.ssh/authorized_keys on the machine yourself.
 type VmSshKeyCreate struct {
 	// Label Optional human-readable label
 	Label *string `json:"label,omitempty"`
@@ -1357,6 +1366,9 @@ type PostOrgsOrgBucketsBucketRestoreJSONRequestBody = RestoreRequest
 
 // PostOrgsOrgDatabasesJSONRequestBody defines body for PostOrgsOrgDatabases for application/json ContentType.
 type PostOrgsOrgDatabasesJSONRequestBody = DatabaseCreate
+
+// DeleteOrgsOrgDatabasesDbBackupsJSONRequestBody defines body for DeleteOrgsOrgDatabasesDbBackups for application/json ContentType.
+type DeleteOrgsOrgDatabasesDbBackupsJSONRequestBody = BackupDelete
 
 // PostOrgsOrgDatabasesDbBackupsEnableJSONRequestBody defines body for PostOrgsOrgDatabasesDbBackupsEnable for application/json ContentType.
 type PostOrgsOrgDatabasesDbBackupsEnableJSONRequestBody = BackupsEnable
@@ -1737,6 +1749,20 @@ type ClientInterface interface {
 	// Corresponds with GET /orgs/{org}/databases/{db} (the `GetOrgsOrgDatabasesDb` operationId).
 	GetOrgsOrgDatabasesDb(ctx context.Context, org string, db string, reqEditors ...RequestEditorFn) (*http.Response, error)
 
+	// DeleteOrgsOrgDatabasesDbBackupsWithBody Delete one backup, by id
+	//
+	// Takes any type of body and a specified content type.
+	//
+	// Corresponds with DELETE /orgs/{org}/databases/{db}/backups (the `DeleteOrgsOrgDatabasesDbBackups` operationId).
+	DeleteOrgsOrgDatabasesDbBackupsWithBody(ctx context.Context, org string, db string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// DeleteOrgsOrgDatabasesDbBackups Delete one backup, by id
+	//
+	// Takes a body of the `application/json` content type.
+	//
+	// Corresponds with DELETE /orgs/{org}/databases/{db}/backups (the `DeleteOrgsOrgDatabasesDbBackups` operationId).
+	DeleteOrgsOrgDatabasesDbBackups(ctx context.Context, org string, db string, body DeleteOrgsOrgDatabasesDbBackupsJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
 	// GetOrgsOrgDatabasesDbBackups List backups, newest first
 	//
 	// Corresponds with GET /orgs/{org}/databases/{db}/backups (the `GetOrgsOrgDatabasesDbBackups` operationId).
@@ -1746,6 +1772,11 @@ type ClientInterface interface {
 	//
 	// Corresponds with POST /orgs/{org}/databases/{db}/backups (the `PostOrgsOrgDatabasesDbBackups` operationId).
 	PostOrgsOrgDatabasesDbBackups(ctx context.Context, org string, db string, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// PostOrgsOrgDatabasesDbBackupsDisable Stop automatic backups, keeping the ones already taken (PostgreSQL only)
+	//
+	// Corresponds with POST /orgs/{org}/databases/{db}/backups/disable (the `PostOrgsOrgDatabasesDbBackupsDisable` operationId).
+	PostOrgsOrgDatabasesDbBackupsDisable(ctx context.Context, org string, db string, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// PostOrgsOrgDatabasesDbBackupsEnableWithBody Enable automatic daily backups (PostgreSQL only)
 	//
@@ -1892,21 +1923,21 @@ type ClientInterface interface {
 	// Corresponds with GET /orgs/{org}/vms/{vm}/ssh-keys (the `GetOrgsOrgVmsVmSshKeys` operationId).
 	GetOrgsOrgVmsVmSshKeys(ctx context.Context, org string, vm string, params *GetOrgsOrgVmsVmSshKeysParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	// PostOrgsOrgVmsVmSshKeysWithBody Add an SSH public key
+	// PostOrgsOrgVmsVmSshKeysWithBody Record an SSH public key (installed only on a machine's first boot)
 	//
 	// Takes any type of body and a specified content type.
 	//
 	// Corresponds with POST /orgs/{org}/vms/{vm}/ssh-keys (the `PostOrgsOrgVmsVmSshKeys` operationId).
 	PostOrgsOrgVmsVmSshKeysWithBody(ctx context.Context, org string, vm string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	// PostOrgsOrgVmsVmSshKeys Add an SSH public key
+	// PostOrgsOrgVmsVmSshKeys Record an SSH public key (installed only on a machine's first boot)
 	//
 	// Takes a body of the `application/json` content type.
 	//
 	// Corresponds with POST /orgs/{org}/vms/{vm}/ssh-keys (the `PostOrgsOrgVmsVmSshKeys` operationId).
 	PostOrgsOrgVmsVmSshKeys(ctx context.Context, org string, vm string, body PostOrgsOrgVmsVmSshKeysJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	// DeleteOrgsOrgVmsVmSshKeysKeyId Remove an SSH public key
+	// DeleteOrgsOrgVmsVmSshKeysKeyId Remove an SSH public key from the machine's record
 	//
 	// Corresponds with DELETE /orgs/{org}/vms/{vm}/ssh-keys/{keyId} (the `DeleteOrgsOrgVmsVmSshKeysKeyId` operationId).
 	DeleteOrgsOrgVmsVmSshKeysKeyId(ctx context.Context, org string, vm string, keyId string, reqEditors ...RequestEditorFn) (*http.Response, error)
@@ -2684,6 +2715,40 @@ func (c *Client) GetOrgsOrgDatabasesDb(ctx context.Context, org string, db strin
 	return c.Client.Do(req)
 }
 
+// DeleteOrgsOrgDatabasesDbBackupsWithBody Delete one backup, by id
+//
+// Takes any type of body and a specified content type.
+//
+// Corresponds with DELETE /orgs/{org}/databases/{db}/backups (the `DeleteOrgsOrgDatabasesDbBackups` operationId).
+func (c *Client) DeleteOrgsOrgDatabasesDbBackupsWithBody(ctx context.Context, org string, db string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewDeleteOrgsOrgDatabasesDbBackupsRequestWithBody(c.Server, org, db, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// DeleteOrgsOrgDatabasesDbBackups Delete one backup, by id
+//
+// Takes a body of the `application/json` content type.
+//
+// Corresponds with DELETE /orgs/{org}/databases/{db}/backups (the `DeleteOrgsOrgDatabasesDbBackups` operationId).
+func (c *Client) DeleteOrgsOrgDatabasesDbBackups(ctx context.Context, org string, db string, body DeleteOrgsOrgDatabasesDbBackupsJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewDeleteOrgsOrgDatabasesDbBackupsRequest(c.Server, org, db, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
 // GetOrgsOrgDatabasesDbBackups List backups, newest first
 //
 // Corresponds with GET /orgs/{org}/databases/{db}/backups (the `GetOrgsOrgDatabasesDbBackups` operationId).
@@ -2704,6 +2769,21 @@ func (c *Client) GetOrgsOrgDatabasesDbBackups(ctx context.Context, org string, d
 // Corresponds with POST /orgs/{org}/databases/{db}/backups (the `PostOrgsOrgDatabasesDbBackups` operationId).
 func (c *Client) PostOrgsOrgDatabasesDbBackups(ctx context.Context, org string, db string, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewPostOrgsOrgDatabasesDbBackupsRequest(c.Server, org, db)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// PostOrgsOrgDatabasesDbBackupsDisable Stop automatic backups, keeping the ones already taken (PostgreSQL only)
+//
+// Corresponds with POST /orgs/{org}/databases/{db}/backups/disable (the `PostOrgsOrgDatabasesDbBackupsDisable` operationId).
+func (c *Client) PostOrgsOrgDatabasesDbBackupsDisable(ctx context.Context, org string, db string, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewPostOrgsOrgDatabasesDbBackupsDisableRequest(c.Server, org, db)
 	if err != nil {
 		return nil, err
 	}
@@ -3109,7 +3189,7 @@ func (c *Client) GetOrgsOrgVmsVmSshKeys(ctx context.Context, org string, vm stri
 	return c.Client.Do(req)
 }
 
-// PostOrgsOrgVmsVmSshKeysWithBody Add an SSH public key
+// PostOrgsOrgVmsVmSshKeysWithBody Record an SSH public key (installed only on a machine's first boot)
 //
 // Takes any type of body and a specified content type.
 //
@@ -3126,7 +3206,7 @@ func (c *Client) PostOrgsOrgVmsVmSshKeysWithBody(ctx context.Context, org string
 	return c.Client.Do(req)
 }
 
-// PostOrgsOrgVmsVmSshKeys Add an SSH public key
+// PostOrgsOrgVmsVmSshKeys Record an SSH public key (installed only on a machine's first boot)
 //
 // Takes a body of the `application/json` content type.
 //
@@ -3143,7 +3223,7 @@ func (c *Client) PostOrgsOrgVmsVmSshKeys(ctx context.Context, org string, vm str
 	return c.Client.Do(req)
 }
 
-// DeleteOrgsOrgVmsVmSshKeysKeyId Remove an SSH public key
+// DeleteOrgsOrgVmsVmSshKeysKeyId Remove an SSH public key from the machine's record
 //
 // Corresponds with DELETE /orgs/{org}/vms/{vm}/ssh-keys/{keyId} (the `DeleteOrgsOrgVmsVmSshKeysKeyId` operationId).
 func (c *Client) DeleteOrgsOrgVmsVmSshKeysKeyId(ctx context.Context, org string, vm string, keyId string, reqEditors ...RequestEditorFn) (*http.Response, error) {
@@ -5124,6 +5204,60 @@ func NewGetOrgsOrgDatabasesDbRequest(server string, org string, db string) (*htt
 	return req, nil
 }
 
+// NewDeleteOrgsOrgDatabasesDbBackupsRequest calls the generic DeleteOrgsOrgDatabasesDbBackups builder with application/json body
+func NewDeleteOrgsOrgDatabasesDbBackupsRequest(server string, org string, db string, body DeleteOrgsOrgDatabasesDbBackupsJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewDeleteOrgsOrgDatabasesDbBackupsRequestWithBody(server, org, db, "application/json", bodyReader)
+}
+
+// NewDeleteOrgsOrgDatabasesDbBackupsRequestWithBody constructs an http.Request for the DeleteOrgsOrgDatabasesDbBackups method, with any body, and a specified content type
+func NewDeleteOrgsOrgDatabasesDbBackupsRequestWithBody(server string, org string, db string, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "org", org, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam1 string
+
+	pathParam1, err = runtime.StyleParamWithOptions("simple", false, "db", db, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/orgs/%s/databases/%s/backups", pathParam0, pathParam1)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodDelete, queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
+
+	return req, nil
+}
+
 // NewGetOrgsOrgDatabasesDbBackupsRequest constructs an http.Request for the GetOrgsOrgDatabasesDbBackups method
 func NewGetOrgsOrgDatabasesDbBackupsRequest(server string, org string, db string, params *GetOrgsOrgDatabasesDbBackupsParams) (*http.Request, error) {
 	var err error
@@ -5228,6 +5362,47 @@ func NewPostOrgsOrgDatabasesDbBackupsRequest(server string, org string, db strin
 	}
 
 	operationPath := fmt.Sprintf("/orgs/%s/databases/%s/backups", pathParam0, pathParam1)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodPost, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewPostOrgsOrgDatabasesDbBackupsDisableRequest constructs an http.Request for the PostOrgsOrgDatabasesDbBackupsDisable method
+func NewPostOrgsOrgDatabasesDbBackupsDisableRequest(server string, org string, db string) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "org", org, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam1 string
+
+	pathParam1, err = runtime.StyleParamWithOptions("simple", false, "db", db, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/orgs/%s/databases/%s/backups/disable", pathParam0, pathParam1)
 	if operationPath[0] == '/' {
 		operationPath = "." + operationPath
 	}
@@ -6902,6 +7077,20 @@ type ClientWithResponsesInterface interface {
 	// Corresponds with GET /orgs/{org}/databases/{db} (the `GetOrgsOrgDatabasesDb` operationId).
 	GetOrgsOrgDatabasesDbWithResponse(ctx context.Context, org string, db string, reqEditors ...RequestEditorFn) (*GetOrgsOrgDatabasesDbResponse, error)
 
+	// DeleteOrgsOrgDatabasesDbBackupsWithBodyWithResponse Delete one backup, by id
+	//
+	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with DELETE /orgs/{org}/databases/{db}/backups (the `DeleteOrgsOrgDatabasesDbBackups` operationId).
+	DeleteOrgsOrgDatabasesDbBackupsWithBodyWithResponse(ctx context.Context, org string, db string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*DeleteOrgsOrgDatabasesDbBackupsResponse, error)
+
+	// DeleteOrgsOrgDatabasesDbBackupsWithResponse Delete one backup, by id
+	//
+	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with DELETE /orgs/{org}/databases/{db}/backups (the `DeleteOrgsOrgDatabasesDbBackups` operationId).
+	DeleteOrgsOrgDatabasesDbBackupsWithResponse(ctx context.Context, org string, db string, body DeleteOrgsOrgDatabasesDbBackupsJSONRequestBody, reqEditors ...RequestEditorFn) (*DeleteOrgsOrgDatabasesDbBackupsResponse, error)
+
 	// GetOrgsOrgDatabasesDbBackupsWithResponse List backups, newest first
 	//
 	// Returns a wrapper object for the known response body format(s).
@@ -6915,6 +7104,13 @@ type ClientWithResponsesInterface interface {
 	//
 	// Corresponds with POST /orgs/{org}/databases/{db}/backups (the `PostOrgsOrgDatabasesDbBackups` operationId).
 	PostOrgsOrgDatabasesDbBackupsWithResponse(ctx context.Context, org string, db string, reqEditors ...RequestEditorFn) (*PostOrgsOrgDatabasesDbBackupsResponse, error)
+
+	// PostOrgsOrgDatabasesDbBackupsDisableWithResponse Stop automatic backups, keeping the ones already taken (PostgreSQL only)
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with POST /orgs/{org}/databases/{db}/backups/disable (the `PostOrgsOrgDatabasesDbBackupsDisable` operationId).
+	PostOrgsOrgDatabasesDbBackupsDisableWithResponse(ctx context.Context, org string, db string, reqEditors ...RequestEditorFn) (*PostOrgsOrgDatabasesDbBackupsDisableResponse, error)
 
 	// PostOrgsOrgDatabasesDbBackupsEnableWithBodyWithResponse Enable automatic daily backups (PostgreSQL only)
 	//
@@ -7091,21 +7287,21 @@ type ClientWithResponsesInterface interface {
 	// Corresponds with GET /orgs/{org}/vms/{vm}/ssh-keys (the `GetOrgsOrgVmsVmSshKeys` operationId).
 	GetOrgsOrgVmsVmSshKeysWithResponse(ctx context.Context, org string, vm string, params *GetOrgsOrgVmsVmSshKeysParams, reqEditors ...RequestEditorFn) (*GetOrgsOrgVmsVmSshKeysResponse, error)
 
-	// PostOrgsOrgVmsVmSshKeysWithBodyWithResponse Add an SSH public key
+	// PostOrgsOrgVmsVmSshKeysWithBodyWithResponse Record an SSH public key (installed only on a machine's first boot)
 	//
 	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
 	//
 	// Corresponds with POST /orgs/{org}/vms/{vm}/ssh-keys (the `PostOrgsOrgVmsVmSshKeys` operationId).
 	PostOrgsOrgVmsVmSshKeysWithBodyWithResponse(ctx context.Context, org string, vm string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*PostOrgsOrgVmsVmSshKeysResponse, error)
 
-	// PostOrgsOrgVmsVmSshKeysWithResponse Add an SSH public key
+	// PostOrgsOrgVmsVmSshKeysWithResponse Record an SSH public key (installed only on a machine's first boot)
 	//
 	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
 	//
 	// Corresponds with POST /orgs/{org}/vms/{vm}/ssh-keys (the `PostOrgsOrgVmsVmSshKeys` operationId).
 	PostOrgsOrgVmsVmSshKeysWithResponse(ctx context.Context, org string, vm string, body PostOrgsOrgVmsVmSshKeysJSONRequestBody, reqEditors ...RequestEditorFn) (*PostOrgsOrgVmsVmSshKeysResponse, error)
 
-	// DeleteOrgsOrgVmsVmSshKeysKeyIdWithResponse Remove an SSH public key
+	// DeleteOrgsOrgVmsVmSshKeysKeyIdWithResponse Remove an SSH public key from the machine's record
 	//
 	// Returns a wrapper object for the known response body format(s).
 	//
@@ -9508,6 +9704,68 @@ func (r GetOrgsOrgDatabasesDbResponse) ContentType() string {
 	return ""
 }
 
+type DeleteOrgsOrgDatabasesDbBackupsResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// ApplicationproblemJSON400 the response for an HTTP 400 `application/problem+json` response
+	ApplicationproblemJSON400 *Problem
+	// ApplicationproblemJSON401 the response for an HTTP 401 `application/problem+json` response
+	ApplicationproblemJSON401 *Problem
+	// ApplicationproblemJSON403 the response for an HTTP 403 `application/problem+json` response
+	ApplicationproblemJSON403 *Problem
+	// ApplicationproblemJSON404 the response for an HTTP 404 `application/problem+json` response
+	ApplicationproblemJSON404 *Problem
+}
+
+// GetApplicationproblemJSON400 returns the response for an HTTP 400 `application/problem+json` response
+func (r DeleteOrgsOrgDatabasesDbBackupsResponse) GetApplicationproblemJSON400() *Problem {
+	return r.ApplicationproblemJSON400
+}
+
+// GetApplicationproblemJSON401 returns the response for an HTTP 401 `application/problem+json` response
+func (r DeleteOrgsOrgDatabasesDbBackupsResponse) GetApplicationproblemJSON401() *Problem {
+	return r.ApplicationproblemJSON401
+}
+
+// GetApplicationproblemJSON403 returns the response for an HTTP 403 `application/problem+json` response
+func (r DeleteOrgsOrgDatabasesDbBackupsResponse) GetApplicationproblemJSON403() *Problem {
+	return r.ApplicationproblemJSON403
+}
+
+// GetApplicationproblemJSON404 returns the response for an HTTP 404 `application/problem+json` response
+func (r DeleteOrgsOrgDatabasesDbBackupsResponse) GetApplicationproblemJSON404() *Problem {
+	return r.ApplicationproblemJSON404
+}
+
+// GetBody returns the raw response body bytes
+func (r DeleteOrgsOrgDatabasesDbBackupsResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r DeleteOrgsOrgDatabasesDbBackupsResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r DeleteOrgsOrgDatabasesDbBackupsResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r DeleteOrgsOrgDatabasesDbBackupsResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
 type GetOrgsOrgDatabasesDbBackupsResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
@@ -9640,6 +9898,75 @@ func (r PostOrgsOrgDatabasesDbBackupsResponse) StatusCode() int {
 
 // ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
 func (r PostOrgsOrgDatabasesDbBackupsResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type PostOrgsOrgDatabasesDbBackupsDisableResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON202 the response for an HTTP 202 `application/json` response
+	JSON202 *BackupsDisabled
+	// ApplicationproblemJSON400 the response for an HTTP 400 `application/problem+json` response
+	ApplicationproblemJSON400 *Problem
+	// ApplicationproblemJSON401 the response for an HTTP 401 `application/problem+json` response
+	ApplicationproblemJSON401 *Problem
+	// ApplicationproblemJSON403 the response for an HTTP 403 `application/problem+json` response
+	ApplicationproblemJSON403 *Problem
+	// ApplicationproblemJSON404 the response for an HTTP 404 `application/problem+json` response
+	ApplicationproblemJSON404 *Problem
+}
+
+// GetJSON202 returns the response for an HTTP 202 `application/json` response
+func (r PostOrgsOrgDatabasesDbBackupsDisableResponse) GetJSON202() *BackupsDisabled {
+	return r.JSON202
+}
+
+// GetApplicationproblemJSON400 returns the response for an HTTP 400 `application/problem+json` response
+func (r PostOrgsOrgDatabasesDbBackupsDisableResponse) GetApplicationproblemJSON400() *Problem {
+	return r.ApplicationproblemJSON400
+}
+
+// GetApplicationproblemJSON401 returns the response for an HTTP 401 `application/problem+json` response
+func (r PostOrgsOrgDatabasesDbBackupsDisableResponse) GetApplicationproblemJSON401() *Problem {
+	return r.ApplicationproblemJSON401
+}
+
+// GetApplicationproblemJSON403 returns the response for an HTTP 403 `application/problem+json` response
+func (r PostOrgsOrgDatabasesDbBackupsDisableResponse) GetApplicationproblemJSON403() *Problem {
+	return r.ApplicationproblemJSON403
+}
+
+// GetApplicationproblemJSON404 returns the response for an HTTP 404 `application/problem+json` response
+func (r PostOrgsOrgDatabasesDbBackupsDisableResponse) GetApplicationproblemJSON404() *Problem {
+	return r.ApplicationproblemJSON404
+}
+
+// GetBody returns the raw response body bytes
+func (r PostOrgsOrgDatabasesDbBackupsDisableResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r PostOrgsOrgDatabasesDbBackupsDisableResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r PostOrgsOrgDatabasesDbBackupsDisableResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r PostOrgsOrgDatabasesDbBackupsDisableResponse) ContentType() string {
 	if r.HTTPResponse != nil {
 		return r.HTTPResponse.Header.Get("Content-Type")
 	}
@@ -9800,10 +10127,14 @@ type PostOrgsOrgDatabasesDbRestartResponse struct {
 	ApplicationproblemJSON400 *Problem
 	// ApplicationproblemJSON401 the response for an HTTP 401 `application/problem+json` response
 	ApplicationproblemJSON401 *Problem
+	// ApplicationproblemJSON402 the response for an HTTP 402 `application/problem+json` response
+	ApplicationproblemJSON402 *Problem
 	// ApplicationproblemJSON403 the response for an HTTP 403 `application/problem+json` response
 	ApplicationproblemJSON403 *Problem
 	// ApplicationproblemJSON404 the response for an HTTP 404 `application/problem+json` response
 	ApplicationproblemJSON404 *Problem
+	// ApplicationproblemJSON409 the response for an HTTP 409 `application/problem+json` response
+	ApplicationproblemJSON409 *Problem
 }
 
 // GetJSON202 returns the response for an HTTP 202 `application/json` response
@@ -9821,6 +10152,11 @@ func (r PostOrgsOrgDatabasesDbRestartResponse) GetApplicationproblemJSON401() *P
 	return r.ApplicationproblemJSON401
 }
 
+// GetApplicationproblemJSON402 returns the response for an HTTP 402 `application/problem+json` response
+func (r PostOrgsOrgDatabasesDbRestartResponse) GetApplicationproblemJSON402() *Problem {
+	return r.ApplicationproblemJSON402
+}
+
 // GetApplicationproblemJSON403 returns the response for an HTTP 403 `application/problem+json` response
 func (r PostOrgsOrgDatabasesDbRestartResponse) GetApplicationproblemJSON403() *Problem {
 	return r.ApplicationproblemJSON403
@@ -9829,6 +10165,11 @@ func (r PostOrgsOrgDatabasesDbRestartResponse) GetApplicationproblemJSON403() *P
 // GetApplicationproblemJSON404 returns the response for an HTTP 404 `application/problem+json` response
 func (r PostOrgsOrgDatabasesDbRestartResponse) GetApplicationproblemJSON404() *Problem {
 	return r.ApplicationproblemJSON404
+}
+
+// GetApplicationproblemJSON409 returns the response for an HTTP 409 `application/problem+json` response
+func (r PostOrgsOrgDatabasesDbRestartResponse) GetApplicationproblemJSON409() *Problem {
+	return r.ApplicationproblemJSON409
 }
 
 // GetBody returns the raw response body bytes
@@ -9952,10 +10293,14 @@ type PostOrgsOrgDatabasesDbStartResponse struct {
 	ApplicationproblemJSON400 *Problem
 	// ApplicationproblemJSON401 the response for an HTTP 401 `application/problem+json` response
 	ApplicationproblemJSON401 *Problem
+	// ApplicationproblemJSON402 the response for an HTTP 402 `application/problem+json` response
+	ApplicationproblemJSON402 *Problem
 	// ApplicationproblemJSON403 the response for an HTTP 403 `application/problem+json` response
 	ApplicationproblemJSON403 *Problem
 	// ApplicationproblemJSON404 the response for an HTTP 404 `application/problem+json` response
 	ApplicationproblemJSON404 *Problem
+	// ApplicationproblemJSON409 the response for an HTTP 409 `application/problem+json` response
+	ApplicationproblemJSON409 *Problem
 }
 
 // GetJSON202 returns the response for an HTTP 202 `application/json` response
@@ -9973,6 +10318,11 @@ func (r PostOrgsOrgDatabasesDbStartResponse) GetApplicationproblemJSON401() *Pro
 	return r.ApplicationproblemJSON401
 }
 
+// GetApplicationproblemJSON402 returns the response for an HTTP 402 `application/problem+json` response
+func (r PostOrgsOrgDatabasesDbStartResponse) GetApplicationproblemJSON402() *Problem {
+	return r.ApplicationproblemJSON402
+}
+
 // GetApplicationproblemJSON403 returns the response for an HTTP 403 `application/problem+json` response
 func (r PostOrgsOrgDatabasesDbStartResponse) GetApplicationproblemJSON403() *Problem {
 	return r.ApplicationproblemJSON403
@@ -9981,6 +10331,11 @@ func (r PostOrgsOrgDatabasesDbStartResponse) GetApplicationproblemJSON403() *Pro
 // GetApplicationproblemJSON404 returns the response for an HTTP 404 `application/problem+json` response
 func (r PostOrgsOrgDatabasesDbStartResponse) GetApplicationproblemJSON404() *Problem {
 	return r.ApplicationproblemJSON404
+}
+
+// GetApplicationproblemJSON409 returns the response for an HTTP 409 `application/problem+json` response
+func (r PostOrgsOrgDatabasesDbStartResponse) GetApplicationproblemJSON409() *Problem {
+	return r.ApplicationproblemJSON409
 }
 
 // GetBody returns the raw response body bytes
@@ -10025,6 +10380,8 @@ type PostOrgsOrgDatabasesDbStopResponse struct {
 	ApplicationproblemJSON403 *Problem
 	// ApplicationproblemJSON404 the response for an HTTP 404 `application/problem+json` response
 	ApplicationproblemJSON404 *Problem
+	// ApplicationproblemJSON409 the response for an HTTP 409 `application/problem+json` response
+	ApplicationproblemJSON409 *Problem
 }
 
 // GetJSON202 returns the response for an HTTP 202 `application/json` response
@@ -10050,6 +10407,11 @@ func (r PostOrgsOrgDatabasesDbStopResponse) GetApplicationproblemJSON403() *Prob
 // GetApplicationproblemJSON404 returns the response for an HTTP 404 `application/problem+json` response
 func (r PostOrgsOrgDatabasesDbStopResponse) GetApplicationproblemJSON404() *Problem {
 	return r.ApplicationproblemJSON404
+}
+
+// GetApplicationproblemJSON409 returns the response for an HTTP 409 `application/problem+json` response
+func (r PostOrgsOrgDatabasesDbStopResponse) GetApplicationproblemJSON409() *Problem {
+	return r.ApplicationproblemJSON409
 }
 
 // GetBody returns the raw response body bytes
@@ -12003,6 +12365,32 @@ func (c *ClientWithResponses) GetOrgsOrgDatabasesDbWithResponse(ctx context.Cont
 	return ParseGetOrgsOrgDatabasesDbResponse(rsp)
 }
 
+// DeleteOrgsOrgDatabasesDbBackupsWithBodyWithResponse Delete one backup, by id
+//
+// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with DELETE /orgs/{org}/databases/{db}/backups (the `DeleteOrgsOrgDatabasesDbBackups` operationId).
+func (c *ClientWithResponses) DeleteOrgsOrgDatabasesDbBackupsWithBodyWithResponse(ctx context.Context, org string, db string, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*DeleteOrgsOrgDatabasesDbBackupsResponse, error) {
+	rsp, err := c.DeleteOrgsOrgDatabasesDbBackupsWithBody(ctx, org, db, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseDeleteOrgsOrgDatabasesDbBackupsResponse(rsp)
+}
+
+// DeleteOrgsOrgDatabasesDbBackupsWithResponse Delete one backup, by id
+//
+// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with DELETE /orgs/{org}/databases/{db}/backups (the `DeleteOrgsOrgDatabasesDbBackups` operationId).
+func (c *ClientWithResponses) DeleteOrgsOrgDatabasesDbBackupsWithResponse(ctx context.Context, org string, db string, body DeleteOrgsOrgDatabasesDbBackupsJSONRequestBody, reqEditors ...RequestEditorFn) (*DeleteOrgsOrgDatabasesDbBackupsResponse, error) {
+	rsp, err := c.DeleteOrgsOrgDatabasesDbBackups(ctx, org, db, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseDeleteOrgsOrgDatabasesDbBackupsResponse(rsp)
+}
+
 // GetOrgsOrgDatabasesDbBackupsWithResponse List backups, newest first
 //
 // Returns a wrapper object for the known response body format(s).
@@ -12027,6 +12415,19 @@ func (c *ClientWithResponses) PostOrgsOrgDatabasesDbBackupsWithResponse(ctx cont
 		return nil, err
 	}
 	return ParsePostOrgsOrgDatabasesDbBackupsResponse(rsp)
+}
+
+// PostOrgsOrgDatabasesDbBackupsDisableWithResponse Stop automatic backups, keeping the ones already taken (PostgreSQL only)
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with POST /orgs/{org}/databases/{db}/backups/disable (the `PostOrgsOrgDatabasesDbBackupsDisable` operationId).
+func (c *ClientWithResponses) PostOrgsOrgDatabasesDbBackupsDisableWithResponse(ctx context.Context, org string, db string, reqEditors ...RequestEditorFn) (*PostOrgsOrgDatabasesDbBackupsDisableResponse, error) {
+	rsp, err := c.PostOrgsOrgDatabasesDbBackupsDisable(ctx, org, db, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParsePostOrgsOrgDatabasesDbBackupsDisableResponse(rsp)
 }
 
 // PostOrgsOrgDatabasesDbBackupsEnableWithBodyWithResponse Enable automatic daily backups (PostgreSQL only)
@@ -12354,7 +12755,7 @@ func (c *ClientWithResponses) GetOrgsOrgVmsVmSshKeysWithResponse(ctx context.Con
 	return ParseGetOrgsOrgVmsVmSshKeysResponse(rsp)
 }
 
-// PostOrgsOrgVmsVmSshKeysWithBodyWithResponse Add an SSH public key
+// PostOrgsOrgVmsVmSshKeysWithBodyWithResponse Record an SSH public key (installed only on a machine's first boot)
 //
 // Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
 //
@@ -12367,7 +12768,7 @@ func (c *ClientWithResponses) PostOrgsOrgVmsVmSshKeysWithBodyWithResponse(ctx co
 	return ParsePostOrgsOrgVmsVmSshKeysResponse(rsp)
 }
 
-// PostOrgsOrgVmsVmSshKeysWithResponse Add an SSH public key
+// PostOrgsOrgVmsVmSshKeysWithResponse Record an SSH public key (installed only on a machine's first boot)
 //
 // Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
 //
@@ -12380,7 +12781,7 @@ func (c *ClientWithResponses) PostOrgsOrgVmsVmSshKeysWithResponse(ctx context.Co
 	return ParsePostOrgsOrgVmsVmSshKeysResponse(rsp)
 }
 
-// DeleteOrgsOrgVmsVmSshKeysKeyIdWithResponse Remove an SSH public key
+// DeleteOrgsOrgVmsVmSshKeysKeyIdWithResponse Remove an SSH public key from the machine's record
 //
 // Returns a wrapper object for the known response body format(s).
 //
@@ -14317,6 +14718,56 @@ func ParseGetOrgsOrgDatabasesDbResponse(rsp *http.Response) (*GetOrgsOrgDatabase
 	return response, nil
 }
 
+// ParseDeleteOrgsOrgDatabasesDbBackupsResponse parses an HTTP response from a DeleteOrgsOrgDatabasesDbBackupsWithResponse call
+func ParseDeleteOrgsOrgDatabasesDbBackupsResponse(rsp *http.Response) (*DeleteOrgsOrgDatabasesDbBackupsResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &DeleteOrgsOrgDatabasesDbBackupsResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case rsp.StatusCode == 204:
+		break // No content-type
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON404 = &dest
+
+	}
+
+	return response, nil
+}
+
 // ParseGetOrgsOrgDatabasesDbBackupsResponse parses an HTTP response from a GetOrgsOrgDatabasesDbBackupsWithResponse call
 func ParseGetOrgsOrgDatabasesDbBackupsResponse(rsp *http.Response) (*GetOrgsOrgDatabasesDbBackupsResponse, error) {
 	bodyBytes, err := io.ReadAll(rsp.Body)
@@ -14391,6 +14842,60 @@ func ParsePostOrgsOrgDatabasesDbBackupsResponse(rsp *http.Response) (*PostOrgsOr
 			return nil, err
 		}
 		response.JSON201 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON404 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParsePostOrgsOrgDatabasesDbBackupsDisableResponse parses an HTTP response from a PostOrgsOrgDatabasesDbBackupsDisableWithResponse call
+func ParsePostOrgsOrgDatabasesDbBackupsDisableResponse(rsp *http.Response) (*PostOrgsOrgDatabasesDbBackupsDisableResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &PostOrgsOrgDatabasesDbBackupsDisableResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 202:
+		var dest BackupsDisabled
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON202 = &dest
 
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
 		var dest Problem
@@ -14575,6 +15080,13 @@ func ParsePostOrgsOrgDatabasesDbRestartResponse(rsp *http.Response) (*PostOrgsOr
 		}
 		response.ApplicationproblemJSON401 = &dest
 
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 402:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON402 = &dest
+
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
 		var dest Problem
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
@@ -14588,6 +15100,13 @@ func ParsePostOrgsOrgDatabasesDbRestartResponse(rsp *http.Response) (*PostOrgsOr
 			return nil, err
 		}
 		response.ApplicationproblemJSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON409 = &dest
 
 	}
 
@@ -14697,6 +15216,13 @@ func ParsePostOrgsOrgDatabasesDbStartResponse(rsp *http.Response) (*PostOrgsOrgD
 		}
 		response.ApplicationproblemJSON401 = &dest
 
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 402:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON402 = &dest
+
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
 		var dest Problem
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
@@ -14710,6 +15236,13 @@ func ParsePostOrgsOrgDatabasesDbStartResponse(rsp *http.Response) (*PostOrgsOrgD
 			return nil, err
 		}
 		response.ApplicationproblemJSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON409 = &dest
 
 	}
 
@@ -14764,6 +15297,13 @@ func ParsePostOrgsOrgDatabasesDbStopResponse(rsp *http.Response) (*PostOrgsOrgDa
 			return nil, err
 		}
 		response.ApplicationproblemJSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
+		var dest Problem
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSON409 = &dest
 
 	}
 

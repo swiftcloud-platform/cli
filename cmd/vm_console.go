@@ -12,9 +12,8 @@ var vmConsoleCmd = &cobra.Command{
 	Short: "Open the VM console in the browser",
 	Long: `Open the VM's serial console in the default browser.
 
-The console uses the platform's dashboard (xterm.js over SSE). You need to
-be signed in to the dashboard in your browser — if you are not, the login
-page appears first.`,
+The console is a page of the dashboard. You need to be signed in to the
+dashboard in your browser — if you are not, the login page appears first.`,
 	Example: `  cloud vm console web`,
 	Args:    cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {

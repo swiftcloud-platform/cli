@@ -14,9 +14,11 @@ table, the JSON, the one-line quiet output, the sentence on failure, and the
 exit code a script would branch on. The fake speaks the real wire shapes.
 */
 
-const vmJSON = `{"id":"vm1","name":"web","organizationId":"org1","region":"zm-lusaka-central-1","regionId":"r1","image":"ubuntu-24.04","size":"vm-1","description":"test VM","status":"running","publicIp":"203.0.113.10","privateIp":"10.0.0.5","errorMessage":"","createdAt":"2026-09-01T00:00:00Z","updatedAt":"2026-09-01T00:00:00Z"}`
+const vmJSON = `{"id":"vm1","name":"web","organizationId":"org1","region":"zm-lsk-1","regionId":"r1","image":"ubuntu-24-04","size":"vm-1","description":"test VM","status":"running","publicIp":"203.0.113.10","privateIp":"10.0.0.5","errorMessage":"","createdAt":"2026-09-01T00:00:00Z","updatedAt":"2026-09-01T00:00:00Z"}`
 
 const vmSSHKeyJSON = `{"id":"key1","label":"laptop","publicKey":"ssh-ed25519 AAAA...","fingerprint":"SHA256:abc123","addedAt":"2026-09-01T00:00:00Z"}`
+
+const vmSSHKeyNotice = "Recorded. Keys are installed only on a machine's first boot; add this one to ~/.ssh/authorized_keys on the machine."
 
 func fakeVMPlatform(t *testing.T) *httptest.Server {
 	t.Helper()
@@ -87,7 +89,7 @@ func fakeVMPlatform(t *testing.T) *httptest.Server {
 					return
 				}
 				w.WriteHeader(201)
-				_, _ = w.Write([]byte(vmSSHKeyJSON))
+				_, _ = w.Write([]byte(strings.TrimSuffix(vmSSHKeyJSON, "}") + `,"notice":"` + vmSSHKeyNotice + `"}`))
 				return
 			}
 			_, _ = w.Write([]byte(`{"items":[` + vmSSHKeyJSON + `]}`))
@@ -106,7 +108,7 @@ func fakeVMPlatform(t *testing.T) *httptest.Server {
 			return
 		case r.URL.Path == "/api/v1/orgs/acme/vms/web/ip/attach":
 			if auth(r) == "viewer-token" {
-				problem(w, 403, "forbidden", "Access denied: your role cannot update resource")
+				problem(w, 403, "forbidden", "Access denied: your role cannot create resource")
 				return
 			}
 			_, _ = w.Write([]byte(`{"publicIp":"203.0.113.20","privateIp":"10.0.0.5"}`))
@@ -181,7 +183,7 @@ func TestVMList_JSON(t *testing.T) {
 	if err := json.Unmarshal([]byte(out), &vms); err != nil {
 		t.Fatalf("not JSON: %v\n%s", err, out)
 	}
-	if vms[0]["name"] != "web" || vms[0]["image"] != "ubuntu-24.04" {
+	if vms[0]["name"] != "web" || vms[0]["image"] != "ubuntu-24-04" {
 		t.Errorf("json lost fields: %v", vms[0])
 	}
 }
@@ -200,7 +202,7 @@ func TestVMGet_Table(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(out, "web") || !strings.Contains(out, "running") || !strings.Contains(out, "ubuntu-24.04") || !strings.Contains(out, "203.0.113.10") {
+	if !strings.Contains(out, "web") || !strings.Contains(out, "running") || !strings.Contains(out, "ubuntu-24-04") || !strings.Contains(out, "203.0.113.10") {
 		t.Errorf("table missing fields:\n%s", out)
 	}
 }
@@ -215,8 +217,8 @@ func TestVMGet_NotFound_Exit5(t *testing.T) {
 
 func TestVMCreate_Table(t *testing.T) {
 	vmSetup(t, "owner-token")
-	t.Setenv("CLOUD_REGION", "zm-lusaka-central-1")
-	out, err := run(t, "vm", "create", "newvm", "--image", "ubuntu-24.04")
+	t.Setenv("CLOUD_REGION", "zm-lsk-1")
+	out, err := run(t, "vm", "create", "newvm", "--image", "ubuntu-24-04")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -228,8 +230,8 @@ func TestVMCreate_Table(t *testing.T) {
 
 func TestVMCreate_Conflict_Exit2(t *testing.T) {
 	vmSetup(t, "owner-token")
-	t.Setenv("CLOUD_REGION", "zm-lusaka-central-1")
-	_, err := run(t, "vm", "create", "taken", "--image", "ubuntu-24.04")
+	t.Setenv("CLOUD_REGION", "zm-lsk-1")
+	_, err := run(t, "vm", "create", "taken", "--image", "ubuntu-24-04")
 	if err == nil || ExitCode(err) != ExitUsage || !strings.Contains(err.Error(), "already exists") {
 		t.Errorf("want a usage exit with the conflict sentence, got %d %v", ExitCode(err), err)
 	}
@@ -237,7 +239,7 @@ func TestVMCreate_Conflict_Exit2(t *testing.T) {
 
 func TestVMCreate_NeedsRegion(t *testing.T) {
 	vmSetup(t, "owner-token")
-	_, err := run(t, "vm", "create", "newvm", "--image", "ubuntu-24.04")
+	_, err := run(t, "vm", "create", "newvm", "--image", "ubuntu-24-04")
 	if err == nil || !strings.Contains(err.Error(), "--region") {
 		t.Errorf("must explain how to pick a region, got %v", err)
 	}
@@ -245,8 +247,8 @@ func TestVMCreate_NeedsRegion(t *testing.T) {
 
 func TestVMCreate_ViewerForbidden_Exit4(t *testing.T) {
 	vmSetup(t, "viewer-token")
-	t.Setenv("CLOUD_REGION", "zm-lusaka-central-1")
-	_, err := run(t, "vm", "create", "newvm", "--image", "ubuntu-24.04")
+	t.Setenv("CLOUD_REGION", "zm-lsk-1")
+	_, err := run(t, "vm", "create", "newvm", "--image", "ubuntu-24-04")
 	if err == nil || ExitCode(err) != ExitDenied {
 		t.Errorf("want exit %d, got %d %v", ExitDenied, ExitCode(err), err)
 	}
@@ -305,9 +307,32 @@ func TestVMSshKeyList_Table(t *testing.T) {
 
 func TestVMSshKeyAdd_Table(t *testing.T) {
 	vmSetup(t, "owner-token")
-	_, err := run(t, "vm", "ssh-key", "add", "web", "ssh-ed25519 AAAA...", "--label", "test")
+	_, stderr, err := runWithStderr(t, "vm", "ssh-key", "add", "web", "ssh-ed25519 AAAA...", "--label", "test")
 	if err != nil {
 		t.Fatal(err)
+	}
+	// A key added after first boot is recorded, not installed; the platform
+	// says so in `notice`, and the user must see that sentence.
+	if !strings.Contains(stderr, vmSSHKeyNotice) {
+		t.Errorf("the platform's notice should be printed:\n%s", stderr)
+	}
+	if !strings.Contains(stderr, "Recorded key key1") {
+		t.Errorf("should say the key was recorded:\n%s", stderr)
+	}
+}
+
+func TestVMSshKeyAdd_JSONCarriesTheNotice(t *testing.T) {
+	vmSetup(t, "owner-token")
+	out, err := run(t, "vm", "ssh-key", "add", "web", "ssh-ed25519 AAAA...", "-o", "json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var keys []map[string]any
+	if err := json.Unmarshal([]byte(out), &keys); err != nil {
+		t.Fatalf("not JSON: %v\n%s", err, out)
+	}
+	if len(keys) != 1 || keys[0]["notice"] != vmSSHKeyNotice {
+		t.Errorf("JSON should carry the notice: %s", out)
 	}
 }
 
@@ -327,6 +352,19 @@ func TestVMIPAttach_Table(t *testing.T) {
 	_, err := run(t, "vm", "ip", "attach", "web")
 	if err != nil {
 		t.Fatal(err)
+	}
+}
+
+// Attaching a public IP needs owner or admin; a denial must exit 4 and print
+// the platform's own sentence, not a generic HTTP status.
+func TestVMIPAttach_Forbidden_PrintsServerMessage(t *testing.T) {
+	vmSetup(t, "viewer-token")
+	_, err := run(t, "vm", "ip", "attach", "web")
+	if err == nil || ExitCode(err) != ExitDenied {
+		t.Fatalf("want exit %d, got %d %v", ExitDenied, ExitCode(err), err)
+	}
+	if !strings.Contains(err.Error(), "your role cannot create resource") {
+		t.Errorf("the platform's sentence should be printed verbatim: %v", err)
 	}
 }
 

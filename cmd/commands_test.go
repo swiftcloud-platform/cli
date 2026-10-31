@@ -14,7 +14,7 @@ table, the JSON, the one-line quiet output, the sentence on failure, and the
 exit code a script would branch on. The fake speaks the real wire shapes.
 */
 
-const appJSON = `{"id":"app1","name":"web","organizationId":"org1","region":"zm-lusaka-central-1","regionId":"r1","image":"nginx:1","description":"","status":"running","url":"https://web.apps.cloud.co.zm","containerPort":8080,"replicasMin":0,"replicasMax":3,"size":"app-1","envVars":{"A":"1"},"registryAuth":null,"createdAt":"2026-09-01T00:00:00Z","updatedAt":"2026-09-01T00:00:00Z"}`
+const appJSON = `{"id":"app1","name":"web","organizationId":"org1","region":"zm-lsk-1","regionId":"r1","image":"nginx:1","description":"","status":"running","url":"https://web.apps.cloud.co.zm","containerPort":8080,"replicasMin":0,"replicasMax":3,"size":"app-1","envVars":{"A":"1"},"registryAuth":null,"createdAt":"2026-09-01T00:00:00Z","updatedAt":"2026-09-01T00:00:00Z"}`
 
 func problem(w http.ResponseWriter, status int, typ, detail string) {
 	w.Header().Set("content-type", "application/problem+json")
@@ -53,7 +53,7 @@ func fakePlatform(t *testing.T) *httptest.Server {
 		if !guard(w, r) {
 			return
 		}
-		_, _ = w.Write([]byte(`{"items":[{"id":"r1","name":"zm-lusaka-central-1","location":"Lusaka, Zambia","status":"active"}]}`))
+		_, _ = w.Write([]byte(`{"items":[{"id":"r1","name":"zm-lsk-1","location":"Lusaka, Zambia","status":"active"}]}`))
 	})
 	mux.HandleFunc("/api/v1/health", func(w http.ResponseWriter, _ *http.Request) {
 		_, _ = w.Write([]byte(`{"status":"ok","api":"v1","database":"ok","worker":{"status":"ok","lastHeartbeat":"2026-09-04T00:00:00Z","ageSeconds":2},"time":"2026-09-04T00:00:00Z"}`))
@@ -142,7 +142,7 @@ func TestAppList_JSONIsFullResource(t *testing.T) {
 	if err := json.Unmarshal([]byte(out), &apps); err != nil {
 		t.Fatalf("not JSON: %v\n%s", err, out)
 	}
-	if apps[0]["url"] != "https://web.apps.cloud.co.zm" || apps[0]["region"] != "zm-lusaka-central-1" {
+	if apps[0]["url"] != "https://web.apps.cloud.co.zm" || apps[0]["region"] != "zm-lsk-1" {
 		t.Errorf("json lost fields: %v", apps[0])
 	}
 }
@@ -158,7 +158,7 @@ func TestAppList_Quiet(t *testing.T) {
 func TestAppGet_ShowsRegionNameNotId(t *testing.T) {
 	setup(t, "owner-token")
 	out, _ := run(t, "app", "get", "web")
-	if !strings.Contains(out, "zm-lusaka-central-1") || strings.Contains(out, "r1\n") {
+	if !strings.Contains(out, "zm-lsk-1") || strings.Contains(out, "r1\n") {
 		t.Errorf("must show the region name:\n%s", out)
 	}
 }
@@ -189,7 +189,7 @@ func TestAppDelete_RefusesWithoutConfirmationWhenNotATerminal(t *testing.T) {
 
 func TestAppCreate_Conflict_Exit2(t *testing.T) {
 	setup(t, "owner-token")
-	t.Setenv("CLOUD_REGION", "zm-lusaka-central-1")
+	t.Setenv("CLOUD_REGION", "zm-lsk-1")
 	_, err := run(t, "app", "create", "taken", "--image", "nginx")
 	if err == nil || ExitCode(err) != ExitUsage || !strings.Contains(err.Error(), "already exists") {
 		t.Errorf("want a usage exit with the conflict sentence, got %d %v", ExitCode(err), err)
@@ -206,7 +206,7 @@ func TestAppCreate_NeedsRegion(t *testing.T) {
 
 func TestAppCreate_PrintsURL(t *testing.T) {
 	setup(t, "owner-token")
-	out, err := run(t, "app", "create", "new", "--image", "nginx", "--region", "zm-lusaka-central-1")
+	out, err := run(t, "app", "create", "new", "--image", "nginx", "--region", "zm-lsk-1")
 	if err != nil {
 		t.Fatal(err)
 	}

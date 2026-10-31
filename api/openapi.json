@@ -540,6 +540,21 @@
           "retention"
         ]
       },
+      "BackupsDisabled": {
+        "type": "object",
+        "properties": {
+          "enabled": {
+            "type": "boolean"
+          },
+          "backupsKept": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "enabled",
+          "backupsKept"
+        ]
+      },
       "Org": {
         "type": "object",
         "properties": {
@@ -686,7 +701,7 @@
           },
           "status": {
             "type": "string",
-            "description": "deploying | ready | stopped | suspended | failed | delete_failed | deleting. `ready` is the healthy state. Advanced by the platform worker; poll until terminal (ready, stopped, suspended, failed, delete_failed)."
+            "description": "deploying | ready | suspended | failed | delete_failed. `ready` is the healthy state. Advanced by the platform worker; poll until terminal (ready, suspended, failed, delete_failed)."
           },
           "errorMessage": {
             "type": "string",
@@ -998,7 +1013,7 @@
           },
           "status": {
             "type": "string",
-            "description": "pending | active | failed"
+            "description": "pending | pending_dns | active | failed. `pending_dns` means the domain does not point here yet; `message` names the CNAME target to set."
           },
           "tls": {
             "type": "string",
@@ -1142,8 +1157,7 @@
           "engine": {
             "type": "string",
             "enum": [
-              "postgresql",
-              "mariadb"
+              "postgresql"
             ]
           },
           "version": {
@@ -1204,6 +1218,20 @@
             "description": "Retention window: a number followed by d, w or m, e.g. 3d. A window, not a count: with a daily schedule 3d keeps two or three base backups."
           }
         },
+        "additionalProperties": false
+      },
+      "BackupDelete": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Backup id, from the backup list"
+          }
+        },
+        "required": [
+          "id"
+        ],
         "additionalProperties": false
       },
       "Backup": {
@@ -1299,8 +1327,7 @@
           "engine": {
             "type": "string",
             "enum": [
-              "postgresql",
-              "mariadb"
+              "postgresql"
             ]
           },
           "version": {
@@ -1966,7 +1993,7 @@
           "region": {
             "type": "string",
             "nullable": true,
-            "description": "Region name, e.g. zm-lusaka-central-1"
+            "description": "Region name, e.g. zm-lsk-1"
           },
           "regionId": {
             "type": "string",
@@ -1975,7 +2002,7 @@
           "image": {
             "type": "string",
             "minLength": 1,
-            "description": "VM image slug, e.g. ubuntu-24.04"
+            "description": "VM image slug, e.g. ubuntu-24-04"
           },
           "size": {
             "type": "string",
@@ -2045,17 +2072,17 @@
           "image": {
             "type": "string",
             "minLength": 1,
-            "description": "VM image slug, e.g. ubuntu-24.04"
+            "description": "VM image slug, e.g. ubuntu-24-04"
           },
           "size": {
             "type": "string",
             "minLength": 1,
-            "description": "Pricing tier name. Defaults to the smallest."
+            "description": "Pricing tier name. Defaults to the smallest tier the image fits on."
           },
           "region": {
             "type": "string",
             "minLength": 1,
-            "description": "Region id or name, e.g. zm-lusaka-central-1"
+            "description": "Region id or name, e.g. zm-lsk-1"
           },
           "description": {
             "type": "string",
@@ -2064,7 +2091,7 @@
           "sshPublicKey": {
             "type": "string",
             "minLength": 1,
-            "description": "Optional SSH public key to install on first boot."
+            "description": "Optional SSH public key to install on first boot. Refused for Windows images: those are signed in to over Remote Desktop with a generated password, shown on the machine's dashboard page."
           }
         },
         "required": [
@@ -2095,6 +2122,10 @@
           "addedAt": {
             "type": "string",
             "format": "date-time"
+          },
+          "notice": {
+            "type": "string",
+            "description": "Present when a key is added: what the platform did with it. Show it to the user."
           }
         },
         "required": [
@@ -2104,7 +2135,8 @@
           "fingerprint",
           "addedAt"
         ],
-        "additionalProperties": false
+        "additionalProperties": false,
+        "description": "An SSH public key recorded on the machine. Keys given at creation are installed on its first boot; a key added later is recorded only and must be added to ~/.ssh/authorized_keys on the machine."
       },
       "VmSshKeyCreate": {
         "type": "object",
@@ -2123,7 +2155,8 @@
         "required": [
           "publicKey"
         ],
-        "additionalProperties": false
+        "additionalProperties": false,
+        "description": "Records an SSH public key on the machine. Keys are installed only on a machine's first boot, so on a machine that is already set up the key is NOT installed — add it to ~/.ssh/authorized_keys on the machine yourself."
       },
       "VmIp": {
         "type": "object",
@@ -3960,6 +3993,16 @@
               }
             }
           },
+          "402": {
+            "description": "problem type `billing-blocked`",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
           "403": {
             "description": "Role does not allow this, or API token bound to another organisation",
             "content": {
@@ -3972,6 +4015,16 @@
           },
           "404": {
             "description": "Not found (or not yours)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "problem type `conflict`",
             "content": {
               "application/problem+json": {
                 "schema": {
@@ -4062,6 +4115,16 @@
                 }
               }
             }
+          },
+          "409": {
+            "description": "problem type `conflict`",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
           }
         },
         "security": [
@@ -4126,6 +4189,16 @@
               }
             }
           },
+          "402": {
+            "description": "problem type `billing-blocked`",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
           "403": {
             "description": "Role does not allow this, or API token bound to another organisation",
             "content": {
@@ -4138,6 +4211,16 @@
           },
           "404": {
             "description": "Not found (or not yours)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "problem type `conflict`",
             "content": {
               "application/problem+json": {
                 "schema": {
@@ -4430,6 +4513,90 @@
             "bearer": []
           }
         ]
+      },
+      "delete": {
+        "summary": "Delete one backup, by id",
+        "x-permission": "DELETE_RESOURCE",
+        "parameters": [
+          {
+            "name": "org",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Organisation slug or id"
+          },
+          {
+            "name": "db",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Database name or id"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BackupDelete"
+              }
+            }
+          }
+        },
+        "responses": {
+          "204": {
+            "description": "No content"
+          },
+          "400": {
+            "description": "Validation failed",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not signed in",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Role does not allow this, or API token bound to another organisation",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found (or not yours)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
       }
     },
     "/orgs/{org}/databases/{db}/backups/enable": {
@@ -4473,6 +4640,89 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/BackupsEnabled"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Validation failed problem type `unsupported-engine`",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not signed in",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Role does not allow this, or API token bound to another organisation",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found (or not yours)",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ]
+      }
+    },
+    "/orgs/{org}/databases/{db}/backups/disable": {
+      "post": {
+        "summary": "Stop automatic backups, keeping the ones already taken (PostgreSQL only)",
+        "x-permission": "UPDATE_RESOURCE",
+        "parameters": [
+          {
+            "name": "org",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Organisation slug or id"
+          },
+          {
+            "name": "db",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Database name or id"
+          }
+        ],
+        "responses": {
+          "202": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BackupsDisabled"
                 }
               }
             }
@@ -7288,7 +7538,7 @@
         ]
       },
       "post": {
-        "summary": "Add an SSH public key",
+        "summary": "Record an SSH public key (installed only on a machine's first boot)",
         "x-permission": "UPDATE_RESOURCE",
         "parameters": [
           {
@@ -7381,7 +7631,7 @@
     },
     "/orgs/{org}/vms/{vm}/ssh-keys/{keyId}": {
       "delete": {
-        "summary": "Remove an SSH public key",
+        "summary": "Remove an SSH public key from the machine's record",
         "x-permission": "UPDATE_RESOURCE",
         "parameters": [
           {
@@ -7550,7 +7800,7 @@
     "/orgs/{org}/vms/{vm}/ip/attach": {
       "post": {
         "summary": "Attach a public IP address",
-        "x-permission": "UPDATE_RESOURCE",
+        "x-permission": "CREATE_RESOURCE",
         "parameters": [
           {
             "name": "org",

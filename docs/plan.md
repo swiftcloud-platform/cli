@@ -124,11 +124,12 @@ cloud app   domain  remove <name> <hostname>
 
 cloud db    engines                                  what --engine and --version accept
 cloud db    list
-cloud db    create  <name> --engine postgresql|mariadb [--size <tier>] [--wait]
+cloud db    create  <name> --engine postgresql [--size <tier>] [--wait]
 cloud db    get     <name>
 cloud db    credentials <name> [--format env|url]      write-level permission; printed once, never logged
 cloud db    start | stop | restart <name>
 cloud db    backup  enable <name> [--retention 3d]
+cloud db    backup  disable <name>                    keeps the backups already taken
 cloud db    backup  create <name>
 cloud db    backup  list   <name>
 cloud db    restore <name> --to <new-name> [--at 2026-09-04T10:15:00Z]   always a NEW database

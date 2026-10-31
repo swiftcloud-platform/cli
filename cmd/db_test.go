@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -131,7 +132,7 @@ rather than extending the one in commands_test.go, so the two can be edited
 independently.
 */
 
-const dbJSON = `{"id":"db1","name":"orders","organizationId":"org1","region":"zm-lusaka-central-1","regionId":"r1","engine":"postgresql","version":"16","size":"db-1","description":"","status":"ready","errorMessage":"","host":"orders.db.cloud.co.zm","port":5432,"createdAt":"2026-09-01T00:00:00Z","updatedAt":"2026-09-01T00:00:00Z"}`
+const dbJSON = `{"id":"db1","name":"orders","organizationId":"org1","region":"zm-lsk-1","regionId":"r1","engine":"postgresql","version":"16","size":"db-1","description":"","status":"ready","errorMessage":"","host":"orders.db.cloud.co.zm","port":5432,"createdAt":"2026-09-01T00:00:00Z","updatedAt":"2026-09-01T00:00:00Z"}`
 
 // fakeDBPlatform serves just enough of /api/v1 for the db commands. Handlers
 // are overridable per test through the returned map.
@@ -143,7 +144,7 @@ func fakeDBPlatform(t *testing.T, override map[string]http.HandlerFunc) *httptes
 	}
 	routes := map[string]http.HandlerFunc{
 		"/api/v1/me":                                        json200(`{"user":{"id":"u1","email":"a@b.c"},"organizations":[{"slug":"acme","role":"owner"}],"auth":{"kind":"session"}}`),
-		"/api/v1/database-engines":                          json200(`{"items":[{"engine":"postgresql","version":"16","default":true},{"engine":"mariadb","version":"11.4","default":true}]}`),
+		"/api/v1/database-engines":                          json200(`{"items":[{"engine":"postgresql","version":"16","default":true}]}`),
 		"/api/v1/orgs/acme/databases":                       json200(`{"items":[` + dbJSON + `]}`),
 		"/api/v1/orgs/acme/databases/orders":                json200(dbJSON),
 		"/api/v1/orgs/acme/databases/orders/credentials":    json200(`{"username":"app","password":"p@ss'w/rd","host":"orders.db.cloud.co.zm","port":5432,"database":"app","connectionString":"host=orders.db.cloud.co.zm port=5432 user=app","connectionStringUri":"postgresql://app:p%40ss%27w%2Frd@orders.db.cloud.co.zm:5432/app?sslmode=require","internalHost":"orders.org1.svc","internalConnectionString":"postgresql://app@orders.org1.svc:5432/app"}`),
@@ -170,7 +171,7 @@ func dbSetup(t *testing.T, override map[string]http.HandlerFunc) {
 	t.Setenv("CLOUD_CONFIG_DIR", t.TempDir())
 	t.Setenv("CLOUD_API_URL", srv.URL+"/api/v1")
 	t.Setenv("CLOUD_ORG", "acme")
-	t.Setenv("CLOUD_REGION", "zm-lusaka-central-1")
+	t.Setenv("CLOUD_REGION", "zm-lsk-1")
 	t.Setenv("CLOUD_TOKEN", "owner-token")
 }
 
@@ -281,8 +282,8 @@ func TestDBCredentials_ConflictWhileProvisioning_Exit2(t *testing.T) {
 	}
 }
 
-// Backups on MariaDB are refused by the platform; the sentence must reach the
-// user and the exit code must say "your request", not "we broke".
+// Backups the platform cannot take for an engine are refused; the sentence
+// must reach the user and the exit code must say "your request", not "we broke".
 func TestDBBackupEnable_UnsupportedEngine_Exit2(t *testing.T) {
 	dbSetup(t, map[string]http.HandlerFunc{
 		"/api/v1/orgs/acme/databases/orders/backups/enable": func(w http.ResponseWriter, _ *http.Request) {
@@ -310,6 +311,115 @@ func TestDBBackupEnable_BadRetentionNeverReachesThePlatform(t *testing.T) {
 	_, err := run(t, "db", "backup", "enable", "orders", "--retention", "7x")
 	if err == nil || ExitCode(err) != ExitUsage {
 		t.Fatalf("a malformed retention should be a usage error, got %v", err)
+	}
+}
+
+func backupsDisabledHandler(t *testing.T, called *bool) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			t.Errorf("backup disable should POST, got %s", r.Method)
+		}
+		*called = true
+		w.WriteHeader(202)
+		_, _ = w.Write([]byte(`{"enabled":false,"backupsKept":true}`))
+	}
+}
+
+func TestDBBackupDisable_SaysTheBackupsAreKept(t *testing.T) {
+	called := false
+	dbSetup(t, map[string]http.HandlerFunc{
+		"/api/v1/orgs/acme/databases/orders/backups/disable": backupsDisabledHandler(t, &called),
+	})
+	out, stderr, err := runWithStderr(t, "db", "backup", "disable", "orders")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !called {
+		t.Fatal("the platform was never asked to disable backups")
+	}
+	if out != "" {
+		t.Errorf("table mode prints its sentence to stderr, not stdout: %q", out)
+	}
+	if !strings.Contains(stderr, "Backups disabled on orders") || !strings.Contains(stderr, "kept") {
+		t.Errorf("should confirm, and say the existing backups are kept:\n%s", stderr)
+	}
+}
+
+func TestDBBackupDisable_JSON(t *testing.T) {
+	called := false
+	dbSetup(t, map[string]http.HandlerFunc{
+		"/api/v1/orgs/acme/databases/orders/backups/disable": backupsDisabledHandler(t, &called),
+	})
+	out, err := run(t, "db", "backup", "disable", "orders", "-o", "json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var got map[string]any
+	if err := json.Unmarshal([]byte(out), &got); err != nil {
+		t.Fatalf("not JSON: %v\n%s", err, out)
+	}
+	if got["enabled"] != false || got["backupsKept"] != true {
+		t.Errorf("JSON should be the platform's answer: %s", out)
+	}
+}
+
+func TestDBBackupDisable_Quiet(t *testing.T) {
+	called := false
+	dbSetup(t, map[string]http.HandlerFunc{
+		"/api/v1/orgs/acme/databases/orders/backups/disable": backupsDisabledHandler(t, &called),
+	})
+	out, err := run(t, "db", "backup", "disable", "orders", "--quiet")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if out != "" {
+		t.Errorf("--quiet should print nothing: %q", out)
+	}
+}
+
+func TestDBBackupDisable_ViewerForbidden_Exit4(t *testing.T) {
+	dbSetup(t, map[string]http.HandlerFunc{
+		"/api/v1/orgs/acme/databases/orders/backups/disable": func(w http.ResponseWriter, _ *http.Request) {
+			problem(w, 403, "forbidden", "Access denied: your role cannot update resource")
+		},
+	})
+	_, err := run(t, "db", "backup", "disable", "orders")
+	if err == nil || ExitCode(err) != ExitDenied {
+		t.Fatalf("want exit %d, got %d %v", ExitDenied, ExitCode(err), err)
+	}
+	if !strings.Contains(err.Error(), "your role cannot update resource") {
+		t.Errorf("the platform's sentence should be printed verbatim: %v", err)
+	}
+}
+
+func TestDBBackupDisable_UnsupportedEngine_Exit2(t *testing.T) {
+	dbSetup(t, map[string]http.HandlerFunc{
+		"/api/v1/orgs/acme/databases/orders/backups/disable": func(w http.ResponseWriter, _ *http.Request) {
+			problem(w, 400, "unsupported-engine", "Automatic backups are available for PostgreSQL databases only.")
+		},
+	})
+	_, err := run(t, "db", "backup", "disable", "orders")
+	if err == nil || ExitCode(err) != ExitUsage {
+		t.Fatalf("an unsupported engine should exit %d, got %d %v", ExitUsage, ExitCode(err), err)
+	}
+}
+
+// New databases are PostgreSQL only; any other engine is refused before the
+// platform is asked.
+func TestDBCreate_RefusesAnEngineOtherThanPostgreSQL(t *testing.T) {
+	dbSetup(t, map[string]http.HandlerFunc{
+		"/api/v1/orgs/acme/databases": func(w http.ResponseWriter, r *http.Request) {
+			if r.Method == http.MethodPost {
+				t.Error("the platform was called with an engine the CLI should have refused")
+			}
+		},
+	})
+	_, err := run(t, "db", "create", "cache", "--engine", "mariadb")
+	if err == nil || ExitCode(err) != ExitUsage {
+		t.Fatalf("an unavailable engine should be a usage error, got %v", err)
+	}
+	if !strings.Contains(err.Error(), "postgresql") {
+		t.Errorf("the error should name the engine that is available: %v", err)
 	}
 }
 

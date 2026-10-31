@@ -28,8 +28,8 @@ it is why two people running `env set` on the same app at the same moment can
 lose one of the two changes — the last write wins, as it would in the
 dashboard.
 
-Every update redeploys the app, because the platform rolls a new Knative
-revision when the row changes. So `env set` costs a rollout; it is not a
+Every update redeploys the app, because the platform rolls a new revision
+when the row changes. So `env set` costs a rollout; it is not a
 free metadata edit, and the command says so.
 */
 
@@ -374,8 +374,8 @@ is left. Any change redeploys the app.
 Rotating a registry token is the common case: pass the new credentials with
 --registry-password-stdin so the password never reaches argv.
 
-The pricing tier cannot be changed here; the platform does not accept it on an
-update, so a different size still means creating a new app.`,
+The size (pricing tier) cannot be changed from the CLI or the API. An owner or
+admin can move an app to a larger size from the app's page in the dashboard.`,
 	Example: `  cloud app update notifie --port 3000
   cloud app update notifie --description "notification service"
 

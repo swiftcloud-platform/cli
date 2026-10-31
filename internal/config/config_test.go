@@ -142,7 +142,7 @@ func TestValidateAPIURL_RequiresHTTPSExceptLoopback(t *testing.T) {
 
 func TestSaveLoad_RoundTripWithOwnerOnlyPermissions(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "nested", "config.yaml")
-	in := &File{CurrentContext: "prod", Contexts: map[string]Context{"prod": {Org: "acme", Region: "zm-lusaka-central-1"}}}
+	in := &File{CurrentContext: "prod", Contexts: map[string]Context{"prod": {Org: "acme", Region: "zm-lsk-1"}}}
 	if err := Save(path, in); err != nil {
 		t.Fatal(err)
 	}
@@ -161,7 +161,7 @@ func TestSaveLoad_RoundTripWithOwnerOnlyPermissions(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if out.CurrentContext != "prod" || out.Contexts["prod"].Region != "zm-lusaka-central-1" {
+	if out.CurrentContext != "prod" || out.Contexts["prod"].Region != "zm-lsk-1" {
 		t.Errorf("round trip lost data: %+v", out)
 	}
 }

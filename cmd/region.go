@@ -33,7 +33,7 @@ var regionCmd = &cobra.Command{
 creation time, so pass --region to "cloud app create", or set a default with
 CLOUD_REGION or a context.`,
 	Example: `  cloud region list
-  cloud app create demo --image nginx:1.27 --region zm-lusaka-central-1`,
+  cloud app create demo --image nginx:1.27 --region zm-lsk-1`,
 }
 
 var regionListCmd = &cobra.Command{

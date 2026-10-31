@@ -25,7 +25,7 @@ func TestContext_SetUseListCurrent(t *testing.T) {
 	if _, err := run(t, "context", "set", "local", "--api-url", "http://localhost:5173/api/v1", "--org", "platform"); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := run(t, "context", "set", "prod", "--org", "acme", "--region", "zm-lusaka-central-1"); err != nil {
+	if _, err := run(t, "context", "set", "prod", "--org", "acme", "--region", "zm-lsk-1"); err != nil {
 		t.Fatal(err)
 	}
 	// First context created becomes current automatically.

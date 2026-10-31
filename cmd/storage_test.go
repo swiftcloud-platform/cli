@@ -45,12 +45,12 @@ func (f *fakeStorage) serveAPI(w http.ResponseWriter, r *http.Request) {
 	case "/api/v1/me":
 		fmt.Fprint(w, `{"user":{"id":"u1","email":"a@b.c"},"organizations":[{"slug":"acme","role":"owner"}],"auth":{"kind":"session"}}`)
 	case "/api/v1/orgs/acme/buckets":
-		fmt.Fprintf(w, `{"items":[{"id":"b1","name":"pics","bucketName":"pics-abc123","organizationId":"o1","region":"zm-lusaka-central-1","regionId":"r1","status":"ready","objectCount":2,"sizeBytes":"2048","size":"s3-1","storageClass":"STANDARD","versioning":false,"publicAccess":false,"endpoint":%q,"virtualHost":"pics-abc123.s3.example","createdAt":"2026-09-01T00:00:00Z","updatedAt":"2026-09-01T00:00:00Z"}]}`, base)
+		fmt.Fprintf(w, `{"items":[{"id":"b1","name":"pics","bucketName":"pics-abc123","organizationId":"o1","region":"zm-lsk-1","regionId":"r1","status":"ready","objectCount":2,"sizeBytes":"2048","size":"s3-1","storageClass":"STANDARD","versioning":false,"publicAccess":false,"endpoint":%q,"virtualHost":"pics-abc123.s3.example","createdAt":"2026-09-01T00:00:00Z","updatedAt":"2026-09-01T00:00:00Z"}]}`, base)
 	case "/api/v1/orgs/acme/buckets/pics/credentials",
 		"/api/v1/orgs/acme/buckets/pics-abc123/credentials":
-		fmt.Fprintf(w, `{"accessKeyId":"AKIAFAKE","secretAccessKey":"s3cr3t'with'quotes","endpoint":%q,"bucketName":"pics-abc123","region":"zm-lusaka-central-1","virtualHost":"pics-abc123.s3.example"}`, base)
+		fmt.Fprintf(w, `{"accessKeyId":"AKIAFAKE","secretAccessKey":"s3cr3t'with'quotes","endpoint":%q,"bucketName":"pics-abc123","region":"zm-lsk-1","virtualHost":"pics-abc123.s3.example"}`, base)
 	case "/api/v1/orgs/acme/buckets/pics":
-		fmt.Fprintf(w, `{"id":"b1","name":"pics","bucketName":"pics-abc123","organizationId":"o1","region":"zm-lusaka-central-1","regionId":"r1","status":"ready","objectCount":2,"sizeBytes":"2048","size":"s3-1","storageClass":"STANDARD","versioning":false,"publicAccess":false,"endpoint":%q,"virtualHost":"pics-abc123.s3.example","createdAt":"2026-09-01T00:00:00Z","updatedAt":"2026-09-01T00:00:00Z"}`, base)
+		fmt.Fprintf(w, `{"id":"b1","name":"pics","bucketName":"pics-abc123","organizationId":"o1","region":"zm-lsk-1","regionId":"r1","status":"ready","objectCount":2,"sizeBytes":"2048","size":"s3-1","storageClass":"STANDARD","versioning":false,"publicAccess":false,"endpoint":%q,"virtualHost":"pics-abc123.s3.example","createdAt":"2026-09-01T00:00:00Z","updatedAt":"2026-09-01T00:00:00Z"}`, base)
 	default:
 		problem(w, 404, "not-found", "no such thing: "+r.URL.Path)
 	}
@@ -142,7 +142,7 @@ func storageSetup(t *testing.T, objects map[string][]byte) *fakeStorage {
 	t.Setenv("CLOUD_CONFIG_DIR", t.TempDir())
 	t.Setenv("CLOUD_API_URL", srv.URL+"/api/v1")
 	t.Setenv("CLOUD_ORG", "acme")
-	t.Setenv("CLOUD_REGION", "zm-lusaka-central-1")
+	t.Setenv("CLOUD_REGION", "zm-lsk-1")
 	t.Setenv("CLOUD_TOKEN", "owner-token")
 	return fake
 }
@@ -421,7 +421,7 @@ func TestBucketCredentials_Formats(t *testing.T) {
 	}
 	// The signing region is the platform's own region name, not a placeholder:
 	// this is what Arthur saw wrong in a presigned URL.
-	for _, want := range []string{"AWS_ACCESS_KEY_ID='AKIAFAKE'", "AWS_REGION='zm-lusaka-central-1'", "AWS_ENDPOINT_URL_S3='http://127.0.0.1"} {
+	for _, want := range []string{"AWS_ACCESS_KEY_ID='AKIAFAKE'", "AWS_REGION='zm-lsk-1'", "AWS_ENDPOINT_URL_S3='http://127.0.0.1"} {
 		if !strings.Contains(env, want) {
 			t.Errorf("env output missing %s:\n%s", want, env)
 		}
@@ -431,7 +431,7 @@ func TestBucketCredentials_Formats(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !strings.HasPrefix(prof, "[cloud-pics]") || !strings.Contains(prof, "region = zm-lusaka-central-1") {
+	if !strings.HasPrefix(prof, "[cloud-pics]") || !strings.Contains(prof, "region = zm-lsk-1") {
 		t.Errorf("aws-profile output:\n%s", prof)
 	}
 
@@ -443,7 +443,7 @@ func TestBucketCredentials_Formats(t *testing.T) {
 	if !strings.Contains(rc, "force_path_style = true") || !strings.Contains(rc, "type = s3") {
 		t.Errorf("rclone output:\n%s", rc)
 	}
-	if !strings.Contains(rc, "region = zm-lusaka-central-1") {
+	if !strings.Contains(rc, "region = zm-lsk-1") {
 		t.Errorf("rclone output should carry the platform region:\n%s", rc)
 	}
 

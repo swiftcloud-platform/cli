@@ -18,8 +18,8 @@ import (
 /*
 Virtual machines — v1.1.
 
-KubeVirt-backed VMs with power management, console access via an embedded
-SPICE client, SSH key management and public IP attach/detach.
+Virtual machines with power management, console access through the dashboard,
+SSH key management and public IP attach/detach.
 
 Statuses are the worker's to write. Nothing below decides a VM is ready;
 --wait polls and, when nothing moves, reports the worker heartbeat age
@@ -146,14 +146,14 @@ func printVM(cmd *cobra.Command, c *api.ClientWithResponses, org string, vm *api
 var vmCmd = &cobra.Command{
 	Use:   "vm",
 	Short: "Virtual machines",
-	Long: `Virtual machines: a KubeVirt-backed VM with power management, console
-access, SSH keys and public IP assignment.
+	Long: `Virtual machines with power management, console access, SSH keys and
+a dedicated public IP address.
 
 Every command below except "list" takes the VM's name as its first argument,
 before any flags. VMs belong to an organisation, taken from --org, CLOUD_ORG
 or the current context, so the name alone is enough to identify one.`,
 	Example: `  cloud vm list
-  cloud vm create web --image ubuntu-24.04 --wait
+  cloud vm create web --image ubuntu-24-04 --size vm-1 --wait
   cloud vm get web
   cloud vm console web
   cloud vm ip attach web`,
@@ -197,11 +197,15 @@ var vmCreateCmd = &cobra.Command{
 refers to it; --image is the only required flag.
 
 The VM is created immediately but starts as "provisioning"; pass --wait to
-block until it is running (or fails).`,
-	Example: `  cloud vm create web --image ubuntu-24.04
-  cloud vm create web --image ubuntu-24.04 --size vm-2 --region zm-lusaka-central-1 --wait
-  cloud vm create web --image ubuntu-24.04 --ssh-key ~/.ssh/id_ed25519.pub
-  cloud vm create web --image ubuntu-24.04 --ssh-key ssh-ed25519 AAAA...`,
+block until it is running (or fails).
+
+A key given with --ssh-key is installed on the machine's first boot. Windows
+images do not take one: they are signed in to over Remote Desktop with a
+generated password, shown on the machine's dashboard page.`,
+	Example: `  cloud vm create web --image ubuntu-24-04
+  cloud vm create web --image ubuntu-24-04 --size vm-1 --ssh-key ~/.ssh/id_ed25519.pub --wait
+  cloud vm create web --image ubuntu-24-04 --size vm-2 --region zm-lsk-1 --wait
+  cloud vm create web --image ubuntu-24-04 --ssh-key "ssh-ed25519 AAAA..."`,
 	Args: cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		org, err := requireOrg()
@@ -432,8 +436,8 @@ func readSSHKey(pathOrKey string) (string, error) {
 
 func init() {
 	f := vmCreateCmd.Flags()
-	f.StringVar(&vmCreateImage, "image", "", "VM image reference (required)")
-	f.StringVar(&vmCreateSize, "size", "", "pricing tier (vCPU/RAM; default: smallest)")
+	f.StringVar(&vmCreateImage, "image", "", "VM image slug, e.g. ubuntu-24-04 (required)")
+	f.StringVar(&vmCreateSize, "size", "", "pricing tier, e.g. vm-1 (default: the smallest tier the image fits on)")
 	f.StringVar(&vmCreateRegion, "region", "", "region name (default from context / CLOUD_REGION)")
 	f.StringVar(&vmCreateDesc, "description", "", "short description")
 	f.StringVar(&vmCreateSSHKey, "ssh-key", "", "SSH public key or path to a public key file")

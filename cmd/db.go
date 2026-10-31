@@ -20,7 +20,7 @@ import (
 /*
 Managed databases — phase 4.
 
-PostgreSQL and MariaDB clusters, their backups, and restore-to-a-new-database.
+PostgreSQL databases, their backups, and restore-to-a-new-database.
 Two restrictions come from the platform rather than from here: automatic
 backups and restore are PostgreSQL-only, and the platform answers those with
 an `unsupported-engine` problem, which this file turns into one plain sentence.
@@ -303,14 +303,13 @@ func printDatabase(cmd *cobra.Command, c *api.ClientWithResponses, org string, d
 
 var dbCmd = &cobra.Command{
 	Use:   "db",
-	Short: "Managed PostgreSQL and MariaDB databases",
+	Short: "Managed PostgreSQL databases",
 	Long: `Managed databases: a cluster the platform runs, backs up and keeps
 patched, reachable over TLS from anywhere and privately from apps in the same
 region.
 
 Every command below except "list" and "engines" takes the database's name as
-its first argument, before any flags. Automatic backups and restore are
-PostgreSQL-only; the platform refuses them for MariaDB.`,
+its first argument, before any flags.`,
 	Example: `  cloud db engines
   cloud db create orders --engine postgresql --wait
   cloud db list
@@ -379,7 +378,7 @@ var dbListCmd = &cobra.Command{
 }
 
 var dbCreateCmd = &cobra.Command{
-	Use:   "create <name> --engine postgresql|mariadb",
+	Use:   "create <name> --engine postgresql",
 	Short: "Create a managed database",
 	Long: `Create a database. The name is yours to choose and is how every other
 command refers to it; --engine is the only required flag.
@@ -390,7 +389,7 @@ credentials appear only once the worker has built the cluster, so pass --wait
 if the next thing you do needs to connect.`,
 	Example: `  cloud db create orders --engine postgresql
   cloud db create orders --engine postgresql --version 16 --size db-2 --wait
-  cloud db create cache --engine mariadb --region zm-lusaka-central-1`,
+  cloud db create cache --engine postgresql --region zm-lsk-1`,
 	Args: cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		org, err := requireOrg()
@@ -399,7 +398,7 @@ if the next thing you do needs to connect.`,
 		}
 		engine := api.DatabaseCreateEngine(dbCreateEngine)
 		if !engine.Valid() {
-			return &UsageError{fmt.Errorf("--engine %q is not postgresql or mariadb (see `cloud db engines`)", dbCreateEngine)}
+			return &UsageError{fmt.Errorf("--engine %q is not available: new databases are postgresql (see `cloud db engines`)", dbCreateEngine)}
 		}
 		region := dbCreateRegion
 		if region == "" {
@@ -636,15 +635,14 @@ var dbRestartCmd = powerCmd("restart", "Restart a database",
 var dbBackupCmd = &cobra.Command{
 	Use:   "backup",
 	Short: "Backups of a database",
-	Long: `Backups are PostgreSQL-only; the platform refuses them for MariaDB.
-
-"enable" attaches continuous WAL archiving and a daily schedule — do that once
-per database. "create" takes a base backup now. The platform records the
-schedule on the cluster rather than in the row, so "list" is how you see
-whether backups are running.`,
+	Long: `"enable" attaches continuous WAL archiving and a daily schedule — do that
+once per database. "create" takes a base backup now. "disable" stops the
+schedule and the archiving but keeps the backups already taken. "list" is how
+you see whether backups are running.`,
 	Example: `  cloud db backup enable orders --retention 7d
   cloud db backup create orders
-  cloud db backup list orders`,
+  cloud db backup list orders
+  cloud db backup disable orders`,
 }
 
 var dbBackupEnableCmd = &cobra.Command{
@@ -769,6 +767,53 @@ base backup has not run yet.`,
 	},
 }
 
+var dbBackupDisableCmd = &cobra.Command{
+	Use:   "disable <db>",
+	Short: "Stop automatic backups, keeping the ones already taken",
+	Long: `Turn off automatic backups for a database: the daily schedule and the
+continuous WAL archiving stop, so nothing further is written or charged for.
+
+Backups already taken are kept and stay restorable, each to its own completion
+point; what stops is point-in-time restore beyond the last archived WAL.
+Disabling twice is not an error. Turn backups back on with "cloud db backup
+enable".`,
+	Example: `  cloud db backup disable orders
+  cloud db backup disable orders -o json`,
+	Args: cobra.ExactArgs(1),
+	RunE: func(cmd *cobra.Command, args []string) error {
+		org, err := requireOrg()
+		if err != nil {
+			return err
+		}
+		c, _, err := apiClient()
+		if err != nil {
+			return err
+		}
+		res, err := c.PostOrgsOrgDatabasesDbBackupsDisableWithResponse(cmd.Context(), org, args[0])
+		if err != nil {
+			return reachErr(err)
+		}
+		if err := apiErr(res.StatusCode(), res.Body); err != nil {
+			return err
+		}
+		disabled, err := decoded(res.JSON202)
+		if err != nil {
+			return err
+		}
+		if printer.Format == output.Table {
+			if !flagQuiet {
+				kept := "Backups already taken are kept and can still be restored."
+				if !disabled.BackupsKept {
+					kept = "Backups already taken were not kept."
+				}
+				fmt.Fprintf(cmd.ErrOrStderr(), "Backups disabled on %s. %s\n", args[0], kept)
+			}
+			return nil
+		}
+		return printer.Print(disabled)
+	},
+}
+
 var dbRestoreCmd = &cobra.Command{
 	Use:   "restore <name> --to <new-name>",
 	Short: "Restore a database into a new one",
@@ -821,7 +866,7 @@ it, you get the latest backup. PostgreSQL only.`,
 
 func init() {
 	f := dbCreateCmd.Flags()
-	f.StringVar(&dbCreateEngine, "engine", "", "postgresql or mariadb (required)")
+	f.StringVar(&dbCreateEngine, "engine", "", "database engine: postgresql (required)")
 	f.StringVar(&dbCreateVersion, "version", "", "engine version (default: the engine's default, see `cloud db engines`)")
 	f.StringVar(&dbCreateSize, "size", "", "pricing tier (see /pricing)")
 	f.StringVar(&dbCreateDesc, "description", "", "short description")
@@ -843,7 +888,7 @@ func init() {
 		c.Flags().DurationVar(&flagTimeout, "timeout", 10*time.Minute, "how long --wait waits")
 	}
 
-	dbBackupCmd.AddCommand(dbBackupEnableCmd, dbBackupCreateCmd, dbBackupListCmd)
+	dbBackupCmd.AddCommand(dbBackupEnableCmd, dbBackupDisableCmd, dbBackupCreateCmd, dbBackupListCmd)
 	dbCmd.AddCommand(dbListCmd, dbCreateCmd, dbGetCmd, dbDeleteCmd, dbCredentialsCmd,
 		dbStartCmd, dbStopCmd, dbRestartCmd, dbBackupCmd, dbRestoreCmd, dbEnginesCmd)
 	rootCmd.AddCommand(dbCmd)

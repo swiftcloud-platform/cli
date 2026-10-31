@@ -166,7 +166,7 @@ var contextSetCmd = &cobra.Command{
 	Short: "Create a context or change its fields",
 	Long: `Create a context, or change only the fields you pass on an existing one.
 Omitted fields are kept. Pass an empty value ("") to clear a field.`,
-	Example: `  cloud context set prod --org acme --region zm-lusaka-central-1
+	Example: `  cloud context set prod --org acme --region zm-lsk-1
   cloud context set local --api-url http://localhost:5173/api/v1 --org platform --use
   cloud context set prod --region ""`,
 	Args:              cobra.ExactArgs(1),

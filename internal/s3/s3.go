@@ -24,7 +24,7 @@ The client.
 Two SDK choices are worth stating, because both look wrong at a glance:
 
   - The signing region is the platform's own region name, e.g.
-    zm-lusaka-central-1, taken from the bucket's credentials. SigV4 signs the
+    zm-lsk-1, taken from the bucket's credentials. SigV4 signs the
     region string, so client and server must agree on it; the storage layer
     accepts any value in the scope, so the platform's name is used in
     preference to the us-east-1 placeholder it used to require. Options.Region
@@ -64,7 +64,7 @@ const Concurrency = 4
 // API client is a separate http.Client with a 60 s timeout, which is right
 // for a JSON call and would be wrong here; do not share it.
 type Options struct {
-	// Endpoint is the region's S3 endpoint, e.g. https://s3.zm-lusaka-central-1.cloud.co.zm
+	// Endpoint is the region's S3 endpoint, e.g. https://s3.zm-lsk-1.cloud.co.zm
 	Endpoint  string
 	AccessKey string
 	SecretKey string

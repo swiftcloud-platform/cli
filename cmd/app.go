@@ -117,8 +117,8 @@ var appCreateCmd = &cobra.Command{
 	Long: `Create an app. The name is yours to choose and is how every other
 command refers to it; --image is the only required flag.
 
-The app is created immediately but starts as "provisioning"; pass --wait to
-block until it is running (or fails), which is when the https URL works.`,
+The app is created immediately but starts as "deploying"; pass --wait to
+block until it is ready (or fails), which is when the https URL works.`,
 	Example: `  cloud app create demo --image nginx:1.27
   cloud app create api --image ghcr.io/acme/api:1.4 --port 3000 --min 1 --max 5 --wait
 

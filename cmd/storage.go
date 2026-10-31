@@ -272,7 +272,7 @@ reach them.
 A bucket's usage figures are measured periodically rather than live, so a
 freshly uploaded object may not be counted yet.`,
 	Example: `  cloud storage bucket list
-  cloud storage bucket create photos --region zm-lusaka-central-1 --wait
+  cloud storage bucket create photos --region zm-lsk-1 --wait
   cloud storage bucket credentials photos --format env`,
 }
 
@@ -334,7 +334,7 @@ follow S3 naming rules — lowercase letters, digits, dots and hyphens.
 The bucket gets a physical name of its own on the storage layer; both names
 work everywhere the CLI takes a bucket.`,
 	Example: `  cloud storage bucket create photos
-  cloud storage bucket create photos --region zm-lusaka-central-1 --wait`,
+  cloud storage bucket create photos --region zm-lsk-1 --wait`,
 	Args: cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		org, err := requireOrg()

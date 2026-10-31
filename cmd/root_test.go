@@ -17,6 +17,14 @@ import (
 // in the tree, not just the root's persistent flags.
 func run(t *testing.T, args ...string) (string, error) {
 	t.Helper()
+	out, _, err := runWithStderr(t, args...)
+	return out, err
+}
+
+// runWithStderr is run, also returning what the command wrote to stderr —
+// where table-mode progress lines and platform notices go.
+func runWithStderr(t *testing.T, args ...string) (string, string, error) {
+	t.Helper()
 	resetFlags(rootCmd)
 	// Tests are never interactive: stdin is whatever the test queued, else empty.
 	if testStdin == nil {
@@ -30,7 +38,7 @@ func run(t *testing.T, args ...string) (string, error) {
 	rootCmd.SetErr(&errOut)
 	rootCmd.SetArgs(args)
 	err := rootCmd.Execute()
-	return out.String(), err
+	return out.String(), errOut.String(), err
 }
 
 // testStdin, when set, is consumed by the next run().

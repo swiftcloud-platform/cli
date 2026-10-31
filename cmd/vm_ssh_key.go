@@ -14,8 +14,13 @@ import (
 var vmSSHKeyCmd = &cobra.Command{
 	Use:   "ssh-key",
 	Short: "SSH keys on a VM",
-	Long: `Manage the SSH public keys installed on a VM. Keys are deployed to
-the VM's authorised_keys on first boot and on each subsequent update.`,
+	Long: `Manage the SSH public keys recorded on a VM.
+
+Keys are installed only on a machine's first boot: those given to "cloud vm
+create --ssh-key", or recorded before the machine first started. A key added
+to a machine that is already set up is recorded but NOT installed — add it to
+~/.ssh/authorized_keys on the machine yourself. Removing a key likewise only
+removes it from the record, not from the machine.`,
 	Example: `  cloud vm ssh-key list web
   cloud vm ssh-key add web ~/.ssh/id_ed25519.pub --label laptop
   cloud vm ssh-key remove web key_abc123`,
@@ -53,15 +58,18 @@ var vmSSHKeyListCmd = &cobra.Command{
 
 var vmSSHKeyAddCmd = &cobra.Command{
 	Use:   "add <vm> <path-or-key>",
-	Short: "Add an SSH key to a VM",
-	Long: `Add an SSH public key to a VM. The argument is either a path to a
+	Short: "Record an SSH key on a VM",
+	Long: `Record an SSH public key on a VM. The argument is either a path to a
 public key file (e.g. ~/.ssh/id_ed25519.pub) or a literal public key string
-starting with ssh-.
+starting with ssh-, quoted so it is one argument.
 
-The key is deployed to the VM's authorised_keys on the next boot or update.`,
+Keys are installed only on a machine's first boot. On a machine that is
+already set up the key is recorded but NOT installed: add it to
+~/.ssh/authorized_keys on the machine yourself. The platform's note about
+what it did with the key is printed after it is added.`,
 	Example: `  cloud vm ssh-key add web ~/.ssh/id_ed25519.pub
   cloud vm ssh-key add web ~/.ssh/id_ed25519.pub --label laptop
-  cloud vm ssh-key add web ssh-ed25519 AAAA...`,
+  cloud vm ssh-key add web "ssh-ed25519 AAAA... me@laptop"`,
 	Args: cobra.ExactArgs(2),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		org, err := requireOrg()
@@ -92,7 +100,10 @@ The key is deployed to the VM's authorised_keys on the next boot or update.`,
 			return err
 		}
 		if !flagQuiet && printer.Format == output.Table {
-			fmt.Fprintf(cmd.ErrOrStderr(), "Added key %s (%s)\n", k.Id, k.Fingerprint)
+			fmt.Fprintf(cmd.ErrOrStderr(), "Recorded key %s (%s)\n", k.Id, k.Fingerprint)
+			if k.Notice != nil && *k.Notice != "" {
+				fmt.Fprintln(cmd.ErrOrStderr(), *k.Notice)
+			}
 			return nil
 		}
 		return printer.Print(vmSSHKeyRows{*k})
@@ -102,8 +113,9 @@ The key is deployed to the VM's authorised_keys on the next boot or update.`,
 var vmSSHKeyRemoveCmd = &cobra.Command{
 	Use:   "remove <vm> <key-id>",
 	Short: "Remove an SSH key from a VM",
-	Long: `Remove an SSH public key from a VM. The key will no longer be deployed
-to the VM's authorised_keys.`,
+	Long: `Remove an SSH public key from the VM's record. A key already
+installed on the machine stays in ~/.ssh/authorized_keys there until you
+remove it on the machine.`,
 	Example: `  cloud vm ssh-key remove web key_abc123
   cloud vm ssh-key remove web key_abc123 --yes`,
 	Args: cobra.ExactArgs(2),
