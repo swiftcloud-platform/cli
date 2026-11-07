@@ -1,6 +1,9 @@
 # SwiftCloud CLI
 BINARY  := cloud
-VERSION ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo dev)
+# goreleaser injects the tag without its "v" (1.2.3), so this strips it too.
+# `cloud update` compares versions as semver and refuses to replace anything
+# that is not a clean release (-dirty, or git describe's -N-g<hash>).
+VERSION ?= $(patsubst v%,%,$(shell git describe --tags --always --dirty 2>/dev/null || echo dev))
 COMMIT  ?= $(shell git rev-parse --short HEAD 2>/dev/null || echo none)
 DATE    ?= $(shell date -u '+%Y-%m-%dT%H:%M:%SZ')
 
