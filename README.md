@@ -27,7 +27,31 @@ nor an administrator prompt is needed on Windows.
 Set `CLOUD_VERSION` to install a specific tag, or `CLOUD_INSTALL_DIR` to choose
 where it goes. Prebuilt binaries for Linux, macOS and Windows on amd64 and
 arm64 are on the [Releases](https://github.com/swiftcloud-platform/cli/releases)
-page, and `cloud update` upgrades an existing install in place.
+page, and `cloud update` upgrades an existing install in place. It only ever
+moves to a newer release, and leaves local builds alone.
+
+### Verifying a release
+
+The checksum catches a broken or swapped download, but `checksums.txt` comes
+from the same release as the archive, so on its own it cannot catch a
+tampered release. Releases after v0.3.4 are also signed: `checksums.txt` is
+signed keylessly with [cosign](https://docs.sigstore.dev/cosign/) by the
+release workflow, and each archive carries a GitHub build-provenance
+attestation. The install scripts check the signature when `cosign` is on your
+PATH. **`cloud update` does not check it yet** — it verifies the checksum only.
+
+To verify by hand:
+
+```sh
+cosign verify-blob checksums.txt \
+  --bundle checksums.txt.sigstore.json \
+  --certificate-identity-regexp '^https://github\.com/swiftcloud-platform/cli/\.github/workflows/release\.yml@refs/tags/v' \
+  --certificate-oidc-issuer https://token.actions.githubusercontent.com
+sha256sum --ignore-missing -c checksums.txt
+
+# or, with the GitHub CLI, the provenance of one archive:
+gh attestation verify cloud_<version>_linux_amd64.tar.gz --repo swiftcloud-platform/cli
+```
 
 ## Use
 

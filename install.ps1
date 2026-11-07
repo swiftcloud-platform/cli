@@ -13,6 +13,11 @@
   administrator, and `cloud update` can then replace the binary in place
   without one either.
 
+  If cosign is on PATH, the release's signature over checksums.txt is checked
+  too, which proves the release was built by the repository's release
+  workflow. Without cosign the check is skipped and the command to run it by
+  hand is printed.
+
 .PARAMETER Version
   A specific tag to install, e.g. v1.2.3. Defaults to the latest release.
   Also read from the CLOUD_VERSION environment variable.
@@ -38,6 +43,12 @@ $ErrorActionPreference = 'Stop'
 Set-StrictMode -Version Latest
 
 $Repo = 'swiftcloud-platform/cli'
+
+# Releases after v0.3.4 carry checksums.txt.sigstore.json; from this version on,
+# a missing signature is a failure, not a skipped check.
+$FirstSigned = [version]'0.3.5'
+$SignerIdentity = '^https://github\.com/swiftcloud-platform/cli/\.github/workflows/release\.yml@refs/tags/v'
+$SignerIssuer = 'https://token.actions.githubusercontent.com'
 
 function Say($msg) { Write-Host $msg }
 function Die($msg) { Write-Error "install.ps1: $msg"; exit 1 }
@@ -96,9 +107,47 @@ try {
     }
 
     # ── verify before anything is written outside the temp directory ────────
-    $line = Select-String -Path $sums -Pattern ([regex]::Escape($archive) + '$') | Select-Object -First 1
-    if (-not $line) { Die "no checksum for $archive in checksums.txt" }
-    $expected = ($line.Line -split '\s+')[0].ToLower()
+    # The signature over checksums.txt, when cosign is available.
+    if (Get-Command cosign -ErrorAction SilentlyContinue) {
+        $bundle = Join-Path $tmp 'checksums.txt.sigstore.json'
+        $haveBundle = $true
+        try {
+            Invoke-WebRequest -Uri "$base/checksums.txt.sigstore.json" -OutFile $bundle -UseBasicParsing
+        } catch {
+            $haveBundle = $false
+        }
+        if ($haveBundle) {
+            & cosign verify-blob $sums --bundle $bundle `
+                --certificate-identity-regexp $SignerIdentity `
+                --certificate-oidc-issuer $SignerIssuer
+            if ($LASTEXITCODE -ne 0) { Die 'the signature on checksums.txt does not verify — nothing was installed' }
+            Say "Signature verified: built by $Repo's release workflow."
+        } else {
+            $numeric = $null
+            if ([version]::TryParse(($ver -replace '[-+].*$', ''), [ref]$numeric) -and $numeric -lt $FirstSigned) {
+                Say "Release $Version predates signed releases ($FirstSigned); checking its checksum only."
+            } else {
+                Die "release $Version has no checksums.txt.sigstore.json, but every release from $FirstSigned on is signed — nothing was installed"
+            }
+        }
+    } else {
+        Say 'cosign is not installed, so the release signature was not checked. To check it yourself, download'
+        Say "  $base/checksums.txt and $base/checksums.txt.sigstore.json, then run:"
+        Say "  cosign verify-blob checksums.txt --bundle checksums.txt.sigstore.json --certificate-identity-regexp '$SignerIdentity' --certificate-oidc-issuer $SignerIssuer"
+    }
+
+    # The archive's checksum. The file-name field must equal the archive name
+    # exactly — a pattern match would also accept it inside a longer name.
+    # goreleaser may write a "*" before the name (binary mode); not part of it.
+    $expected = $null
+    foreach ($l in Get-Content -Path $sums) {
+        $fields = $l.Trim() -split '\s+'
+        if ($fields.Count -eq 2 -and $fields[1].TrimStart('*') -ceq $archive) {
+            $expected = $fields[0].ToLower()
+            break
+        }
+    }
+    if (-not $expected) { Die "no checksum for $archive in checksums.txt" }
     $actual = (Get-FileHash -Path $zip -Algorithm SHA256).Hash.ToLower()
     if ($expected -ne $actual) {
         Die "checksum mismatch for $archive (expected $expected, got $actual) — nothing was installed"
@@ -119,13 +168,30 @@ try {
     # ── PATH ────────────────────────────────────────────────────────────────
     # The user's own PATH, so no administrator is needed. A fresh terminal
     # picks it up; this session gets it immediately.
-    $userPath = [Environment]::GetEnvironmentVariable('Path', 'User')
-    if (-not $userPath) { $userPath = '' }
-    $already = $userPath -split ';' | Where-Object { $_.TrimEnd('\') -ieq $InstallDir.TrimEnd('\') }
-    if (-not $already) {
-        $newPath = if ($userPath.TrimEnd(';')) { $userPath.TrimEnd(';') + ';' + $InstallDir } else { $InstallDir }
-        [Environment]::SetEnvironmentVariable('Path', $newPath, 'User')
-        Say "Added $InstallDir to your PATH — open a new terminal for it to take effect elsewhere."
+    #
+    # Read and written as the raw registry value. [Environment]'s Get/Set
+    # expand %VARIABLE% entries on the way in and write the expanded text back
+    # as a plain string, which silently freezes every %USERPROFILE%-style entry
+    # the user had. The RegistryKey API with DoNotExpandEnvironmentNames keeps
+    # them as written, and the value stays REG_EXPAND_SZ.
+    $envKey = [Microsoft.Win32.Registry]::CurrentUser.OpenSubKey('Environment', $true)
+    if (-not $envKey) { $envKey = [Microsoft.Win32.Registry]::CurrentUser.CreateSubKey('Environment') }
+    try {
+        $userPath = [string]$envKey.GetValue('Path', '', [Microsoft.Win32.RegistryValueOptions]::DoNotExpandEnvironmentNames)
+        $already = $userPath -split ';' | Where-Object { $_.TrimEnd('\') -ieq $InstallDir.TrimEnd('\') }
+        if (-not $already) {
+            $newPath = if ($userPath.TrimEnd(';')) { $userPath.TrimEnd(';') + ';' + $InstallDir } else { $InstallDir }
+            $envKey.SetValue('Path', $newPath, [Microsoft.Win32.RegistryValueKind]::ExpandString)
+            # Writing the registry directly does not tell running programs
+            # (Explorer, and so new terminals) that the environment changed;
+            # setting and clearing a throwaway user variable through
+            # [Environment] broadcasts WM_SETTINGCHANGE, which does.
+            [Environment]::SetEnvironmentVariable('CLOUD_INSTALL_PATH_REFRESH', '1', 'User')
+            [Environment]::SetEnvironmentVariable('CLOUD_INSTALL_PATH_REFRESH', $null, 'User')
+            Say "Added $InstallDir to your PATH — open a new terminal for it to take effect elsewhere."
+        }
+    } finally {
+        $envKey.Close()
     }
     if (($env:Path -split ';' | Where-Object { $_.TrimEnd('\') -ieq $InstallDir.TrimEnd('\') }).Count -eq 0) {
         $env:Path = "$env:Path;$InstallDir"
