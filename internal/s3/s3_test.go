@@ -318,6 +318,46 @@ func TestPresignPut_IsAPutURL(t *testing.T) {
 	}
 }
 
+// Every request signed with the bucket's secret goes to the endpoint, so an
+// endpoint that is not plainly a region's S3 host is refused before use.
+func TestValidateEndpoint(t *testing.T) {
+	for _, ok := range []string{
+		"https://s3.zm-lsk-1.cloud.co.zm",
+		"https://s3.zm-lsk-1.cloud.co.zm/",
+		"https://s3.example.com:8443",
+		"http://localhost:8333",
+		"http://127.0.0.1:9000",
+		"http://127.1.2.3",
+		"http://[::1]:9000",
+	} {
+		if err := ValidateEndpoint(ok); err != nil {
+			t.Errorf("%q should be accepted: %v", ok, err)
+		}
+	}
+	for _, bad := range []string{
+		"http://s3.example.com",
+		"http://10.0.0.1:9000",
+		"ftp://s3.example.com",
+		"s3.example.com",
+		"https://",
+		"https://user:pass@s3.example.com",
+		"https://user@s3.example.com",
+		"https://s3.example.com?x=1",
+		"https://s3.example.com/?",
+		"https://s3.example.com#frag",
+		"https://s3.example.com/bucket",
+		"https://s3.example.com/a/b/",
+		"http://localhost.evil.com",
+	} {
+		if err := ValidateEndpoint(bad); err == nil {
+			t.Errorf("%q must be refused", bad)
+		}
+	}
+	if _, err := New(Options{Endpoint: "http://s3.example.com", AccessKey: "a", SecretKey: "b"}); err == nil {
+		t.Error("New must refuse an endpoint that fails validation")
+	}
+}
+
 // The signing region is the platform's own region name. It reached a customer
 // as a visible "us-east-1" inside a presigned URL, which is what prompted the
 // change; the placeholder survives only as a fallback.
