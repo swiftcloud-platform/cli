@@ -408,7 +408,7 @@ func TestDBBackupDisable_UnsupportedEngine_Exit2(t *testing.T) {
 // platform is asked.
 func TestDBCreate_RefusesAnEngineOtherThanPostgreSQL(t *testing.T) {
 	dbSetup(t, map[string]http.HandlerFunc{
-		"/api/v1/orgs/acme/databases": func(w http.ResponseWriter, r *http.Request) {
+		"/api/v1/orgs/acme/databases": func(_ http.ResponseWriter, r *http.Request) {
 			if r.Method == http.MethodPost {
 				t.Error("the platform was called with an engine the CLI should have refused")
 			}

@@ -13,6 +13,8 @@ import (
 	"errors"
 	"fmt"
 	"time"
+
+	"cloud/internal/termsafe"
 )
 
 // Poll fetches the current status. done=true ends the wait successfully.
@@ -29,8 +31,11 @@ type Options struct {
 	StallAfter time.Duration
 	// OnStatus is called whenever the status changes, for progress output.
 	OnStatus func(status string)
-	Now      func() time.Time
-	Sleep    func(context.Context, time.Duration) error
+	// CheckCommand is what a timeout message tells the person to run to look
+	// again later, e.g. "cloud vm get web". Empty gives a generic sentence.
+	CheckCommand string
+	Now          func() time.Time
+	Sleep        func(context.Context, time.Duration) error
 }
 
 // ErrTimeout is returned when Timeout passes without a terminal status.
@@ -40,6 +45,8 @@ type ErrTimeout struct {
 	// WorkerDown is set when /health reported a stale or missing heartbeat.
 	WorkerDown bool
 	WorkerAge  time.Duration
+	// Check is the command to look at the resource later (Options.CheckCommand).
+	Check string
 }
 
 func (e *ErrTimeout) Error() string {
@@ -49,17 +56,21 @@ func (e *ErrTimeout) Error() string {
 		}
 		return fmt.Sprintf("still %q after %s — the platform worker is not running, so statuses are not being updated", e.LastStatus, e.Elapsed.Round(time.Second))
 	}
-	return fmt.Sprintf("still %q after %s; check `cloud app get` later or increase --timeout", e.LastStatus, e.Elapsed.Round(time.Second))
+	if e.Check != "" {
+		return fmt.Sprintf("still %q after %s; check `%s` later or increase --timeout", e.LastStatus, e.Elapsed.Round(time.Second), e.Check)
+	}
+	return fmt.Sprintf("still %q after %s; check its status later or increase --timeout", e.LastStatus, e.Elapsed.Round(time.Second))
 }
 
 // ErrFailed is returned when the status becomes a failure state.
 type ErrFailed struct{ Status, Reason string }
 
 func (e *ErrFailed) Error() string {
+	// Both come from the platform and end up on a terminal.
 	if e.Reason != "" {
-		return fmt.Sprintf("%s: %s", e.Status, e.Reason)
+		return fmt.Sprintf("%s: %s", termsafe.String(e.Status), termsafe.String(e.Reason))
 	}
-	return e.Status
+	return termsafe.String(e.Status)
 }
 
 func defaultSleep(ctx context.Context, d time.Duration) error {
@@ -116,14 +127,14 @@ func Until(ctx context.Context, poll Poll, health Health, o Options) (string, er
 		if elapsed >= o.Timeout {
 			// WorkerDown is false here by construction: the only place that
 			// finds a dead worker returns below, without falling through.
-			return status, &ErrTimeout{LastStatus: status, Elapsed: elapsed}
+			return status, &ErrTimeout{LastStatus: status, Elapsed: elapsed, Check: o.CheckCommand}
 		}
 		// Stalled: ask once whether anyone is actually working on it.
 		if !healthChecked && health != nil && now().Sub(lastChange) >= o.StallAfter {
 			healthChecked = true
 			if ok, age, herr := health(ctx); herr == nil && !ok {
 				// No point waiting the full timeout for a worker that is not there.
-				return status, &ErrTimeout{LastStatus: status, Elapsed: elapsed, WorkerDown: true, WorkerAge: age}
+				return status, &ErrTimeout{LastStatus: status, Elapsed: elapsed, WorkerDown: true, WorkerAge: age, Check: o.CheckCommand}
 			}
 		}
 		if err := sleep(ctx, o.Interval); err != nil {

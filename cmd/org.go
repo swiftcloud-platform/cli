@@ -2,12 +2,14 @@ package cmd
 
 import (
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 
 	"github.com/spf13/cobra"
 
 	"cloud/internal/config"
+	"cloud/internal/termsafe"
 )
 
 var orgCmd = &cobra.Command{
@@ -83,11 +85,28 @@ new shells. The argument is the slug from "cloud org list", not the display name
 			return &UsageError{fmt.Errorf("you are not a member of an organisation %q (see `cloud org list`)", slug)}
 		}
 
-		name, err := saveDefaultOrg(slug)
+		w := cmd.ErrOrStderr()
+		name, err := saveDefaultOrg(w, slug)
 		if err != nil {
 			return err
 		}
-		fmt.Fprintf(cmd.ErrOrStderr(), "Default organisation for context %q is now %s.\n", name, slug)
+		fmt.Fprintf(w, "Default organisation for context %q is now %s.\n", name, termsafe.String(slug))
+		// --org and CLOUD_ORG outrank the saved default, so while one is set
+		// the change above does not apply — say so rather than let the next
+		// command act on a different organisation than the one just chosen.
+		switch src := cfg.Source["org"]; src {
+		case "flag", "env":
+			how := "--org"
+			if src == "env" {
+				how = "CLOUD_ORG"
+			}
+			if cfg.Org != slug {
+				fmt.Fprintf(w, "warning: %s is set to %s, which overrides this default — commands run with it will act on %s, not %s.\n",
+					how, termsafe.String(cfg.Org), termsafe.String(cfg.Org), termsafe.String(slug))
+			} else {
+				fmt.Fprintf(w, "note: %s is also set; it overrides the saved default whenever it is present.\n", how)
+			}
+		}
 		return nil
 	},
 }
@@ -103,7 +122,15 @@ func init() {
 // Shared by `org use` and by `login`, which sets the first organisation
 // automatically so that signing in leaves the CLI ready to use rather than
 // one instruction short of it.
-func saveDefaultOrg(slug string) (string, error) {
+//
+// It writes the organisation and nothing else into an existing context. An
+// API URL that came from --api-url or CLOUD_API_URL is an override for this
+// run; writing it into the context would make it permanent, so every later
+// command — and every token — would go to that host without anyone having
+// asked. Only when the context is being created here, and the URL was given
+// as a flag on this very command, is it saved with the organisation (the
+// organisation belongs to that API), and stderr says so.
+func saveDefaultOrg(w io.Writer, slug string) (string, error) {
 	dir, err := config.Dir(os.Getenv)
 	if err != nil {
 		return "", err
@@ -118,15 +145,14 @@ func saveDefaultOrg(slug string) (string, error) {
 		name = "default"
 		file.CurrentContext = name
 	}
-	ctx := file.Contexts[name]
-	ctx.Org = slug
-	// Keep a non-default API URL with the organisation it belongs to, or the
-	// context would point the org at production next time.
-	if ctx.APIURL == "" && cfg.APIURL != config.DefaultAPIURL {
-		ctx.APIURL = cfg.APIURL
-	}
 	if file.Contexts == nil {
 		file.Contexts = map[string]config.Context{}
+	}
+	ctx, existed := file.Contexts[name]
+	ctx.Org = slug
+	if !existed && ctx.APIURL == "" && cfg.Source["api_url"] == "flag" && cfg.APIURL != config.DefaultAPIURL {
+		ctx.APIURL = cfg.APIURL
+		fmt.Fprintf(w, "Saved API URL %s in new context %q along with the organisation.\n", cfg.APIURL, name)
 	}
 	file.Contexts[name] = ctx
 	return name, config.Save(path, file)

@@ -5,9 +5,12 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"os"
 	"time"
 
 	"github.com/spf13/cobra"
+
+	"cloud/internal/termsafe"
 )
 
 // sinceSeconds turns a --since duration into the query parameter the platform
@@ -42,23 +45,82 @@ reported, not passed off as success. An empty stdout is indistinguishable from
 their process wrote nothing, the platform collected nothing, or the command
 went to the wrong place. Saying so — on stderr, so a pipe still sees only log
 lines — costs nothing and answers the question.
+
+`app logs -f` is not cut off by the API client's request timeout: the client
+sends GET …/logs?follow=true through a path with no overall deadline (see
+api.New), bounded instead by the time to response headers and by Ctrl-C.
 */
+
+// maxLogLine is the longest log line printed whole. A longer one is cut here
+// and marked, rather than ending the stream: one runaway line (a minified
+// payload, a binary dump) must not take the rest of the logs with it.
+const maxLogLine = 64 << 10
+
+// truncatedMark ends a log line that was cut at maxLogLine.
+const truncatedMark = " …[truncated]"
 
 // streamLines copies a log stream to stdout line by line and reports how many
 // lines it wrote. A cancelled context (Ctrl-C while following) is not an error.
+//
+// When stdout is a terminal each line is stripped of control characters: log
+// lines are written by whatever runs in the app, and an escape sequence in one
+// would be interpreted by the person's terminal. Into a pipe or file they pass
+// through untouched, since a program reading them may want the bytes.
 func streamLines(cmd *cobra.Command, body io.Reader) (int, error) {
-	sc := bufio.NewScanner(body)
-	sc.Buffer(make([]byte, 0, 64<<10), 1<<20)
-	out := cmd.OutOrStdout()
+	return copyLines(cmd, body, cmd.OutOrStdout(), isTerminal(cmd.OutOrStdout()))
+}
+
+func copyLines(cmd *cobra.Command, body io.Reader, out io.Writer, sanitise bool) (int, error) {
+	r := bufio.NewReaderSize(body, 64<<10)
 	lines := 0
-	for sc.Scan() {
-		fmt.Fprintln(out, sc.Text())
+	line := make([]byte, 0, 4096)
+	truncated, pending := false, false
+	emit := func() {
+		text := string(line)
+		if sanitise {
+			text = termsafe.String(text)
+		}
+		if truncated {
+			text += truncatedMark
+		}
+		fmt.Fprintln(out, text)
 		lines++
+		line, truncated, pending = line[:0], false, false
 	}
-	if err := sc.Err(); err != nil && !errors.Is(err, io.EOF) && cmd.Context().Err() == nil {
+	for {
+		chunk, isPrefix, err := r.ReadLine()
+		if err == nil {
+			pending = true
+			if room := maxLogLine - len(line); len(chunk) > room {
+				line = append(line, chunk[:room]...)
+				truncated = true
+			} else {
+				line = append(line, chunk...)
+			}
+			if !isPrefix {
+				emit()
+			}
+			continue
+		}
+		// A last line without a newline still counts.
+		if pending {
+			emit()
+		}
+		if errors.Is(err, io.EOF) || cmd.Context().Err() != nil {
+			return lines, nil
+		}
 		return lines, err
 	}
-	return lines, nil
+}
+
+// isTerminal reports whether w is a character device, i.e. a terminal.
+func isTerminal(w io.Writer) bool {
+	f, ok := w.(*os.File)
+	if !ok {
+		return false
+	}
+	st, err := f.Stat()
+	return err == nil && st.Mode()&os.ModeCharDevice != 0
 }
 
 // reportNoLogs explains an empty stream. The scale-to-zero case is named
@@ -70,6 +132,7 @@ func reportNoLogs(cmd *cobra.Command, name string, following bool) {
 		return
 	}
 	w := cmd.ErrOrStderr()
+	name = termsafe.String(name)
 	fmt.Fprintf(w, "No log lines returned for app %q.\n", name)
 	if following {
 		fmt.Fprintln(w, "The stream ended without any output. If the app is idle it may have no running instance; send it a request and try again.")

@@ -9,6 +9,7 @@ import (
 
 	"cloud/internal/api"
 	"cloud/internal/output"
+	"cloud/internal/termsafe"
 )
 
 /*
@@ -211,7 +212,7 @@ them.`,
 			return err
 		}
 		if len(list.Items) == 0 && !flagQuiet && printer.Format == output.Table {
-			fmt.Fprintf(cmd.ErrOrStderr(), "No records on %s.\n", args[0])
+			fmt.Fprintf(cmd.ErrOrStderr(), "No records on %s.\n", termsafe.String(args[0]))
 			return nil
 		}
 		return printer.Print(dnsRecordRows(list.Items))
@@ -287,7 +288,7 @@ get their reason rather than a success you cannot rely on.`,
 		}
 		if !flagQuiet && printer.Format == output.Table {
 			fmt.Fprintf(cmd.ErrOrStderr(), "Created %s %s %s (id %s, ttl %d) — live on the name servers.\n",
-				rec.Name, rec.Type, rec.Content, rec.Id, rec.Ttl)
+				termsafe.String(rec.Name), termsafe.String(string(rec.Type)), termsafe.String(rec.Content), termsafe.String(rec.Id), rec.Ttl)
 			return nil
 		}
 		return printer.Print(dnsRecordRows{*rec})
@@ -345,18 +346,16 @@ records and the name alone would be ambiguous.`,
 		if err != nil {
 			return err
 		}
-		// The platform is moving this from PUT to PATCH — every other partial
-		// update on the API is a PATCH, and PUT was the odd one out. Both
-		// spellings exist across the transition, so try the new one and fall
-		// back when the deployment predates it. Drop the fallback once no
-		// reachable platform answers 405 here.
+		// A partial update is a PATCH, like every other partial update on the
+		// API. There is no PUT fallback: a platform that answers 405 here
+		// predates the endpoint and the error says so.
 		rec, err := updateDNSRecord(cmd, c, org, args[0], args[1], body)
 		if err != nil {
 			return err
 		}
 		if !flagQuiet && printer.Format == output.Table {
 			fmt.Fprintf(cmd.ErrOrStderr(), "Updated %s %s %s (ttl %d) — live on the name servers.\n",
-				rec.Name, rec.Type, rec.Content, rec.Ttl)
+				termsafe.String(rec.Name), termsafe.String(string(rec.Type)), termsafe.String(rec.Content), rec.Ttl)
 			return nil
 		}
 		return printer.Print(dnsRecordRows{*rec})
@@ -394,7 +393,7 @@ the record's TTL, so you are asked to confirm the id unless --yes.`,
 			return err
 		}
 		if !flagQuiet {
-			fmt.Fprintf(cmd.ErrOrStderr(), "Deleted %s from %s. Resolvers may keep it until its TTL expires.\n", args[1], args[0])
+			fmt.Fprintf(cmd.ErrOrStderr(), "Deleted %s from %s. Resolvers may keep it until its TTL expires.\n", termsafe.String(args[1]), termsafe.String(args[0]))
 		}
 		return nil
 	},
@@ -415,11 +414,10 @@ func init() {
 	rootCmd.AddCommand(dnsCmd)
 }
 
-// updateDNSRecord sends PATCH, falling back to PUT on 405.
-//
-// 405 is the only signal that separates "this platform is older" from any
-// real failure: a wrong id is 404 and a bad body is 400, both of which must
-// surface rather than be retried under another method.
+// updateDNSRecord sends the PATCH and returns the updated record. Every
+// failure — 404 for a wrong id, 400 for a bad body, 405 from a platform that
+// predates PATCH here — surfaces as the platform's error; nothing is retried
+// under another method.
 func updateDNSRecord(cmd *cobra.Command, c *api.ClientWithResponses, org, domain, recordID string,
 	body api.PatchOrgsOrgDomainsDomainRecordsRecordIdJSONRequestBody) (*api.DnsRecord, error) {
 	res, err := c.PatchOrgsOrgDomainsDomainRecordsRecordIdWithResponse(cmd.Context(), org, domain, recordID, body)

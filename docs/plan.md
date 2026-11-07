@@ -99,7 +99,7 @@ Three deliverables, in dependency order.
 
 ```
 cloud login [--token-stdin]        device-code flow, or paste a CI token
-cloud logout
+cloud logout [--all]               end the session on the platform, forget the stored credential
 cloud whoami                       user, organisation, region, token kind and expiry
 cloud org   list | use <slug>
 cloud region list
@@ -205,6 +205,11 @@ Each of these has already bitten the platform once; the CLI must not rediscover 
 - **Deleted names are reusable.** Soft delete releases the name (partial unique index); the confirm prompt echoes the name so the wrong one is not deleted by muscle memory.
 - **Regions have their own kubeconfigs and credentials.** Every create takes `--region`, defaulting from the context; the API resolves per-region clients — the CLI never sees a kubeconfig.
 - **Legacy hosts.** `SEO_LEGACY_HOSTS` redirects GET/HEAD only; the CLI targets `cloud.co.zm` explicitly and refuses a config whose API URL is a retired host.
+- **Dot segments collapse, and redirects replay.** The generated client path-escapes each argument (which leaves `..` alone) and then resolves against the server URL, which removes dot segments: `cloud vm ssh-key remove web ..` became `DELETE …/vms/web/`, the platform 308'd the trailing slash, and Go followed with `DELETE …/vms/web` — deleting the VM. Fixed three ways (2026-11): the root pre-run refuses empty, `.` and `..` positional arguments and `--org`/`CLOUD_ORG` (exit 2; storage object commands, `app env set/unset` keys and `vm ssh-key add`'s key file are exempt — only an s3:// bucket is checked there), the API client refuses any request whose path ends in `/`, contains `//` or keeps a dot segment, and neither the API client nor the device flow follows redirects; a 3xx is an error naming the Location.
+- **Server text is untrusted on a terminal.** Problem details, status reasons, notices and (on a TTY) log lines go through `internal/termsafe`, which strips C0/C1 control characters. Table output (`internal/output`) is sanitised separately.
+- **Login trusts nothing in the device response.** The approval URL must be https (http only on loopback) on the API host, under it, or under its parent when that parent has three or more labels; `expires_in <= 0` means 15 minutes, the poll interval is capped at 60 s. `cloud login` names the host before the code and warns when it is not the default. Plain-http API URLs are accepted only for `localhost`, 127.0.0.0/8 and `::1` — not `*.localhost`.
+- **Overrides are not saved.** `org use` and login's org adoption never write an `--api-url`/`CLOUD_API_URL` override into an existing context (a new context keeps an `--api-url` flag, and says so); `org use` warns while `--org`/`CLOUD_ORG` overrides the saved default; CLOUD_TOKEN sent to a non-default, non-loopback host prints a warning once per run.
+- **Logout ends the session.** For a `cloud login` session, `cloud logout` calls better-auth's `POST /api/auth/sign-out` with the bearer (best effort) before deleting the file. An `sc_` API token has no self-revoke endpoint usable with a bearer; it is forgotten locally and must be revoked in the dashboard. `--all` removes every stored credential (only the current host's session is ended server-side). Logout works for a retired or otherwise refused API URL, sending nothing to it.
 - **SeaweedFS is S3-compatible, not S3.** Path-style URLs only (no virtual-hosted buckets), region literally `us-east-1`, no bucket versioning or lifecycle rules in the API, ETags of multipart objects are not MD5s — `sync` compares size + ETag, never assumes an MD5. Test against the real region endpoint in CI, not against MinIO.
 - **Presigned URLs once carried the bucket name twice.** A dashboard bug this year produced `…/bucket/bucket/key`. The CLI signs locally with the SDK and has a golden test for the exact URL shape.
 - **Storage credentials are per bucket, and the admin keys are never issued.** `bucket credentials` returns the bucket's own identity from the DB-reconciled S3 config; the CLI must never ask for or accept region admin keys.

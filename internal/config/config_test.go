@@ -125,7 +125,9 @@ func TestValidateAPIURL_RequiresHTTPSExceptLoopback(t *testing.T) {
 	for _, ok := range []string{
 		"http://localhost:5173/api/v1",
 		"http://127.0.0.1:5173/api/v1",
-		"http://app.localhost/api/v1",
+		"http://127.3.4.5/api/v1",
+		"http://[::1]:5173/api/v1",
+		"http://LOCALHOST.:5173/api/v1",
 		"https://cloud.co.zm/api/v1",
 		"https://staging.cloud.co.zm/api/v1",
 	} {
@@ -133,7 +135,19 @@ func TestValidateAPIURL_RequiresHTTPSExceptLoopback(t *testing.T) {
 			t.Errorf("%s should be accepted: %v", ok, err)
 		}
 	}
-	for _, bad := range []string{"", "not a url", "ftp://cloud.co.zm/api/v1", "cloud.co.zm/api/v1"} {
+	for _, bad := range []string{
+		"", "not a url", "ftp://cloud.co.zm/api/v1", "cloud.co.zm/api/v1",
+		// *.localhost is a name, and what it resolves to is not the CLI's call.
+		"http://app.localhost/api/v1",
+		"http://localhost.evil.example/api/v1",
+		"http://128.0.0.1/api/v1",
+		// userinfo hides the real host and would be sent as Basic auth.
+		"https://cloud.co.zm@evil.example/api/v1",
+		"https://user:pw@cloud.co.zm/api/v1",
+		"https://cloud.co.zm/api/v1?x=1",
+		"https://cloud.co.zm/api/v1?",
+		"https://cloud.co.zm/api/v1#frag",
+	} {
 		if err := ValidateAPIURL(bad); err == nil {
 			t.Errorf("%q should be refused", bad)
 		}

@@ -8,6 +8,7 @@ import (
 
 	"cloud/internal/api"
 	"cloud/internal/output"
+	"cloud/internal/termsafe"
 )
 
 type whoami struct {
@@ -103,11 +104,11 @@ stored per API host, so a session for one API URL does not apply to another.`,
 			return printer.Print(w)
 		}
 		out := cmd.OutOrStdout()
-		fmt.Fprintf(out, "Signed in as   %s", w.Email)
+		fmt.Fprintf(out, "Signed in as   %s", termsafe.String(w.Email))
 		if w.Name != "" {
-			fmt.Fprintf(out, " (%s)", w.Name)
+			fmt.Fprintf(out, " (%s)", termsafe.String(w.Name))
 		}
-		fmt.Fprintf(out, "\nCredential     %s", w.AuthKind)
+		fmt.Fprintf(out, "\nCredential     %s", termsafe.String(w.AuthKind))
 		if !exp.IsZero() {
 			left := time.Until(exp)
 			fmt.Fprintf(out, ", expires %s", exp.Local().Format("Mon 2 Jan 15:04"))
@@ -115,11 +116,11 @@ stored per API host, so a session for one API URL does not apply to another.`,
 				fmt.Fprintf(out, "  ⚠ in %s", left.Round(time.Minute))
 			}
 		}
-		fmt.Fprintf(out, "\nAPI            %s", w.APIURL)
+		fmt.Fprintf(out, "\nAPI            %s", termsafe.String(w.APIURL))
 		if w.Context != "" {
-			fmt.Fprintf(out, "  (context %s)", w.Context)
+			fmt.Fprintf(out, "  (context %s)", termsafe.String(w.Context))
 		}
-		fmt.Fprintf(out, "\nOrganisation   %s\nRegion         %s\n\n", orDash(w.Org), orDash(w.Region))
+		fmt.Fprintf(out, "\nOrganisation   %s\nRegion         %s\n\n", termsafe.String(orDash(w.Org)), termsafe.String(orDash(w.Region)))
 		return printer.Print(orgRows(w.Orgs))
 	},
 }
