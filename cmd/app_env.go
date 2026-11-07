@@ -15,6 +15,7 @@ import (
 
 	"cloud/internal/api"
 	"cloud/internal/output"
+	"cloud/internal/termsafe"
 )
 
 /*
@@ -216,7 +217,7 @@ func patchEnvVars(cmd *cobra.Command, c *api.ClientWithResponses, org, app strin
 		case a.LatestRevision == "":
 			fmt.Fprintf(w, "The platform applies variables by rolling a new revision; check it took with `cloud app get %s`.\n", a.Name)
 		case a.LatestRevision != priorRevision:
-			fmt.Fprintf(w, "Rolling out %s.\n", a.LatestRevision)
+			fmt.Fprintf(w, "Rolling out %s.\n", termsafe.String(a.LatestRevision))
 		default:
 			// Careful here: the record can lag the cluster. The platform used
 			// to write the revision columns only on its two-minute sync, so a
@@ -226,9 +227,9 @@ func patchEnvVars(cmd *cobra.Command, c *api.ClientWithResponses, org, app strin
 			// direction. Report the record and let time settle it.
 			if a.ErrorMessage != "" {
 				// The platform knows why — most often "nothing to roll out".
-				fmt.Fprintf(w, "%s\n", a.ErrorMessage)
+				fmt.Fprintf(w, "%s\n", termsafe.String(a.ErrorMessage))
 			} else {
-				fmt.Fprintf(w, "No new revision recorded yet (still %s) — the record can lag the cluster by a couple of minutes. Re-check with `cloud app get %s`; if it has not advanced after that, the rollout did not start.\n", a.LatestRevision, a.Name)
+				fmt.Fprintf(w, "No new revision recorded yet (still %s) — the record can lag the cluster by a couple of minutes. Re-check with `cloud app get %s`; if it has not advanced after that, the rollout did not start.\n", termsafe.String(a.LatestRevision), a.Name)
 			}
 		}
 		return nil

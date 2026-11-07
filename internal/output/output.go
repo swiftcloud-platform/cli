@@ -13,6 +13,8 @@ import (
 	"text/tabwriter"
 
 	"gopkg.in/yaml.v3"
+
+	"cloud/internal/termsafe"
 )
 
 // Format is the requested rendering.
@@ -60,7 +62,7 @@ func (p *Printer) Print(v any) error {
 	if p.Quiet {
 		if t, ok := v.(Tabular); ok {
 			for _, id := range t.IDs() {
-				fmt.Fprintln(p.W, id)
+				fmt.Fprintln(p.W, termsafe.String(id))
 			}
 			return nil
 		}
@@ -80,8 +82,20 @@ func (p *Printer) Print(v any) error {
 		tw := tabwriter.NewWriter(p.W, 0, 4, 2, ' ', 0)
 		fmt.Fprintln(tw, strings.Join(t.Columns(), "\t"))
 		for _, r := range t.Rows() {
-			fmt.Fprintln(tw, strings.Join(r, "\t"))
+			fmt.Fprintln(tw, strings.Join(cells(r), "\t"))
 		}
 		return tw.Flush()
 	}
+}
+
+// cells makes each value safe for one table cell. The values come from the
+// platform, and some are set by other org members, so an escape sequence is
+// stripped, and a tab (which would shift the columns) becomes a space.
+// JSON and YAML need none of this: their encoders escape control characters.
+func cells(row []string) []string {
+	out := make([]string, len(row))
+	for i, v := range row {
+		out[i] = strings.ReplaceAll(termsafe.String(v), "\t", " ")
+	}
+	return out
 }

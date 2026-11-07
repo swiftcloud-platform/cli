@@ -18,6 +18,7 @@ import (
 	"cloud/internal/api"
 	"cloud/internal/output"
 	s3pkg "cloud/internal/s3"
+	"cloud/internal/termsafe"
 	"cloud/internal/wait"
 )
 
@@ -291,7 +292,7 @@ func sampleKeys(w io.Writer, keys []string, n int) {
 			fmt.Fprintf(w, "  … and %d more\n", len(keys)-n)
 			return
 		}
-		fmt.Fprintf(w, "  %s\n", k)
+		fmt.Fprintf(w, "  %s\n", termsafe.String(k))
 	}
 }
 
@@ -431,8 +432,8 @@ work everywhere the CLI takes a bucket.`,
 			}
 		}
 		if !flagQuiet && printer.Format == output.Table {
-			fmt.Fprintf(cmd.ErrOrStderr(), "Created %s — status: %s\n", b.Name, b.Status)
-			fmt.Fprintf(cmd.ErrOrStderr(), "Address objects as s3://%s/… (physical name %s)\n", b.Name, b.BucketName)
+			fmt.Fprintf(cmd.ErrOrStderr(), "Created %s — status: %s\n", b.Name, termsafe.String(b.Status))
+			fmt.Fprintf(cmd.ErrOrStderr(), "Address objects as s3://%s/… (physical name %s)\n", b.Name, termsafe.String(b.BucketName))
 			return nil
 		}
 		return printer.Print(bucketRows{*b})
@@ -465,7 +466,7 @@ func waitForBucket(cmd *cobra.Command, c *api.ClientWithResponses, org, name str
 			return last, nil
 		}
 		if !flagQuiet {
-			fmt.Fprintf(cmd.ErrOrStderr(), "  %s\n", b.Status)
+			fmt.Fprintf(cmd.ErrOrStderr(), "  %s\n", termsafe.String(b.Status))
 		}
 		if time.Now().After(deadline) {
 			return last, fmt.Errorf("bucket %s was still %q after %s", b.Name, b.Status, timeout)
@@ -506,7 +507,7 @@ var bucketGetCmd = &cobra.Command{
 		}
 		if !flagQuiet && printer.Format == output.Table {
 			if b.ErrorMessage != "" {
-				fmt.Fprintf(cmd.ErrOrStderr(), "%s\n", b.ErrorMessage)
+				fmt.Fprintf(cmd.ErrOrStderr(), "%s\n", termsafe.String(fmt.Sprint(b.ErrorMessage)))
 			}
 			printBucketAccess(cmd, b)
 		}
@@ -728,10 +729,10 @@ var storageStatCmd = &cobra.Command{
 			return printer.Print(o)
 		}
 		out := cmd.OutOrStdout()
-		fmt.Fprintf(out, "Key           %s\n", o.Key)
+		fmt.Fprintf(out, "Key           %s\n", termsafe.String(o.Key))
 		fmt.Fprintf(out, "Size          %s (%d bytes)\n", humanBytes(o.Size), o.Size)
-		fmt.Fprintf(out, "Content-Type  %s\n", o.ContentType)
-		fmt.Fprintf(out, "ETag          %s\n", o.ETag)
+		fmt.Fprintf(out, "Content-Type  %s\n", termsafe.String(o.ContentType))
+		fmt.Fprintf(out, "ETag          %s\n", termsafe.String(o.ETag))
 		fmt.Fprintf(out, "Modified      %s\n", o.LastModified.Local().Format(time.RFC1123))
 		return nil
 	},
@@ -1054,12 +1055,12 @@ func runPlan(cmd *cobra.Command, b *bucket, plan []s3pkg.Action, upload bool) er
 	for _, a := range plan {
 		if a.Unsafe {
 			unsafe++
-			fmt.Fprintf(errOut, "warning: skipped %s — its key would write outside the target directory\n", a.Key)
+			fmt.Fprintf(errOut, "warning: skipped %s — its key would write outside the target directory\n", termsafe.String(a.Key))
 		}
 	}
 	if syncDryRun {
 		for _, a := range plan {
-			fmt.Fprintf(cmd.OutOrStdout(), "%-8s %s — %s\n", a.Kind, a.Key, a.Reason)
+			fmt.Fprintf(cmd.OutOrStdout(), "%-8s %s — %s\n", a.Kind, termsafe.String(a.Key), termsafe.String(a.Reason))
 		}
 		fmt.Fprintf(errOut, "\nWould transfer %d, skip %d, remove %d (%s). Nothing was changed.\n",
 			transfers, skips, removes, humanBytes(bytes))
@@ -1092,7 +1093,7 @@ func runPlan(cmd *cobra.Command, b *bucket, plan []s3pkg.Action, upload bool) er
 	if !flagQuiet {
 		progress = func(a s3pkg.Action, _, _ int64) {
 			if a.Kind == s3pkg.Transfer {
-				fmt.Fprintf(errOut, "  %s (%s)\n", a.Key, humanBytes(a.Size))
+				fmt.Fprintf(errOut, "  %s (%s)\n", termsafe.String(a.Key), humanBytes(a.Size))
 			}
 		}
 	}
@@ -1418,7 +1419,7 @@ func printBucketAccess(cmd *cobra.Command, b *api.Bucket) {
 	case b.PublicAccess:
 		fmt.Fprintln(w, "Public       yes — every object is readable by anyone on the internet")
 	case len(b.PublicPrefixes) > 0:
-		fmt.Fprintf(w, "Public       no, except these folders: %s\n", strings.Join(b.PublicPrefixes, ", "))
+		fmt.Fprintf(w, "Public       no, except these folders: %s\n", termsafe.String(strings.Join(b.PublicPrefixes, ", ")))
 	default:
 		fmt.Fprintln(w, "Public       no")
 	}
@@ -1886,10 +1887,10 @@ revoked. The new key works within about a minute.`,
 		fmt.Fprintf(out, "%s\n%s\n", k.AccessKeyId, k.SecretAccessKey)
 		if !flagQuiet {
 			w := cmd.ErrOrStderr()
-			fmt.Fprintf(w, "\nKey %s added.\n", k.Id)
+			fmt.Fprintf(w, "\nKey %s added.\n", termsafe.String(k.Id))
 			fmt.Fprintln(w, "The secret above is shown once and cannot be retrieved again.")
 			if k.Note != nil && *k.Note != "" {
-				fmt.Fprintf(w, "%s\n", *k.Note)
+				fmt.Fprintf(w, "%s\n", termsafe.String(*k.Note))
 			}
 		}
 		return nil
@@ -2058,12 +2059,12 @@ certificate itself once it does.`,
 		}
 		if !flagQuiet {
 			w := cmd.ErrOrStderr()
-			fmt.Fprintf(w, "Attached %s to %s.\n", dm.Domain, args[0])
+			fmt.Fprintf(w, "Attached %s to %s.\n", termsafe.String(dm.Domain), args[0])
 			if dm.Target != "" {
-				fmt.Fprintf(w, "Create a CNAME record: %s → %s\n", dm.Domain, dm.Target)
+				fmt.Fprintf(w, "Create a CNAME record: %s → %s\n", termsafe.String(dm.Domain), termsafe.String(fmt.Sprint(dm.Target)))
 			}
 			if dm.Message != "" {
-				fmt.Fprintf(w, "%s\n", dm.Message)
+				fmt.Fprintf(w, "%s\n", termsafe.String(fmt.Sprint(dm.Message)))
 			}
 			fmt.Fprintf(w, "Watch it with `cloud storage bucket domains list %s`.\n", args[0])
 		}

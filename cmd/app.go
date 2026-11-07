@@ -11,6 +11,7 @@ import (
 
 	"cloud/internal/api"
 	"cloud/internal/output"
+	"cloud/internal/termsafe"
 )
 
 // ── table shapes ────────────────────────────────────────────────────────────
@@ -206,7 +207,7 @@ it would land in shell history; --env wins over the file for the same name.`,
 			return err
 		}
 		if !flagQuiet {
-			fmt.Fprintf(cmd.ErrOrStderr(), "Created %s (%s). Status: %s\n", app.Name, app.Id, app.Status)
+			fmt.Fprintf(cmd.ErrOrStderr(), "Created %s (%s). Status: %s\n", app.Name, termsafe.String(app.Id), termsafe.String(app.Status))
 		}
 		if flagWait {
 			app, err = waitForApp(cmd, c, org, app.Name, flagTimeout)
@@ -216,7 +217,7 @@ it would land in shell history; --env wins over the file for the same name.`,
 		}
 		if printer.Format == output.Table && !flagQuiet {
 			if app.Url != "" {
-				fmt.Fprintf(cmd.OutOrStdout(), "%s\n", app.Url)
+				fmt.Fprintf(cmd.OutOrStdout(), "%s\n", termsafe.String(app.Url))
 			}
 			return nil
 		}
@@ -260,23 +261,23 @@ var appGetCmd = &cobra.Command{
 		// A status alone is not actionable. The platform sets errorMessage
 		// when it knows why, so print it directly under the status it explains.
 		if a.ErrorMessage != "" {
-			fmt.Fprintf(out, "Reason       %s\n", a.ErrorMessage)
+			fmt.Fprintf(out, "Reason       %s\n", termsafe.String(a.ErrorMessage))
 		}
 		// The image field is what was asked for; the serving revision is what
 		// answers requests. They diverge while a rollout is in flight, and stay
 		// diverged when the newest revision never became ready — which is the
 		// state that used to be invisible.
 		if a.LatestRevision != "" && a.ServingRevision != a.LatestRevision {
-			fmt.Fprintf(out, "Revision     %s serving, %s is newest\n", orDash(a.ServingRevision), a.LatestRevision)
+			fmt.Fprintf(out, "Revision     %s serving, %s is newest\n", termsafe.String(orDash(a.ServingRevision)), termsafe.String(a.LatestRevision))
 			fmt.Fprintln(out, "             the newest revision is not taking traffic")
 		} else if a.ServingRevision != "" {
-			fmt.Fprintf(out, "Revision     %s\n", a.ServingRevision)
+			fmt.Fprintf(out, "Revision     %s\n", termsafe.String(a.ServingRevision))
 		}
 		if a.Description != "" {
-			fmt.Fprintf(out, "Description  %s\n", a.Description)
+			fmt.Fprintf(out, "Description  %s\n", termsafe.String(a.Description))
 		}
 		if a.RegistryAuth.Server != "" {
-			fmt.Fprintf(out, "Registry     %s as %s\n", a.RegistryAuth.Server, a.RegistryAuth.Username)
+			fmt.Fprintf(out, "Registry     %s as %s\n", termsafe.String(a.RegistryAuth.Server), termsafe.String(a.RegistryAuth.Username))
 		}
 		if len(a.EnvVars) > 0 {
 			fmt.Fprintf(out, "Env          %d variable(s); `--output json` to see them\n", len(a.EnvVars))
@@ -575,9 +576,9 @@ issued after that record resolves, so re-run "domain list" to watch it turn.`,
 			return err
 		}
 		if !flagQuiet && printer.Format == output.Table {
-			fmt.Fprintf(cmd.ErrOrStderr(), "Attached %s — routing: %s, TLS: %s\n", d.Domain, d.Status, d.Tls)
+			fmt.Fprintf(cmd.ErrOrStderr(), "Attached %s — routing: %s, TLS: %s\n", termsafe.String(d.Domain), termsafe.String(fmt.Sprint(d.Status)), termsafe.String(fmt.Sprint(d.Tls)))
 			if d.Message != "" {
-				fmt.Fprintf(cmd.ErrOrStderr(), "%s\n", d.Message)
+				fmt.Fprintf(cmd.ErrOrStderr(), "%s\n", termsafe.String(fmt.Sprint(d.Message)))
 			}
 			return nil
 		}
@@ -692,14 +693,14 @@ func printAppURL(cmd *cobra.Command, app *api.App) {
 	// errorMessage, so printing it only for a non-serving app would hide
 	// exactly the case the user needs to hear about.
 	if app.ErrorMessage != "" {
-		fmt.Fprintf(cmd.ErrOrStderr(), "%s\n", app.ErrorMessage)
+		fmt.Fprintf(cmd.ErrOrStderr(), "%s\n", termsafe.String(app.ErrorMessage))
 	}
 	switch app.Status {
 	case "ready", "running":
 		if app.Url != "" {
-			fmt.Fprintln(cmd.OutOrStdout(), app.Url)
+			fmt.Fprintln(cmd.OutOrStdout(), termsafe.String(app.Url))
 		}
 	default:
-		fmt.Fprintf(cmd.ErrOrStderr(), "%s is %s and is not serving; no URL to give you yet.\n", app.Name, app.Status)
+		fmt.Fprintf(cmd.ErrOrStderr(), "%s is %s and is not serving; no URL to give you yet.\n", app.Name, termsafe.String(app.Status))
 	}
 }
