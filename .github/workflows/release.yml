@@ -4,24 +4,83 @@ on:
   push:
     tags: ["v*"]
 
-permissions:
-  contents: write
+# Nothing by default; each job asks for exactly what it needs.
+permissions: {}
+
+# Every third-party action is pinned to a full commit SHA (the tag in the
+# comment is for humans and for Dependabot, which keeps both in step). A tag
+# can be moved; a SHA cannot.
 
 jobs:
-  release:
+  # The suite runs before anything is built, in a job that can write nothing.
+  # It used to run as a goreleaser before-hook, inside the job that holds the
+  # release token and the signing identity.
+  test:
+    name: Test
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          fetch-depth: 0
-      - uses: actions/setup-go@v7
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
           go-version-file: go.mod
-          cache: true
-      - uses: goreleaser/goreleaser-action@v7
+          cache: false
+      - name: Toolchain is the one go.mod pins
+        run: |
+          want=$(awk '$1 == "toolchain" { print $2 }' go.mod)
+          got=$(go env GOVERSION)
+          echo "go.mod toolchain: $want; running: $got"
+          test "$got" = "$want"
+      - run: go test ./...
+      - name: govulncheck
+        run: go run golang.org/x/vuln/cmd/govulncheck@v1.9.0 ./...
+
+  release:
+    name: Build, sign and publish
+    needs: test
+    runs-on: ubuntu-latest
+    # Create this environment in the repository settings (Settings →
+    # Environments → release) with required reviewers, so a pushed tag waits
+    # for a person before anything is signed or published. Until it exists,
+    # GitHub creates it on first use with no protection.
+    environment: release
+    permissions:
+      contents: write     # create the GitHub release and upload assets
+      id-token: write     # keyless cosign signing and build provenance (OIDC)
+      attestations: write # store the provenance attestation
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          version: "~> v2"
+          # goreleaser needs every tag to write the changelog. It publishes
+          # with GITHUB_TOKEN from the environment, not the git credentials,
+          # so those are not left in .git/config for later steps to read.
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+          # No cache in the job that signs: a cache written by any other
+          # workflow run must not be able to feed a release build.
+          cache: false
+      - name: Toolchain is the one go.mod pins
+        run: |
+          want=$(awk '$1 == "toolchain" { print $2 }' go.mod)
+          got=$(go env GOVERSION)
+          echo "go.mod toolchain: $want; running: $got"
+          test "$got" = "$want"
+      - uses: sigstore/cosign-installer@756fe2d284c7292c4e9b62c8a28f1e5629c59532 # v4.1.3
+      - uses: anchore/sbom-action/download-syft@66cbf4bc1f1c0d2edc94016e65bc221b6bb0ad6c # v0.24.3
+      - uses: goreleaser/goreleaser-action@a4f02ab5355a589de60d917a659ce617ed19b3de # v7.3.0
+        with:
+          version: v2.20.0
           args: release --clean
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          HOMEBREW_TAP_GITHUB_TOKEN: ${{ secrets.HOMEBREW_TAP_GITHUB_TOKEN }}
+      - uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
+        with:
+          subject-path: |
+            dist/*.tar.gz
+            dist/*.zip

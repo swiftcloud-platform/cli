@@ -1,0 +1,19 @@
+# Keeps the pinned action SHAs (and their `# vX.Y.Z` comments) and the Go
+# modules current. Each update arrives as a pull request that CI must pass.
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    groups:
+      actions:
+        patterns: ["*"]
+
+  - package-ecosystem: gomod
+    directory: /
+    schedule:
+      interval: weekly
+    groups:
+      aws-sdk:
+        patterns: ["github.com/aws/*"]

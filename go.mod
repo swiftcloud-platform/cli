@@ -2,6 +2,8 @@ module cloud
 
 go 1.25.0
 
+toolchain go1.26.10
+
 require (
 	github.com/aws/aws-sdk-go-v2 v1.45.1
 	github.com/aws/aws-sdk-go-v2/credentials v1.20.2
@@ -11,6 +13,7 @@ require (
 	github.com/oapi-codegen/runtime v1.7.0
 	github.com/spf13/cobra v1.10.2
 	github.com/spf13/pflag v1.0.9
+	golang.org/x/mod v0.40.0
 	gopkg.in/yaml.v3 v3.0.1
 )
 

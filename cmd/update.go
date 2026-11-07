@@ -20,6 +20,7 @@ import (
 	"time"
 
 	"github.com/spf13/cobra"
+	"golang.org/x/mod/semver"
 
 	"cloud/internal/version"
 )
@@ -30,8 +31,19 @@ Self-update.
 The rules this follows, and why:
 
   - Nothing is replaced until the download's SHA-256 matches the release's own
-    checksums.txt. An interrupted or tampered download must not become the
-    binary a person then trusts with their infrastructure.
+    checksums.txt. That catches an interrupted or corrupted download, and one
+    swapped in transit. It does NOT protect against a compromised release:
+    checksums.txt comes from the same GitHub release as the archive, so
+    whoever can replace one can replace the other. Releases are signed
+    (keyless cosign, checksums.txt.sigstore.json) from the first release after
+    v0.3.4, but this command does not verify that signature yet — see
+    "Verifying a release" in the README for doing it by hand.
+  - Only a strictly newer release is installed. Versions are compared as
+    semver, so a downgrade never happens automatically, and a build that is
+    not itself a clean release ("dev", "-dirty", git describe's "-N-g<hash>")
+    is never replaced, because it has no place in the release order.
+  - The download is capped at the size the release lists for the asset, so a
+    hostile or broken server cannot fill the disk.
   - The new binary is written beside the old one and renamed into place, so the
     swap is atomic on the same filesystem and a failure leaves the working
     binary exactly where it was.
@@ -40,6 +52,10 @@ The rules this follows, and why:
     upgrade` later; the command says which upgrade to run instead.
   - "dev" builds are refused, because there is no version to compare and
     overwriting someone's locally built binary is never what they meant.
+  - On Windows a running .exe cannot be overwritten, but it can be renamed.
+    The old binary is moved aside to cloud.exe.old, the new one moved in, and
+    the first move undone if the second fails. The .old file is removed by the
+    next `cloud update`, once it is no longer the running image.
 */
 
 const (
@@ -58,13 +74,16 @@ var (
 
 // release is the part of GitHub's release JSON this needs.
 type release struct {
-	TagName string `json:"tag_name"`
-	HTMLURL string `json:"html_url"`
-	Assets  []struct {
-		Name string `json:"name"`
-		URL  string `json:"browser_download_url"`
-		Size int64  `json:"size"`
-	} `json:"assets"`
+	TagName string         `json:"tag_name"`
+	HTMLURL string         `json:"html_url"`
+	Assets  []releaseAsset `json:"assets"`
+}
+
+// releaseAsset is one file attached to a release.
+type releaseAsset struct {
+	Name string `json:"name"`
+	URL  string `json:"browser_download_url"`
+	Size int64  `json:"size"`
 }
 
 var updateCmd = &cobra.Command{
@@ -74,7 +93,12 @@ var updateCmd = &cobra.Command{
 
 The download's checksum is verified against the release's own checksums.txt
 before anything is replaced, and the new binary is renamed into place, so a
-failed update leaves the working one untouched.
+failed update leaves the working one untouched. Only a newer release is
+installed: this never downgrades, and never replaces a local build.
+
+The checksum guards against a broken or swapped download, not against a
+compromised release; the release's cosign signature is not checked here yet.
+See the README for verifying a release by hand.
 
 If the CLI came from Homebrew, this reports the command to use instead rather
 than overwriting files a package manager owns.`,
@@ -97,14 +121,22 @@ than overwriting files a package manager owns.`,
 			return err
 		}
 
+		// What a previous update on Windows had to leave behind.
+		removeStaleBinary(self)
+
 		rel, err := latestRelease(cmd.Context())
 		if err != nil {
 			return err
 		}
-		latest := strings.TrimPrefix(rel.TagName, "v")
-		if latest == "" {
+		if rel.TagName == "" {
 			return fmt.Errorf("the latest release from %s has no version tag", updateRepo)
 		}
+		latestV, ok := version.Release(rel.TagName)
+		if !ok {
+			return fmt.Errorf("the latest release from %s is tagged %q, which is not a release version", updateRepo, rel.TagName)
+		}
+		latest := strings.TrimPrefix(latestV, "v")
+		currentV, isRelease := version.Release(current)
 
 		if printer.Format != "table" {
 			return printer.Print(map[string]string{
@@ -115,11 +147,20 @@ than overwriting files a package manager owns.`,
 			})
 		}
 
-		if current == latest {
-			fmt.Fprintf(errOut, "cloud %s is the latest release.\n", current)
-			return nil
+		if isRelease {
+			switch c := semver.Compare(latestV, currentV); {
+			case c == 0:
+				fmt.Fprintf(errOut, "cloud %s is the latest release.\n", current)
+				return nil
+			case c < 0:
+				// Never a downgrade, whatever the latest release says.
+				fmt.Fprintf(errOut, "cloud %s is newer than the latest release (%s); nothing to do.\n", current, latest)
+				return nil
+			}
+			fmt.Fprintf(errOut, "cloud %s is available (you have %s)\n%s\n", latest, current, rel.HTMLURL)
+		} else {
+			fmt.Fprintf(errOut, "The latest release is cloud %s (this is a local build, %q)\n%s\n", latest, current, rel.HTMLURL)
 		}
-		fmt.Fprintf(errOut, "cloud %s is available (you have %s)\n%s\n", latest, current, rel.HTMLURL)
 		if updateCheckOnly {
 			return nil
 		}
@@ -129,11 +170,11 @@ than overwriting files a package manager owns.`,
 			return &UsageError{fmt.Errorf("this CLI was installed with %s, which manages its own files — run `%s` instead",
 				manager, upgradeCommandFor(manager))}
 		}
-		if current == "dev" {
-			return &UsageError{errors.New("this is a local build (version \"dev\"), so there is nothing to compare — install a release, or build again from source")}
+		if !isRelease {
+			return &UsageError{fmt.Errorf("this is a local build (version %q), not a release, so there is nothing to compare and it is not replaced — install a release with the install script, or build again from source", current)}
 		}
 
-		asset, sums := pickAsset(rel)
+		asset, sums := pickAsset(rel, runtime.GOOS, runtime.GOARCH)
 		if asset.URL == "" {
 			return fmt.Errorf("release %s has no build for %s/%s", rel.TagName, runtime.GOOS, runtime.GOARCH)
 		}
@@ -148,7 +189,7 @@ than overwriting files a package manager owns.`,
 		}
 
 		fmt.Fprintf(errOut, "Downloading %s…\n", asset.Name)
-		if err := installUpdate(cmd.Context(), asset.URL, asset.Name, sums.URL, self); err != nil {
+		if err := installUpdate(cmd.Context(), asset, sums.URL, self); err != nil {
 			return err
 		}
 		fmt.Fprintf(errOut, "Updated to cloud %s at %s\n", latest, self)
@@ -162,14 +203,14 @@ than overwriting files a package manager owns.`,
 // Every failure path leaves target exactly as it was — that is the whole
 // contract, and it is why the checksum is checked before extraction rather
 // than after.
-func installUpdate(ctx context.Context, assetURL, assetName, sumsURL, target string) error {
-	archive, err := download(ctx, assetURL)
+func installUpdate(ctx context.Context, asset releaseAsset, sumsURL, target string) error {
+	archive, err := download(ctx, asset.URL, asset.Size)
 	if err != nil {
 		return err
 	}
 	defer func() { _ = os.Remove(archive) }()
 
-	want, err := checksumFor(ctx, sumsURL, assetName)
+	want, err := checksumFor(ctx, sumsURL, asset.Name)
 	if err != nil {
 		return err
 	}
@@ -217,19 +258,27 @@ func latestRelease(ctx context.Context) (*release, error) {
 	return &rel, nil
 }
 
-// pickAsset finds this platform's archive and the checksums file.
-func pickAsset(rel *release) (asset, sums struct {
-	Name string `json:"name"`
-	URL  string `json:"browser_download_url"`
-	Size int64  `json:"size"`
-}) {
-	wantOS, wantArch := runtime.GOOS, runtime.GOARCH
+// archiveName is the exact name goreleaser gives a platform's archive — see
+// archives.name_template in .goreleaser.yaml: cloud_<version>_<os>_<arch>,
+// .zip on Windows and .tar.gz everywhere else. version has no leading "v".
+func archiveName(version, goos, goarch string) string {
+	ext := ".tar.gz"
+	if goos == "windows" {
+		ext = ".zip"
+	}
+	return fmt.Sprintf("cloud_%s_%s_%s%s", version, goos, goarch, ext)
+}
+
+// pickAsset finds a platform's archive and the checksums file, by exact name.
+// A substring match would also find the archive's SBOM
+// (cloud_…_linux_amd64.tar.gz.sbom.json), so nothing but the exact name will do.
+func pickAsset(rel *release, goos, goarch string) (asset, sums releaseAsset) {
+	want := archiveName(strings.TrimPrefix(rel.TagName, "v"), goos, goarch)
 	for _, a := range rel.Assets {
-		name := strings.ToLower(a.Name)
-		switch {
-		case name == "checksums.txt":
+		switch a.Name {
+		case "checksums.txt":
 			sums = a
-		case strings.Contains(name, wantOS) && strings.Contains(name, wantArch):
+		case want:
 			asset = a
 		}
 	}
@@ -263,8 +312,21 @@ func checksumFor(ctx context.Context, url, assetName string) (string, error) {
 	return "", fmt.Errorf("checksums.txt does not list %s", assetName)
 }
 
+// downloadCap bounds a download whose size the release does not list.
+// Generous: a release archive is a few tens of MiB.
+const downloadCap = 200 << 20
+
 // download streams a URL into a temporary file and returns its path.
-func download(ctx context.Context, url string) (string, error) {
+//
+// size is what the release metadata says the asset weighs. Nothing larger is
+// accepted — not by Content-Length, not by the bytes that actually arrive —
+// so a hostile or broken server cannot fill the disk. When the size is not
+// listed (zero), downloadCap applies instead.
+func download(ctx context.Context, url string, size int64) (string, error) {
+	limit := size
+	if limit <= 0 || limit > downloadCap {
+		limit = downloadCap
+	}
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
 		return "", err
@@ -277,11 +339,17 @@ func download(ctx context.Context, url string) (string, error) {
 	if res.StatusCode != http.StatusOK {
 		return "", fmt.Errorf("downloading %s: HTTP %d", url, res.StatusCode)
 	}
+	if res.ContentLength > limit {
+		return "", fmt.Errorf("the download is %d bytes, more than the %d the release lists — nothing was changed", res.ContentLength, limit)
+	}
 	f, err := os.CreateTemp("", "cloud-update-*")
 	if err != nil {
 		return "", err
 	}
-	_, err = io.Copy(f, res.Body)
+	n, err := io.Copy(f, io.LimitReader(res.Body, limit+1))
+	if err == nil && n > limit {
+		err = fmt.Errorf("the download is more than the %d bytes the release lists — nothing was changed", limit)
+	}
 	closeErr := f.Close()
 	if err == nil {
 		err = closeErr
@@ -314,6 +382,20 @@ func fileSHA256(path string) (string, error) {
 // rename cannot happen here: the new file was extracted into the target's own
 // directory precisely so that it cannot.
 func replaceBinary(newPath, target string) error {
+	return replaceBinaryOn(runtime.GOOS, os.Rename, newPath, target)
+}
+
+// staleSuffix names where Windows' running binary is moved aside to.
+const staleSuffix = ".old"
+
+// replaceBinaryOn is replaceBinary with the platform and the rename made
+// explicit, so the Windows path can be exercised on any OS.
+//
+// Windows will not replace an executable while it runs, but it will rename
+// one. So there it is two renames — the running binary aside to <target>.old,
+// then the new one into place — and if the second fails the first is undone,
+// which keeps the promise that a failed update leaves the old binary working.
+func replaceBinaryOn(goos string, rename func(oldpath, newpath string) error, newPath, target string) error {
 	info, err := os.Stat(target)
 	if err != nil {
 		return err
@@ -321,13 +403,49 @@ func replaceBinary(newPath, target string) error {
 	if err := os.Chmod(newPath, info.Mode().Perm()); err != nil {
 		return err
 	}
-	if err := os.Rename(newPath, target); err != nil {
-		if os.IsPermission(err) {
-			return fmt.Errorf("cannot write %s — rerun with sudo, or set CLOUD_INSTALL_DIR to somewhere you own and reinstall: %w", target, err)
+	if goos != "windows" {
+		if err := rename(newPath, target); err != nil {
+			if os.IsPermission(err) {
+				return fmt.Errorf("cannot write %s — rerun with sudo, or set CLOUD_INSTALL_DIR to somewhere you own and reinstall: %w", target, err)
+			}
+			return err
 		}
-		return err
+		return nil
+	}
+
+	stale := target + staleSuffix
+	// A leftover from an earlier update would block the rename below.
+	if err := os.Remove(stale); err != nil && !errors.Is(err, os.ErrNotExist) {
+		return windowsWriteError(target, err)
+	}
+	if err := rename(target, stale); err != nil {
+		return windowsWriteError(target, err)
+	}
+	if err := rename(newPath, target); err != nil {
+		if rbErr := rename(stale, target); rbErr != nil {
+			return fmt.Errorf("could not install the new binary (%w), nor put the old one back (%w) — it is at %s; rename it to %s", err, rbErr, stale, target)
+		}
+		return windowsWriteError(target, err)
 	}
 	return nil
+}
+
+// windowsWriteError explains a failed write on Windows, where sudo is not the
+// answer: the usual causes are a directory the user cannot write, or another
+// copy of cloud.exe holding the file open.
+func windowsWriteError(target string, err error) error {
+	if os.IsPermission(err) {
+		return fmt.Errorf("cannot replace %s — close any other running cloud.exe and try again; if it is installed somewhere you cannot write (such as Program Files), reinstall per-user with install.ps1, which needs no administrator: %w", target, err)
+	}
+	return fmt.Errorf("cannot replace %s: %w", target, err)
+}
+
+// removeStaleBinary deletes the <target>.old a Windows update leaves behind.
+// It cannot be deleted during that update, since it is still the running
+// image; by the next run it is not. Failure is harmless and ignored — the
+// next update tries again.
+func removeStaleBinary(target string) {
+	_ = os.Remove(target + staleSuffix)
 }
 
 // packageManagerOf names the manager that owns a path, or "" when nothing does.
@@ -402,8 +520,13 @@ func extractBinary(archive, dir string) (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("cannot write to %s: %w", dir, err)
 	}
+	// Covers the error paths; on success copyOut has already closed it, and
+	// the second Close's error means nothing.
 	defer func() { _ = out.Close() }()
 
+	// copyOut writes the binary and makes sure it reached the disk: a Sync or
+	// Close error means a short or unwritten file, which must not be renamed
+	// over a working binary.
 	copyOut := func(r io.Reader) error {
 		n, err := io.Copy(out, io.LimitReader(r, updateSizeLimit))
 		if err != nil {
@@ -411,6 +534,12 @@ func extractBinary(archive, dir string) (string, error) {
 		}
 		if n == updateSizeLimit {
 			return errors.New("the binary in the release archive is implausibly large")
+		}
+		if err := out.Sync(); err != nil {
+			return fmt.Errorf("writing the new binary: %w", err)
+		}
+		if err := out.Close(); err != nil {
+			return fmt.Errorf("writing the new binary: %w", err)
 		}
 		return nil
 	}
