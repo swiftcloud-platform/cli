@@ -2,13 +2,18 @@ package cmd
 
 import (
 	"fmt"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"regexp"
+	"runtime"
+	"sort"
 	"strings"
 	"testing"
 
+	"cloud/internal/api"
 	"cloud/internal/wait"
 
 	s3pkg "cloud/internal/s3"
@@ -21,6 +26,8 @@ hands out point back at itself, which is what lets a command resolve a bucket
 by its display name and then talk S3 to the "region" in one test.
 */
 
+var batchKeyRE = regexp.MustCompile(`<Key>([^<]*)</Key>`)
+
 // fakeStorage serves the API and the S3 endpoint from one server.
 type fakeStorage struct {
 	t       *testing.T
@@ -28,6 +35,12 @@ type fakeStorage struct {
 	// puts and deletes record what the data path did.
 	puts    []string
 	deletes []string
+	// batchKeys are the keys named in batch deletes, in order.
+	batchKeys []string
+	// credCalls counts credential fetches; credEndpoint, when set, replaces
+	// the endpoint the credentials hand out.
+	credCalls    int
+	credEndpoint string
 }
 
 func (f *fakeStorage) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -48,6 +61,10 @@ func (f *fakeStorage) serveAPI(w http.ResponseWriter, r *http.Request) {
 		fmt.Fprintf(w, `{"items":[{"id":"b1","name":"pics","bucketName":"pics-abc123","organizationId":"o1","region":"zm-lsk-1","regionId":"r1","status":"ready","objectCount":2,"sizeBytes":"2048","size":"s3-1","storageClass":"STANDARD","versioning":false,"publicAccess":false,"endpoint":%q,"virtualHost":"pics-abc123.s3.example","createdAt":"2026-09-01T00:00:00Z","updatedAt":"2026-09-01T00:00:00Z"}]}`, base)
 	case "/api/v1/orgs/acme/buckets/pics/credentials",
 		"/api/v1/orgs/acme/buckets/pics-abc123/credentials":
+		f.credCalls++
+		if f.credEndpoint != "" {
+			base = f.credEndpoint
+		}
 		fmt.Fprintf(w, `{"accessKeyId":"AKIAFAKE","secretAccessKey":"s3cr3t'with'quotes","endpoint":%q,"bucketName":"pics-abc123","region":"zm-lsk-1","virtualHost":"pics-abc123.s3.example"}`, base)
 	case "/api/v1/orgs/acme/buckets/pics":
 		fmt.Fprintf(w, `{"id":"b1","name":"pics","bucketName":"pics-abc123","organizationId":"o1","region":"zm-lsk-1","regionId":"r1","status":"ready","objectCount":2,"sizeBytes":"2048","size":"s3-1","storageClass":"STANDARD","versioning":false,"publicAccess":false,"endpoint":%q,"virtualHost":"pics-abc123.s3.example","createdAt":"2026-09-01T00:00:00Z","updatedAt":"2026-09-01T00:00:00Z"}`, base)
@@ -98,6 +115,10 @@ func (f *fakeStorage) serveS3(w http.ResponseWriter, r *http.Request) {
 	case http.MethodPost:
 		// Batch delete.
 		f.deletes = append(f.deletes, "batch")
+		body, _ := io.ReadAll(r.Body)
+		for _, m := range batchKeyRE.FindAllStringSubmatch(string(body), -1) {
+			f.batchKeys = append(f.batchKeys, m[1])
+		}
 		w.Header().Set("content-type", "application/xml")
 		fmt.Fprint(w, `<?xml version="1.0"?><DeleteResult></DeleteResult>`)
 	default:
@@ -684,5 +705,390 @@ func TestBucketDomains_RemoveNeedsConfirmation(t *testing.T) {
 	_, err := run(t, "storage", "bucket", "domains", "remove", "pics", "assets.example.com")
 	if err == nil || ExitCode(err) != ExitUsage {
 		t.Fatalf("removing a hostname without --yes should be refused, got %v", err)
+	}
+}
+
+// ── safety: traversal, prefixes, confirmations, credentials ────────────────
+
+// fakeTerminal makes the next command see an interactive terminal on stdin
+// that will type input, so a confirmation prompt can be exercised.
+func fakeTerminal(t *testing.T, input string) {
+	t.Helper()
+	old := stdinIsTerminal
+	stdinIsTerminal = func(io.Reader) bool { return true }
+	t.Cleanup(func() { stdinIsTerminal = old })
+	testStdin = strings.NewReader(input)
+}
+
+// A key is chosen by whoever can write to the bucket. One that climbs out of
+// the target directory is skipped with a warning; the rest still download,
+// and the exit status says something was left behind.
+func TestCpRecursive_RefusesAKeyThatEscapesTheTarget(t *testing.T) {
+	storageSetup(t, map[string][]byte{
+		"site/ok.txt":                []byte("fine"),
+		"site/../../escaped.txt":     []byte("planted"),
+		`site/..\..\escaped-win.txt`: []byte("planted"),
+		"site/deep/../../../up.txt":  []byte("planted"),
+	})
+	base := t.TempDir()
+	dir := filepath.Join(base, "a", "b")
+	_, stderr, err := runWithStderr(t, "storage", "cp", "s3://pics/site", dir, "--recursive")
+	if err == nil {
+		t.Fatal("a download that skipped unsafe keys must not exit 0")
+	}
+	if got, readErr := os.ReadFile(filepath.Join(dir, "ok.txt")); readErr != nil || string(got) != "fine" {
+		t.Errorf("the safe key should still download: %q, %v", got, readErr)
+	}
+	for _, p := range []string{
+		filepath.Join(base, "escaped.txt"),
+		filepath.Join(base, "a", "escaped.txt"),
+		filepath.Join(base, "a", "up.txt"),
+		filepath.Join(base, "up.txt"),
+	} {
+		if _, statErr := os.Stat(p); statErr == nil {
+			t.Errorf("a key escaped the target directory: %s exists", p)
+		}
+	}
+	if !strings.Contains(stderr, "warning: skipped site/../../escaped.txt") {
+		t.Errorf("the skip should be reported on stderr:\n%s", stderr)
+	}
+}
+
+// Downloading one object into a directory names the file after the key's last
+// segment, which must not be ".." either.
+func TestCp_SingleObjectIntoADirectoryRefusesADotDotName(t *testing.T) {
+	storageSetup(t, map[string][]byte{"x/..": []byte("planted")})
+	dir := t.TempDir()
+	_, err := run(t, "storage", "cp", "s3://pics/x/..", dir)
+	if err == nil || ExitCode(err) != ExitUsage {
+		t.Fatalf("expected a usage error, got %v", err)
+	}
+}
+
+// "photo.jpg" recursively is the directory photo.jpg/, not every key that
+// starts with those letters.
+func TestCpRecursive_KeyIsADirectoryNotAStringPrefix(t *testing.T) {
+	storageSetup(t, map[string][]byte{
+		"photo.jpg":         []byte("1"),
+		"photo.jpg.bak":     []byte("2"),
+		"photo.jpg/one.txt": []byte("3"),
+	})
+	dir := t.TempDir()
+	if _, err := run(t, "storage", "cp", "s3://pics/photo.jpg", dir, "--recursive"); err != nil {
+		t.Fatal(err)
+	}
+	entries, _ := os.ReadDir(dir)
+	var names []string
+	for _, e := range entries {
+		names = append(names, e.Name())
+	}
+	if strings.Join(names, ",") != "one.txt" {
+		t.Errorf("downloaded %v, want only one.txt", names)
+	}
+}
+
+func TestRmRecursive_KeyIsADirectoryNotAStringPrefix(t *testing.T) {
+	fake := storageSetup(t, map[string][]byte{
+		"site":         []byte("exact"),
+		"site.html":    []byte("sibling"),
+		"site2/a.txt":  []byte("sibling dir"),
+		"site/a.txt":   []byte("a"),
+		"site/b/c.txt": []byte("c"),
+	})
+	if _, err := run(t, "storage", "rm", "s3://pics/site", "--recursive", "--yes"); err != nil {
+		t.Fatal(err)
+	}
+	got := append([]string(nil), fake.batchKeys...)
+	sort.Strings(got)
+	if strings.Join(got, ",") != "site/a.txt,site/b/c.txt" {
+		t.Errorf("deleted %v, want only site/a.txt and site/b/c.txt", got)
+	}
+}
+
+func TestRmRecursive_PromptShowsThePrefixAndASample(t *testing.T) {
+	objects := map[string][]byte{}
+	for i := range 7 {
+		objects[fmt.Sprintf("dir/%d.txt", i)] = []byte("x")
+	}
+	fake := storageSetup(t, objects)
+	fakeTerminal(t, "6\n") // the wrong count
+	_, stderr, err := runWithStderr(t, "storage", "rm", "s3://pics/dir", "--recursive")
+	if err == nil || ExitCode(err) != ExitUsage {
+		t.Fatalf("a mistyped count must refuse, got %v", err)
+	}
+	if len(fake.deletes) != 0 {
+		t.Errorf("nothing should be deleted: %v", fake.deletes)
+	}
+	for _, want := range []string{"s3://pics/dir/", "7 object(s)", "  dir/", "… and 2 more", `Type "7"`} {
+		if !strings.Contains(stderr, want) {
+			t.Errorf("prompt missing %q:\n%s", want, stderr)
+		}
+	}
+
+	fakeTerminal(t, "7\n")
+	if _, err := run(t, "storage", "rm", "s3://pics/dir", "--recursive"); err != nil {
+		t.Fatalf("typing the count should proceed: %v", err)
+	}
+	if len(fake.batchKeys) != 7 {
+		t.Errorf("deleted %d keys, want 7", len(fake.batchKeys))
+	}
+}
+
+func syncSource(t *testing.T, files ...string) string {
+	t.Helper()
+	dir := t.TempDir()
+	for _, f := range files {
+		if err := os.WriteFile(filepath.Join(dir, f), []byte("data"), 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	return dir
+}
+
+func TestSyncDelete_NeedsConfirmation(t *testing.T) {
+	fake := storageSetup(t, map[string][]byte{"site/stale.html": []byte("old"), "site/keep.txt": []byte("data")})
+	src := syncSource(t, "keep.txt")
+
+	_, err := run(t, "storage", "sync", src, "s3://pics/site", "--delete")
+	if err == nil || ExitCode(err) != ExitUsage {
+		t.Fatalf("a non-interactive --delete without --yes must be refused, got %v", err)
+	}
+	if len(fake.deletes) != 0 || len(fake.puts) != 0 {
+		t.Errorf("nothing should have changed: puts=%v deletes=%v", fake.puts, fake.deletes)
+	}
+
+	fakeTerminal(t, "wrong\n")
+	_, stderr, err := runWithStderr(t, "storage", "sync", src, "s3://pics/site", "--delete")
+	if err == nil {
+		t.Fatal("a mistyped bucket name must refuse")
+	}
+	if !strings.Contains(stderr, "site/stale.html") || !strings.Contains(stderr, `Type "pics"`) {
+		t.Errorf("the prompt should list what goes and ask for the bucket name:\n%s", stderr)
+	}
+	if len(fake.deletes) != 0 {
+		t.Errorf("nothing should be deleted after a refusal: %v", fake.deletes)
+	}
+
+	fakeTerminal(t, "pics\n")
+	if _, err := run(t, "storage", "sync", src, "s3://pics/site", "--delete"); err != nil {
+		t.Fatalf("typing the bucket name should proceed: %v", err)
+	}
+	if strings.Join(fake.batchKeys, ",") != "site/stale.html" {
+		t.Errorf("deleted %v, want site/stale.html", fake.batchKeys)
+	}
+}
+
+func TestSyncDelete_YesSkipsThePrompt(t *testing.T) {
+	fake := storageSetup(t, map[string][]byte{"site/stale.html": []byte("old")})
+	src := syncSource(t, "new.txt")
+	if _, err := run(t, "storage", "sync", src, "s3://pics/site", "--delete", "--yes"); err != nil {
+		t.Fatal(err)
+	}
+	if strings.Join(fake.batchKeys, ",") != "site/stale.html" {
+		t.Errorf("deleted %v", fake.batchKeys)
+	}
+}
+
+// Nothing to delete means nothing to confirm.
+func TestSync_WithoutRemovalsDoesNotPrompt(t *testing.T) {
+	fake := storageSetup(t, nil)
+	src := syncSource(t, "a.txt")
+	if _, err := run(t, "storage", "sync", src, "s3://pics/site", "--delete"); err != nil {
+		t.Fatal(err)
+	}
+	if len(fake.puts) != 1 {
+		t.Errorf("puts = %v", fake.puts)
+	}
+}
+
+// An empty source under --delete is almost always a wrong path, and would
+// empty the destination.
+func TestSyncDelete_RefusesAnEmptySource(t *testing.T) {
+	fake := storageSetup(t, map[string][]byte{"site/a.txt": []byte("a")})
+	src := syncSource(t)
+	_, err := run(t, "storage", "sync", src, "s3://pics/site", "--delete", "--yes")
+	if err == nil || ExitCode(err) != ExitUsage || !strings.Contains(err.Error(), "--allow-empty-source") {
+		t.Fatalf("expected a usage error naming --allow-empty-source, got %v", err)
+	}
+	if len(fake.deletes) != 0 {
+		t.Errorf("nothing should be deleted: %v", fake.deletes)
+	}
+	if _, err := run(t, "storage", "sync", src, "s3://pics/site", "--delete", "--yes", "--allow-empty-source"); err != nil {
+		t.Fatal(err)
+	}
+	if strings.Join(fake.batchKeys, ",") != "site/a.txt" {
+		t.Errorf("deleted %v", fake.batchKeys)
+	}
+}
+
+// --delete only reaches under the destination as a directory: site.html is not
+// inside s3://pics/site.
+func TestSyncDelete_DestinationIsADirectory(t *testing.T) {
+	fake := storageSetup(t, map[string][]byte{"site.html": []byte("x"), "site/old.txt": []byte("x")})
+	src := syncSource(t, "a.txt")
+	if _, err := run(t, "storage", "sync", src, "s3://pics/site", "--delete", "--yes"); err != nil {
+		t.Fatal(err)
+	}
+	if strings.Join(fake.batchKeys, ",") != "site/old.txt" {
+		t.Errorf("deleted %v, want only site/old.txt", fake.batchKeys)
+	}
+}
+
+func TestSync_SymlinkedSourceDirectoryIsWalked(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("symlinks need privileges on Windows")
+	}
+	fake := storageSetup(t, nil)
+	target := syncSource(t, "a.txt", "b.txt")
+	link := filepath.Join(t.TempDir(), "link")
+	if err := os.Symlink(target, link); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := run(t, "storage", "sync", link, "s3://pics/site"); err != nil {
+		t.Fatal(err)
+	}
+	sort.Strings(fake.puts)
+	if strings.Join(fake.puts, ",") != "site/a.txt,site/b.txt" {
+		t.Errorf("puts = %v", fake.puts)
+	}
+}
+
+func TestSyncDownload_PrefixIsADirectory(t *testing.T) {
+	storageSetup(t, map[string][]byte{"site.html": []byte("x"), "site/a.txt": []byte("a")})
+	dir := t.TempDir()
+	if _, err := run(t, "storage", "sync", "s3://pics/site", dir); err != nil {
+		t.Fatal(err)
+	}
+	entries, _ := os.ReadDir(dir)
+	if len(entries) != 1 || entries[0].Name() != "a.txt" {
+		t.Errorf("downloaded %v, want only a.txt", entries)
+	}
+}
+
+// The endpoint comes from the API and receives every signed request.
+func TestStorage_RefusesAnUnsafeEndpoint(t *testing.T) {
+	fake := storageSetup(t, map[string][]byte{"a.txt": []byte("x")})
+	fake.credEndpoint = "http://s3.attacker.example"
+	_, err := run(t, "storage", "ls", "s3://pics")
+	if err == nil || !strings.Contains(err.Error(), "S3 endpoint") {
+		t.Fatalf("a plain-http remote endpoint must be refused, got %v", err)
+	}
+}
+
+func TestRenderBucketCredential_RefusesControlCharacters(t *testing.T) {
+	good := api.BucketCredentials{AccessKeyId: "AK", SecretAccessKey: "SK", Endpoint: "https://s3.example", BucketName: "pics-abc", Region: "zm-lsk-1"}
+	for _, format := range []string{"env", "aws-profile", "rclone"} {
+		if _, err := renderBucketCredential(good, "pics", format); err != nil {
+			t.Fatalf("%s: a clean credential must render: %v", format, err)
+		}
+		for name, mutate := range map[string]func(*api.BucketCredentials){
+			"key":      func(c *api.BucketCredentials) { c.AccessKeyId = "AK\n[evil]" },
+			"secret":   func(c *api.BucketCredentials) { c.SecretAccessKey = "SK\rx" },
+			"endpoint": func(c *api.BucketCredentials) { c.Endpoint = "https://s3.example\nendpoint_url = https://evil" },
+			"bucket":   func(c *api.BucketCredentials) { c.BucketName = "pics\nAWS_ACCESS_KEY_ID=x" },
+			"region":   func(c *api.BucketCredentials) { c.Region = "zm\x1b[2J" },
+			"nul":      func(c *api.BucketCredentials) { c.SecretAccessKey = "a\x00b" },
+		} {
+			c := good
+			mutate(&c)
+			if out, err := renderBucketCredential(c, "pics", format); err == nil {
+				t.Errorf("%s/%s: must be refused, rendered:\n%s", format, name, out)
+			} else if strings.Contains(err.Error(), "SK") {
+				t.Errorf("%s/%s: the error must not echo the value: %v", format, name, err)
+			}
+		}
+		if _, err := renderBucketCredential(good, "pics\nx", format); err == nil {
+			t.Errorf("%s: a reference with a newline must be refused", format)
+		}
+	}
+	for _, format := range []string{"aws-profile", "rclone"} {
+		if _, err := renderBucketCredential(good, "pi]cs", format); err == nil {
+			t.Errorf("%s: a section name with ] must be refused", format)
+		}
+	}
+}
+
+func TestMv_RefusesStdin(t *testing.T) {
+	fake := storageSetup(t, nil)
+	testStdin = strings.NewReader("data")
+	_, err := run(t, "storage", "mv", "-", "s3://pics/a.txt")
+	if err == nil || ExitCode(err) != ExitUsage {
+		t.Fatalf("mv - must be a usage error, got %v", err)
+	}
+	if len(fake.puts) != 0 {
+		t.Errorf("nothing should be uploaded: %v", fake.puts)
+	}
+}
+
+// Copying an object over itself and then deleting "the source" would delete
+// the only copy. Both names of the bucket resolve to the same place.
+func TestMv_RefusesAMoveOntoItself(t *testing.T) {
+	fake := storageSetup(t, map[string][]byte{"dir/a.txt": []byte("x")})
+	for _, dst := range []string{"s3://pics/dir/a.txt", "s3://pics-abc123/dir/a.txt", "s3://pics/dir/"} {
+		_, err := run(t, "storage", "mv", "s3://pics/dir/a.txt", dst)
+		if err == nil || ExitCode(err) != ExitUsage {
+			t.Errorf("mv onto itself (%s) must be refused, got %v", dst, err)
+		}
+	}
+	if len(fake.deletes) != 0 || len(fake.puts) != 0 {
+		t.Errorf("nothing should change: puts=%v deletes=%v", fake.puts, fake.deletes)
+	}
+}
+
+func TestMv_ResolvesTheBucketOnce(t *testing.T) {
+	fake := storageSetup(t, map[string][]byte{"a.txt": []byte("x")})
+	if _, err := run(t, "storage", "mv", "s3://pics/a.txt", "s3://pics/b.txt"); err != nil {
+		t.Fatal(err)
+	}
+	if fake.credCalls != 1 {
+		t.Errorf("credentials fetched %d times, want 1", fake.credCalls)
+	}
+	if strings.Join(fake.deletes, ",") != "a.txt" {
+		t.Errorf("deletes = %v, want a.txt", fake.deletes)
+	}
+
+	fake.credCalls = 0
+	fake.deletes = nil
+	dir := t.TempDir()
+	if _, err := run(t, "storage", "mv", "s3://pics/a.txt", dir); err != nil {
+		t.Fatal(err)
+	}
+	if fake.credCalls != 1 || strings.Join(fake.deletes, ",") != "a.txt" {
+		t.Errorf("credCalls=%d deletes=%v", fake.credCalls, fake.deletes)
+	}
+	if _, err := os.Stat(filepath.Join(dir, "a.txt")); err != nil {
+		t.Errorf("the object should have been downloaded: %v", err)
+	}
+}
+
+func TestBucketUpdate_VersioningOffNeedsConfirmation(t *testing.T) {
+	storageSetup(t, nil)
+	_, err := run(t, "storage", "bucket", "update", "pics", "--versioning", "off")
+	if err == nil || ExitCode(err) != ExitUsage {
+		t.Fatalf("--versioning off without --yes must be refused, got %v", err)
+	}
+	if _, err := run(t, "storage", "bucket", "update", "pics", "--versioning", "off", "--yes"); err != nil {
+		t.Fatal(err)
+	}
+	fakeTerminal(t, "pics\n")
+	_, stderr, err := runWithStderr(t, "storage", "bucket", "update", "pics", "--versioning", "off")
+	if err != nil {
+		t.Fatalf("typing the name should proceed: %v", err)
+	}
+	if !strings.Contains(stderr, `turn versioning off for bucket "pics"`) {
+		t.Errorf("prompt wording:\n%s", stderr)
+	}
+}
+
+// The public-access prompt says what it does, not "permanently delete".
+func TestBucketUpdate_PublicPromptSaysWhatItDoes(t *testing.T) {
+	storageSetup(t, nil)
+	fakeTerminal(t, "nope\n")
+	_, stderr, err := runWithStderr(t, "storage", "bucket", "update", "pics", "--public", "on")
+	if err == nil {
+		t.Fatal("a mistyped name must refuse")
+	}
+	if !strings.Contains(stderr, `make bucket "pics" publicly readable`) || strings.Contains(stderr, "delete") {
+		t.Errorf("prompt wording:\n%s", stderr)
 	}
 }

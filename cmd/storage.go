@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"bufio"
 	"context"
 	"errors"
 	"fmt"
@@ -10,6 +11,7 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	"unicode"
 
 	"github.com/spf13/cobra"
 
@@ -46,6 +48,8 @@ var (
 	cpRecursive        bool
 	syncDelete         bool
 	syncDryRun         bool
+	syncYes            bool
+	syncAllowEmpty     bool
 	rmRecursive        bool
 	rmYes              bool
 	presignExpires     time.Duration
@@ -239,6 +243,56 @@ func storageErr(err error) error {
 		return fmt.Errorf("the storage layer refused this — either the bucket is read-only because it is over its storage limit, or the credential is no longer valid. `cloud storage bucket get` shows which: %w", err)
 	}
 	return err
+}
+
+// ── confirmation ────────────────────────────────────────────────────────────
+
+// stdinIsTerminal reports whether r is an interactive terminal. A variable so
+// tests can exercise the prompt; nothing else replaces it.
+var stdinIsTerminal = func(r io.Reader) bool {
+	f, ok := r.(*os.File)
+	if !ok {
+		return false
+	}
+	st, err := f.Stat()
+	return err == nil && st.Mode()&os.ModeCharDevice != 0
+}
+
+// confirmAction asks the user to type name back before doing action, unless
+// yes is set. action completes the sentence "This will …", e.g.
+// `make bucket "pics" publicly readable`.
+//
+// It is confirm (cmdutil.go) with the action spelled out instead of fixed to
+// "permanently delete": opening a bucket, removing a variable and detaching a
+// domain each deserve their own sentence. Without a terminal and without
+// --yes it refuses, so a script never hangs on a prompt or proceeds on one it
+// could not show. A candidate to merge into cmdutil.go alongside confirm.
+func confirmAction(cmd *cobra.Command, yes bool, action, name string) error {
+	if yes {
+		return nil
+	}
+	in := cmd.InOrStdin()
+	if !stdinIsTerminal(in) {
+		return &UsageError{fmt.Errorf("refusing to %s without confirmation; pass --yes in scripts", action)}
+	}
+	fmt.Fprintf(cmd.ErrOrStderr(), "This will %s. Type %q to confirm: ", action, name)
+	line, _ := bufio.NewReader(in).ReadString('\n')
+	if strings.TrimSpace(line) != name {
+		return &UsageError{errors.New("that did not match; nothing was changed")}
+	}
+	return nil
+}
+
+// sampleKeys renders up to n keys for a confirmation, with a count of the
+// rest, so a person sees what a prefix actually matched before agreeing.
+func sampleKeys(w io.Writer, keys []string, n int) {
+	for i, k := range keys {
+		if i == n {
+			fmt.Fprintf(w, "  … and %d more\n", len(keys)-n)
+			return
+		}
+		fmt.Fprintf(w, "  %s\n", k)
+	}
 }
 
 // ── commands ────────────────────────────────────────────────────────────────
@@ -547,6 +601,12 @@ layer accepts either.`,
 // renderBucketCredential writes a credential in a form another tool accepts.
 // Values are single-quoted for env output so a secret containing a shell
 // metacharacter survives being eval'd.
+//
+// Every field is checked before anything is rendered: the output is appended
+// to ~/.aws/credentials or rclone.conf, or eval'd, so a newline in a value
+// from the API (or in the bucket name the user typed) would inject a line of
+// configuration — a second profile, a different endpoint — into a file the
+// user trusts. Nothing in a real credential contains a control character.
 func renderBucketCredential(c api.BucketCredentials, ref, format string) (string, error) {
 	profile := "cloud-" + ref
 	// The platform's own region name is the signing region. us-east-1 is only
@@ -555,6 +615,26 @@ func renderBucketCredential(c api.BucketCredentials, ref, format string) (string
 	region := c.Region
 	if region == "" {
 		region = "us-east-1"
+	}
+	switch format {
+	case "env", "aws-profile", "rclone":
+	default:
+		return "", &UsageError{fmt.Errorf("--format %q is not env, aws-profile or rclone", format)}
+	}
+	for _, f := range [][2]string{
+		{"access key id", c.AccessKeyId},
+		{"secret access key", c.SecretAccessKey},
+		{"endpoint", c.Endpoint},
+		{"bucket name", c.BucketName},
+		{"region", region},
+		{"bucket reference", ref},
+	} {
+		if hasControl(f[1]) {
+			return "", fmt.Errorf("the %s contains a control character; refusing to write it into a configuration", f[0])
+		}
+	}
+	if format != "env" && strings.ContainsAny(ref, "[]") {
+		return "", &UsageError{fmt.Errorf("%q cannot name a %s section: it contains \"[\" or \"]\"", ref, format)}
 	}
 	switch format {
 	case "env":
@@ -590,9 +670,14 @@ region = %s
 force_path_style = true
 # bucket: %s
 `, profile, c.AccessKeyId, c.SecretAccessKey, c.Endpoint, region, c.BucketName), nil
-	default:
-		return "", &UsageError{fmt.Errorf("--format %q is not env, aws-profile or rclone", format)}
 	}
+	return "", &UsageError{fmt.Errorf("--format %q is not env, aws-profile or rclone", format)}
+}
+
+// hasControl reports whether s contains a control character — CR, LF, NUL,
+// ESC, DEL and the rest — which no credential field legitimately carries.
+func hasControl(s string) bool {
+	return strings.IndexFunc(s, unicode.IsControl) >= 0
 }
 
 var storageLsCmd = &cobra.Command{
@@ -780,6 +865,9 @@ func copyRemoteToLocal(cmd *cobra.Command, src, dst string) error {
 		if !cpRecursive {
 			return &UsageError{fmt.Errorf("%s names a prefix; pass --recursive to copy everything under it", src)}
 		}
+		// A recursive copy takes the key as a directory: s3://b/photo.jpg
+		// means photo.jpg/…, never photo.jpg.bak.
+		u.Key = s3pkg.DirPrefix(u.Key)
 		objects, _, err := b.Client.List(cmd.Context(), u, true)
 		if err != nil {
 			return storageErr(err)
@@ -790,12 +878,25 @@ func copyRemoteToLocal(cmd *cobra.Command, src, dst string) error {
 		}
 		return runPlan(cmd, b, plan, false)
 	}
-	target := dst
+	return downloadObject(cmd, b, u, dst)
+}
+
+// downloadObject fetches one object to dst: the file itself, or — when dst is
+// an existing directory — a file inside it named after the key's last segment.
+//
+// That name comes from the key, so it is checked like any recursive download:
+// a key ending "/.." or, on Windows, "..\x" must not become a path out of dst.
+func downloadObject(cmd *cobra.Command, b *bucket, u s3pkg.URI, dst string) error {
+	a := s3pkg.Action{Kind: s3pkg.Transfer, Key: u.Key, LocalPath: dst}
 	if info, err := os.Stat(dst); err == nil && info.IsDir() {
-		target = filepath.Join(dst, filepath.Base(u.Key))
+		name := u.Key[strings.LastIndex(u.Key, "/")+1:]
+		path, err := s3pkg.SafeLocalPath(dst, name)
+		if err != nil {
+			return &UsageError{fmt.Errorf("cannot name a local file after %s: %w — give the destination file name instead of a directory", u, err)}
+		}
+		a.LocalPath, a.Root, a.Rel = path, dst, filepath.FromSlash(name)
 	}
-	plan := []s3pkg.Action{{Kind: s3pkg.Transfer, Key: u.Key, LocalPath: target}}
-	return runPlan(cmd, b, plan, false)
+	return runPlan(cmd, b, []s3pkg.Action{a}, false)
 }
 
 func copyRemoteToRemote(cmd *cobra.Command, src, dst string) error {
@@ -803,14 +904,40 @@ func copyRemoteToRemote(cmd *cobra.Command, src, dst string) error {
 	if err != nil {
 		return err
 	}
-	db, du, err := parseRemote(cmd.Context(), dst)
+	db, du, err := parseRemoteReusing(cmd.Context(), dst, sb)
 	if err != nil {
 		return err
 	}
-	key := du.Key
-	if du.IsPrefix() {
-		key = du.Join((s3pkg.Object{Key: su.Key}).Name()).Key
+	return copyBetween(cmd, sb, su, db, du)
+}
+
+// parseRemoteReusing is parseRemote, except that when arg names the bucket
+// already resolved as have it reuses that resolution instead of asking the
+// platform for the same credential twice.
+func parseRemoteReusing(ctx context.Context, arg string, have *bucket) (*bucket, s3pkg.URI, error) {
+	u, err := s3pkg.ParseURI(arg)
+	if err != nil {
+		return nil, s3pkg.URI{}, &UsageError{err}
 	}
+	if have != nil && (u.Bucket == have.Ref || u.Bucket == have.Physical) {
+		u.Bucket = have.Physical
+		return have, u, nil
+	}
+	return parseRemote(ctx, arg)
+}
+
+// remoteDestKey is the key a remote→remote copy writes: du's key, or the
+// source's name under it when du is a prefix.
+func remoteDestKey(su, du s3pkg.URI) string {
+	if du.IsPrefix() {
+		return du.Join((s3pkg.Object{Key: su.Key}).Name()).Key
+	}
+	return du.Key
+}
+
+// copyBetween copies one object between two resolved locations.
+func copyBetween(cmd *cobra.Command, sb *bucket, su s3pkg.URI, db *bucket, du s3pkg.URI) error {
+	key := remoteDestKey(su, du)
 	// Same bucket: let the storage layer do it and keep the bytes there.
 	if sb.Physical == db.Physical {
 		if err := sb.Client.Copy(cmd.Context(), su, s3pkg.URI{Bucket: db.Physical, Key: key}); err != nil {
@@ -855,9 +982,17 @@ and --dry-run says so. Sizes still catch every change that alters length.
 
 --delete removes objects at the destination with no counterpart at the source,
 and only ever under the destination prefix. Uploads finish before any deletion,
-so an interrupted sync never leaves the destination short.`,
+so an interrupted sync never leaves the destination short. Whenever a sync
+would delete anything it lists a sample and asks you to type the bucket name;
+--yes skips that in scripts. A source directory with no files at all is
+refused under --delete — that is almost always a wrong path, and it would
+empty the destination — unless --allow-empty-source says it is meant.
+
+A remote location is a directory: s3://pics/site means site/…, never
+site.html.`,
 	Example: `  cloud storage sync ./site s3://pics/site
   cloud storage sync ./site s3://pics/site --delete
+  cloud storage sync ./site s3://pics/site --delete --yes
   cloud storage sync ./site s3://pics/site --dry-run
   cloud storage sync s3://pics/site ./backup`,
 	Args: cobra.ExactArgs(2),
@@ -874,6 +1009,10 @@ so an interrupted sync never leaves the destination short.`,
 			if err != nil {
 				return err
 			}
+			if syncDelete && len(files) == 0 && !syncAllowEmpty && !syncDryRun {
+				return &UsageError{fmt.Errorf("%s contains no files, so --delete would remove everything under %s; check the path, or pass --allow-empty-source if emptying it is the intent", src, dst)}
+			}
+			u.Key = s3pkg.DirPrefix(u.Key)
 			remote, _, err := b.Client.List(cmd.Context(), u, true)
 			if err != nil {
 				return storageErr(err)
@@ -888,6 +1027,7 @@ so an interrupted sync never leaves the destination short.`,
 			if err != nil {
 				return err
 			}
+			u.Key = s3pkg.DirPrefix(u.Key)
 			remote, _, err := b.Client.List(cmd.Context(), u, true)
 			if err != nil {
 				return storageErr(err)
@@ -907,6 +1047,16 @@ so an interrupted sync never leaves the destination short.`,
 func runPlan(cmd *cobra.Command, b *bucket, plan []s3pkg.Action, upload bool) error {
 	transfers, skips, removes, bytes := s3pkg.Counts(plan)
 	errOut := cmd.ErrOrStderr()
+	// A key that would write outside the target directory is skipped, and
+	// said so even under --quiet: it is a file the user asked for and has not
+	// got, and possibly someone trying to plant one.
+	var unsafe int
+	for _, a := range plan {
+		if a.Unsafe {
+			unsafe++
+			fmt.Fprintf(errOut, "warning: skipped %s — its key would write outside the target directory\n", a.Key)
+		}
+	}
 	if syncDryRun {
 		for _, a := range plan {
 			fmt.Fprintf(cmd.OutOrStdout(), "%-8s %s — %s\n", a.Kind, a.Key, a.Reason)
@@ -914,6 +1064,22 @@ func runPlan(cmd *cobra.Command, b *bucket, plan []s3pkg.Action, upload bool) er
 		fmt.Fprintf(errOut, "\nWould transfer %d, skip %d, remove %d (%s). Nothing was changed.\n",
 			transfers, skips, removes, humanBytes(bytes))
 		return nil
+	}
+	if removes > 0 {
+		var keys []string
+		for _, a := range plan {
+			if a.Kind == s3pkg.Remove {
+				keys = append(keys, a.Key)
+			}
+		}
+		if !syncYes {
+			fmt.Fprintf(errOut, "%d object(s) in %s are not at the source and will be deleted:\n", removes, b.Ref)
+			sampleKeys(errOut, keys, 5)
+		}
+		if err := confirmAction(cmd, syncYes,
+			fmt.Sprintf("permanently delete %d object(s) from bucket %q", removes, b.Ref), b.Ref); err != nil {
+			return err
+		}
 	}
 	if !flagQuiet && (transfers+removes) > 0 {
 		fmt.Fprintf(errOut, "Transferring %d file(s), %s", transfers, humanBytes(bytes))
@@ -940,7 +1106,10 @@ func runPlan(cmd *cobra.Command, b *bucket, plan []s3pkg.Action, upload bool) er
 		return storageErr(err)
 	}
 	if !flagQuiet && transfers+removes == 0 {
-		fmt.Fprintf(errOut, "Nothing to do — %d file(s) already match.\n", skips)
+		fmt.Fprintf(errOut, "Nothing to do — %d file(s) already match.\n", skips-unsafe)
+	}
+	if unsafe > 0 {
+		return fmt.Errorf("%d object(s) were not downloaded because their keys would write outside the target directory", unsafe)
 	}
 	return nil
 }
@@ -952,31 +1121,62 @@ var storageMvCmd = &cobra.Command{
 and the delete only happens once the copy has succeeded.
 
 There is no atomic move in S3, so an interruption between the two leaves the
-object at both locations rather than at neither — the safe direction.`,
+object at both locations rather than at neither — the safe direction.
+
+mv moves one object or file. It does not read stdin ("-"), since there is no
+source to remove afterwards, and it refuses a move onto itself, which would
+copy the object over itself and then delete it.`,
 	Example: `  cloud storage mv s3://pics/old.jpg s3://pics/new.jpg
   cloud storage mv ./photo.jpg s3://pics/photo.jpg
   cloud storage mv s3://pics/photo.jpg ./photo.jpg`,
 	Args: cobra.ExactArgs(2),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		src, dst := args[0], args[1]
-		if err := storageCpCmd.RunE(cmd, args); err != nil {
-			return err
-		}
-		if s3pkg.IsURI(src) {
-			b, u, err := parseRemote(cmd.Context(), src)
+		srcRemote, dstRemote := s3pkg.IsURI(src), s3pkg.IsURI(dst)
+		switch {
+		case src == "-":
+			return &UsageError{errors.New("mv cannot move stdin; use `cloud storage cp - s3://…`")}
+		case !srcRemote && !dstRemote:
+			return &UsageError{errors.New("at least one of the two locations must be an s3:// location; use mv(1) for local moves")}
+		case !srcRemote:
+			if err := copyLocalToRemote(cmd, src, dst); err != nil {
+				return err
+			}
+			if err := os.Remove(src); err != nil {
+				return err
+			}
+		default:
+			// The source is resolved once and reused for the delete: asking
+			// the platform again would be a second credential fetch, and a
+			// second chance for the answer to differ.
+			sb, su, err := parseRemote(cmd.Context(), src)
 			if err != nil {
 				return err
 			}
-			if err := b.Client.Delete(cmd.Context(), u); err != nil {
+			if su.IsPrefix() {
+				return &UsageError{fmt.Errorf("%s names a bucket or prefix; mv moves one object", src)}
+			}
+			if dstRemote {
+				db, du, err := parseRemoteReusing(cmd.Context(), dst, sb)
+				if err != nil {
+					return err
+				}
+				if sb.Physical == db.Physical && su.Key == remoteDestKey(su, du) {
+					return &UsageError{fmt.Errorf("%s and %s are the same object; nothing to move", src, dst)}
+				}
+				if err := copyBetween(cmd, sb, su, db, du); err != nil {
+					return err
+				}
+			} else if err := downloadObject(cmd, sb, su, dst); err != nil {
+				return err
+			}
+			if err := sb.Client.Delete(cmd.Context(), su); err != nil {
 				return storageErr(err)
 			}
-		} else if err := os.Remove(src); err != nil {
-			return err
 		}
 		if !flagQuiet {
 			fmt.Fprintf(cmd.ErrOrStderr(), "Removed %s\n", src)
 		}
-		_ = dst
 		return nil
 	},
 }
@@ -986,9 +1186,13 @@ var storageRmCmd = &cobra.Command{
 	Short: "Delete objects",
 	Long: `Delete one object, or everything under a prefix with --recursive.
 
-A recursive delete lists what it would remove and asks you to confirm the
-count, because a prefix is easy to mistype and there is no undo. --yes skips
-the prompt for scripts.`,
+A recursive delete takes the key as a directory: s3://pics/site --recursive
+deletes site/… and nothing else — not site.html, not site2/, and not an object
+named exactly "site" (delete that one without --recursive).
+
+It shows the prefix and a sample of what it would remove and asks you to type
+the count, because a prefix is easy to mistype and there is no undo. --yes
+skips the prompt for scripts.`,
 	Example: `  cloud storage rm s3://pics/old.jpg
   cloud storage rm s3://pics/2025/ --recursive
   cloud storage rm s3://pics/2025/ --recursive --yes`,
@@ -1010,13 +1214,16 @@ the prompt for scripts.`,
 			}
 			return nil
 		}
+		// "site" means the directory site/, never site.html or site2/….
+		u.Key = s3pkg.DirPrefix(u.Key)
+		where := (s3pkg.URI{Bucket: b.Ref, Key: u.Key}).String()
 		objects, _, err := b.Client.List(cmd.Context(), u, true)
 		if err != nil {
 			return storageErr(err)
 		}
 		if len(objects) == 0 {
 			if !flagQuiet {
-				fmt.Fprintf(cmd.ErrOrStderr(), "Nothing under %s\n", args[0])
+				fmt.Fprintf(cmd.ErrOrStderr(), "Nothing under %s\n", where)
 			}
 			return nil
 		}
@@ -1027,11 +1234,12 @@ the prompt for scripts.`,
 			total += o.Size
 		}
 		if !rmYes {
-			fmt.Fprintf(cmd.ErrOrStderr(), "This will permanently delete %d object(s), %s, under %s.\n",
-				len(keys), humanBytes(total), args[0])
-			if err := confirm(cmd, false, "objects", strconv.Itoa(len(keys))); err != nil {
-				return err
-			}
+			fmt.Fprintf(cmd.ErrOrStderr(), "Under %s: %d object(s), %s, including\n", where, len(keys), humanBytes(total))
+			sampleKeys(cmd.ErrOrStderr(), keys, 5)
+		}
+		if err := confirmAction(cmd, rmYes,
+			fmt.Sprintf("permanently delete %d object(s) under %s", len(keys), where), strconv.Itoa(len(keys))); err != nil {
+			return err
 		}
 		if err := b.Client.DeleteMany(cmd.Context(), b.Physical, keys); err != nil {
 			return storageErr(err)
@@ -1155,6 +1363,8 @@ func init() {
 
 	storageSyncCmd.Flags().BoolVar(&syncDelete, "delete", false, "remove destination objects that are not at the source")
 	storageSyncCmd.Flags().BoolVar(&syncDryRun, "dry-run", false, "print what would move, change nothing")
+	storageSyncCmd.Flags().BoolVarP(&syncYes, "yes", "y", false, "skip the confirmation before --delete removes objects (scripts)")
+	storageSyncCmd.Flags().BoolVar(&syncAllowEmpty, "allow-empty-source", false, "let --delete run when the source directory has no files, emptying the destination")
 
 	storageRmCmd.Flags().BoolVarP(&rmRecursive, "recursive", "r", false, "delete everything under a prefix")
 	storageRmCmd.Flags().BoolVarP(&rmYes, "yes", "y", false, "skip the confirmation (scripts)")
@@ -1168,7 +1378,7 @@ func init() {
 	bucketUpdateCmd.Flags().StringVar(&bucketPublic, "public", "", "on or off — every object readable by anyone")
 	bucketUpdateCmd.Flags().StringArrayVar(&bucketAddPrefix, "public-prefix", nil, "open one folder to the public (repeatable)")
 	bucketUpdateCmd.Flags().StringArrayVar(&bucketDelPrefix, "remove-public-prefix", nil, "close a folder again (repeatable)")
-	bucketUpdateCmd.Flags().BoolVarP(&bucketUpdateYes, "yes", "y", false, "skip the confirmation when opening access (scripts)")
+	bucketUpdateCmd.Flags().BoolVarP(&bucketUpdateYes, "yes", "y", false, "skip the confirmation when opening access or turning versioning off (scripts)")
 
 	bucketKeysAddCmd.Flags().StringVar(&keyLabel, "label", "", "a name to recognise this key by (max 60 characters)")
 	bucketKeysRevokeCmd.Flags().BoolVarP(&keyRevokeYes, "yes", "y", false, "skip the confirmation (scripts)")
@@ -1240,9 +1450,10 @@ folder wants.
 Both prefix flags are repeatable, and they are applied to the folders the
 bucket already has, so adding one does not remove the others.
 
-Anything that opens access asks you to confirm, because it takes effect
-immediately and cannot be undone for anyone who has already fetched the
-object. Use --yes in scripts.
+Anything that opens access asks you to type the bucket name, because it takes
+effect immediately and cannot be undone for anyone who has already fetched the
+object. So does --versioning off, after which an overwrite or delete keeps no
+earlier version. Use --yes in scripts.
 
 The platform proves a public rule before recording it: it writes a probe
 object, fetches it without credentials and deletes it. If your region cannot
@@ -1299,8 +1510,9 @@ honour the rule, the change is refused and the reason says so.`,
 			return &UsageError{errors.New("nothing to change — pass --versioning, --public, --public-prefix or --remove-public-prefix")}
 		}
 
-		if opens && !bucketUpdateYes {
-			if err := confirmOpening(cmd, args[0], body); err != nil {
+		versioningOff := body.Versioning != nil && !*body.Versioning
+		if (opens || versioningOff) && !bucketUpdateYes {
+			if err := confirmBucketUpdate(cmd, args[0], body, opens, versioningOff); err != nil {
 				return err
 			}
 		}
@@ -1380,19 +1592,33 @@ func mergePrefixes(current, add, remove []string) ([]string, bool) {
 	return out, opened
 }
 
-// confirmOpening spells out what becomes public before it does.
-func confirmOpening(cmd *cobra.Command, name string, body api.PatchOrgsOrgBucketsBucketJSONRequestBody) error {
+// confirmBucketUpdate spells out what an update does before it does it — what
+// becomes public, and what turning versioning off gives up — and asks for the
+// bucket's name once, whichever of the two it is.
+func confirmBucketUpdate(cmd *cobra.Command, name string, body api.PatchOrgsOrgBucketsBucketJSONRequestBody, opens, versioningOff bool) error {
 	w := cmd.ErrOrStderr()
-	if body.PublicAccess != nil && *body.PublicAccess {
-		fmt.Fprintf(w, "Every object in %s becomes readable by anyone on the internet, immediately.\n", name)
-	}
-	if body.PublicPrefixes != nil && len(*body.PublicPrefixes) > 0 {
-		for _, p := range *body.PublicPrefixes {
-			fmt.Fprintf(w, "Everything under %s/ becomes readable by anyone on the internet, immediately.\n", p)
+	var actions []string
+	if opens {
+		if body.PublicAccess != nil && *body.PublicAccess {
+			fmt.Fprintf(w, "Every object in %s becomes readable by anyone on the internet, immediately.\n", name)
+		}
+		if body.PublicPrefixes != nil && len(*body.PublicPrefixes) > 0 {
+			for _, p := range *body.PublicPrefixes {
+				fmt.Fprintf(w, "Everything under %s/ becomes readable by anyone on the internet, immediately.\n", p)
+			}
+		}
+		fmt.Fprintln(w, "Anyone who fetches an object while it is public keeps their copy; closing access later does not undo that.")
+		if body.PublicAccess != nil && *body.PublicAccess {
+			actions = append(actions, fmt.Sprintf("make bucket %q publicly readable", name))
+		} else {
+			actions = append(actions, fmt.Sprintf("make folders in bucket %q publicly readable", name))
 		}
 	}
-	fmt.Fprintln(w, "Anyone who fetches an object while it is public keeps their copy; closing access later does not undo that.")
-	return confirm(cmd, false, "bucket", name)
+	if versioningOff {
+		fmt.Fprintf(w, "With versioning off, an object in %s that is overwritten or deleted from now on keeps no earlier version to restore.\n", name)
+		actions = append(actions, fmt.Sprintf("turn versioning off for bucket %q", name))
+	}
+	return confirmAction(cmd, false, strings.Join(actions, " and "), name)
 }
 
 // ── object versions ─────────────────────────────────────────────────────────
