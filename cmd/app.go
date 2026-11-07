@@ -105,6 +105,8 @@ var (
 	createImage, createRegion, createDesc, createSize string
 	createPort, createMin, createMax                  int
 	createEnv                                         []string
+	createEnvFile                                     string
+	domainRemoveYes                                   bool
 	createRegServer, createRegUser                    string
 	createRegPassStdin                                bool
 	flagWait                                          bool
@@ -118,12 +120,18 @@ var appCreateCmd = &cobra.Command{
 command refers to it; --image is the only required flag.
 
 The app is created immediately but starts as "deploying"; pass --wait to
-block until it is ready (or fails), which is when the https URL works.`,
+block until it is ready (or fails), which is when the https URL works.
+
+Environment variables come from --env KEY=VALUE (repeatable) or --env-file,
+which reads a KEY=VALUE file in the format "cloud app env set --help"
+describes. A secret belongs in the file rather than on the command line, where
+it would land in shell history; --env wins over the file for the same name.`,
 	Example: `  cloud app create demo --image nginx:1.27
   cloud app create api --image ghcr.io/acme/api:1.4 --port 3000 --min 1 --max 5 --wait
 
-  # environment variables: repeat --env
+  # environment variables: repeat --env, or keep secrets out of argv with --env-file
   cloud app create api --image ghcr.io/acme/api:1.4 --env LOG_LEVEL=debug --env TZ=Africa/Lusaka
+  cloud app create api --image ghcr.io/acme/api:1.4 --env-file .env
 
   # a private registry; the password is read from stdin, never from argv
   echo "$REGISTRY_TOKEN" | cloud app create api --image registry.acme.io/api:1.4 \
@@ -141,9 +149,18 @@ block until it is ready (or fails), which is when the https URL works.`,
 		if region == "" {
 			return &UsageError{errors.New("no region given — pass --region, set CLOUD_REGION, or add one to your context (see `cloud region list`)")}
 		}
-		env, err := parseEnv(createEnv)
+		env := map[string]string{}
+		if createEnvFile != "" {
+			if env, err = readEnvFile(createEnvFile); err != nil {
+				return err
+			}
+		}
+		flagEnv, err := parseEnv(createEnv)
 		if err != nil {
 			return err
+		}
+		for k, v := range flagEnv {
+			env[k] = v
 		}
 		body := api.PostOrgsOrgAppsJSONRequestBody{
 			Name: args[0], Image: createImage, Region: region,
@@ -572,9 +589,13 @@ var appDomainRemoveCmd = &cobra.Command{
 	Use:   "remove <app> <hostname>",
 	Short: "Detach a custom domain",
 	Long: `Detach a hostname from an app. The app keeps running on its own URL and
-any other domains; only this hostname stops routing.`,
-	Example: `  cloud app domain remove demo www.example.com`,
-	Args:    cobra.ExactArgs(2),
+any other domains; only this hostname stops routing.
+
+You are asked to type the hostname to confirm, since the site at that name
+stops answering at once. Use --yes in scripts.`,
+	Example: `  cloud app domain remove demo www.example.com
+  cloud app domain remove demo www.example.com --yes`,
+	Args: cobra.ExactArgs(2),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		org, err := requireOrg()
 		if err != nil {
@@ -584,7 +605,12 @@ any other domains; only this hostname stops routing.`,
 		if err != nil {
 			return err
 		}
-		res, err := c.DeleteOrgsOrgAppsAppDomainsDomainWithResponse(cmd.Context(), org, args[0], strings.ToLower(args[1]))
+		host := strings.ToLower(args[1])
+		if err := confirmAction(cmd, domainRemoveYes,
+			fmt.Sprintf("detach %s from app %q; it stops routing immediately", host, args[0]), host); err != nil {
+			return err
+		}
+		res, err := c.DeleteOrgsOrgAppsAppDomainsDomainWithResponse(cmd.Context(), org, args[0], host)
 		if err != nil {
 			return reachErr(err)
 		}
@@ -625,6 +651,7 @@ func init() {
 	f.IntVar(&createMin, "min", 0, "minimum replicas (0 = scale to zero)")
 	f.IntVar(&createMax, "max", 3, "maximum replicas")
 	f.StringArrayVar(&createEnv, "env", nil, "environment variable KEY=VALUE (repeatable)")
+	f.StringVar(&createEnvFile, "env-file", "", "read environment variables from a KEY=VALUE file (keeps secrets out of argv)")
 	f.StringVar(&createRegServer, "registry-server", "", "private registry host")
 	f.StringVar(&createRegUser, "registry-username", "", "private registry user")
 	f.BoolVar(&createRegPassStdin, "registry-password-stdin", false, "read the registry password from stdin")
@@ -648,6 +675,7 @@ func init() {
 		c.Flags().DurationVar(&flagTimeout, "timeout", 10*time.Minute, "how long --wait waits")
 	}
 
+	appDomainRemoveCmd.Flags().BoolVarP(&domainRemoveYes, "yes", "y", false, "skip the confirmation (scripts)")
 	appDomainCmd.AddCommand(appDomainListCmd, appDomainAddCmd, appDomainRemoveCmd)
 	appCmd.AddCommand(appListCmd, appCreateCmd, appGetCmd, appDeployCmd, appScaleCmd, appLogsCmd, appDeleteCmd, appDomainCmd)
 	rootCmd.AddCommand(appCmd)

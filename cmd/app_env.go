@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"regexp"
 	"sort"
 	"strings"
 
@@ -37,6 +38,7 @@ var (
 	envShowValues bool
 	envFile       string
 	envFromStdin  string
+	envUnsetYes   bool
 	updatePort    int
 	updateDesc    string
 	updateRegSrv  string
@@ -77,18 +79,90 @@ func (r envRows) keys() []string {
 	return keys
 }
 
-// maskValue keeps enough to recognise a value without disclosing it. Short
-// values are hidden completely, since revealing three of four characters is
-// not a mask.
+// maskValue hides a value completely behind a fixed-width mask. Showing a few
+// characters, or a mask as long as the value, leaks the length and part of
+// the secret to anyone reading over a shoulder or a pasted screenshot; an
+// empty value stays visibly empty, since that is not a secret.
 func maskValue(v string) string {
-	switch {
-	case v == "":
+	if v == "" {
 		return ""
-	case len(v) <= 8:
-		return strings.Repeat("•", len(v))
-	default:
-		return v[:2] + strings.Repeat("•", len(v)-4) + v[len(v)-2:]
 	}
+	return valueMask
+}
+
+const valueMask = "••••••••"
+
+// envChange is one variable in the result of `env set` / `env unset`, for
+// -o json and -o yaml: the name and what happened to it, never the value.
+type envChange struct {
+	Name   string `json:"name" yaml:"name"`
+	Status string `json:"status" yaml:"status"` // "set", "removed" or "unchanged"
+}
+
+// envChangeResult is what `env set` and `env unset` print for a machine.
+// The table form is never printed (those commands speak in sentences on
+// stderr), but it is Tabular so --quiet lists the names.
+type envChangeResult struct {
+	App            string      `json:"app" yaml:"app"`
+	LatestRevision string      `json:"latestRevision,omitempty" yaml:"latestRevision,omitempty"`
+	Variables      []envChange `json:"variables" yaml:"variables"`
+}
+
+func (r envChangeResult) Columns() []string { return []string{"NAME", "STATUS"} }
+func (r envChangeResult) Rows() [][]string {
+	out := make([][]string, len(r.Variables))
+	for i, v := range r.Variables {
+		out[i] = []string{v.Name, v.Status}
+	}
+	return out
+}
+func (r envChangeResult) IDs() []string {
+	out := make([]string, 0, len(r.Variables))
+	for _, v := range r.Variables {
+		if v.Status != "removed" {
+			out = append(out, v.Name)
+		}
+	}
+	return out
+}
+
+// newEnvChangeResult describes the map after a write: every variable now set,
+// marked "set" when this command wrote it, plus the ones it removed.
+func newEnvChangeResult(app, revision string, vars map[string]string, set, removed []string) envChangeResult {
+	status := map[string]string{}
+	for k := range vars {
+		status[k] = "unchanged"
+	}
+	for _, k := range set {
+		status[k] = "set"
+	}
+	for _, k := range removed {
+		status[k] = "removed"
+	}
+	names := make([]string, 0, len(status))
+	for k := range status {
+		names = append(names, k)
+	}
+	sort.Strings(names)
+	r := envChangeResult{App: app, LatestRevision: revision, Variables: make([]envChange, len(names))}
+	for i, k := range names {
+		r.Variables[i] = envChange{Name: k, Status: status[k]}
+	}
+	return r
+}
+
+// readEnvFile opens and parses a --env-file.
+func readEnvFile(path string) (map[string]string, error) {
+	f, err := os.Open(path) // #nosec G304 -- the file the user named
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = f.Close() }()
+	vars, err := parseEnvFile(f)
+	if err != nil {
+		return nil, &UsageError{fmt.Errorf("%s: %w", path, err)}
+	}
+	return vars, nil
 }
 
 // appEnvVars fetches an app's current variables, which every write needs
@@ -115,8 +189,9 @@ func appEnvVars(ctx context.Context, c *api.ClientWithResponses, org, app string
 	return vars, a.LatestRevision, nil
 }
 
-// patchEnvVars writes the whole map back and reports the redeploy.
-func patchEnvVars(cmd *cobra.Command, c *api.ClientWithResponses, org, app string, vars map[string]string, priorRevision string) error {
+// patchEnvVars writes the whole map back and reports the redeploy. set and
+// removed name what this command changed, for the machine-readable result.
+func patchEnvVars(cmd *cobra.Command, c *api.ClientWithResponses, org, app string, vars map[string]string, priorRevision string, set, removed []string) error {
 	body := api.PatchOrgsOrgAppsAppJSONRequestBody{EnvVars: &vars}
 	res, err := c.PatchOrgsOrgAppsAppWithResponse(cmd.Context(), org, app, body)
 	if err != nil {
@@ -158,34 +233,103 @@ func patchEnvVars(cmd *cobra.Command, c *api.ClientWithResponses, org, app strin
 		}
 		return nil
 	}
-	return printer.Print(envRows{vars: vars, show: envShowValues})
+	return printer.Print(newEnvChangeResult(a.Name, a.LatestRevision, vars, set, removed))
 }
 
-// parseEnvFile reads KEY=VALUE lines, ignoring blanks and # comments, and
-// accepting the `export KEY=VALUE` that .env files often carry.
+// envKey is what a variable name may be: the portable shell identifier.
+var envKey = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]*$`)
+
+// envFileMaxLine is the longest line parseEnvFile accepts. A PEM key or a
+// JSON blob on one line easily passes bufio's 64 KiB default.
+const envFileMaxLine = 1 << 20
+
+// parseEnvFile reads a .env file of KEY=VALUE lines.
+//
+// What it accepts, deliberately a small and predictable subset of what
+// various dotenv libraries do:
+//
+//   - blank lines and lines starting with # are ignored; a UTF-8 byte-order
+//     mark at the start of the file is dropped;
+//   - an optional `export ` before the key;
+//   - whitespace around the key and around the value is trimmed;
+//   - a value in matching single or double quotes is taken exactly as written
+//     between them — no escape sequences, no variable expansion, no
+//     multi-line values — and only a # comment may follow the closing quote;
+//   - an unquoted value ends at a " #" (whitespace then #), which starts a
+//     comment; a # with no space before it is part of the value;
+//   - a key must match [A-Za-z_][A-Za-z0-9_]*, and a key given twice is an
+//     error rather than last-one-wins.
+//
+// Errors name the line number and never echo the line, which may hold a
+// secret.
 func parseEnvFile(r io.Reader) (map[string]string, error) {
 	out := map[string]string{}
+	seenAt := map[string]int{}
 	sc := bufio.NewScanner(r)
+	sc.Buffer(make([]byte, 0, 64*1024), envFileMaxLine)
 	line := 0
 	for sc.Scan() {
 		line++
-		s := strings.TrimSpace(sc.Text())
+		s := sc.Text()
+		if line == 1 {
+			s = strings.TrimPrefix(s, "\uFEFF")
+		}
+		s = strings.TrimSpace(s)
 		if s == "" || strings.HasPrefix(s, "#") {
 			continue
 		}
-		s = strings.TrimPrefix(s, "export ")
+		if rest, ok := strings.CutPrefix(s, "export"); ok && rest != "" && (rest[0] == ' ' || rest[0] == '\t') {
+			s = strings.TrimSpace(rest)
+		}
 		k, v, ok := strings.Cut(s, "=")
-		if !ok || strings.TrimSpace(k) == "" {
-			return nil, fmt.Errorf("line %d is not KEY=VALUE: %q", line, sc.Text())
-		}
 		k = strings.TrimSpace(k)
-		// Strip one layer of matching quotes, the way a shell would.
-		if len(v) >= 2 && (v[0] == '"' && v[len(v)-1] == '"' || v[0] == '\'' && v[len(v)-1] == '\'') {
-			v = v[1 : len(v)-1]
+		if !ok || k == "" {
+			return nil, fmt.Errorf("line %d is not KEY=VALUE", line)
 		}
-		out[k] = v
+		if !envKey.MatchString(k) {
+			return nil, fmt.Errorf("line %d: %q is not a valid variable name (letters, digits and _, not starting with a digit)", line, k)
+		}
+		if first, dup := seenAt[k]; dup {
+			return nil, fmt.Errorf("line %d: %s is already set on line %d", line, k, first)
+		}
+		val, err := envFileValue(strings.TrimSpace(v))
+		if err != nil {
+			return nil, fmt.Errorf("line %d (%s): %w", line, k, err)
+		}
+		seenAt[k] = line
+		out[k] = val
 	}
-	return out, sc.Err()
+	if err := sc.Err(); err != nil {
+		if errors.Is(err, bufio.ErrTooLong) {
+			return nil, fmt.Errorf("line %d is longer than %d KiB", line+1, envFileMaxLine>>10)
+		}
+		return nil, err
+	}
+	return out, nil
+}
+
+// envFileValue interprets the text after "=", already trimmed.
+func envFileValue(v string) (string, error) {
+	if v == "" {
+		return "", nil
+	}
+	if q := v[0]; q == '"' || q == '\'' {
+		end := strings.IndexByte(v[1:], q)
+		if end < 0 {
+			return "", errors.New("the quote is not closed (values cannot span lines)")
+		}
+		rest := strings.TrimSpace(v[end+2:])
+		if rest != "" && !strings.HasPrefix(rest, "#") {
+			return "", errors.New("unexpected text after the closing quote (quotes have no escapes; use the other quote character or --from-stdin)")
+		}
+		return v[1 : end+1], nil
+	}
+	for j := 1; j < len(v); j++ {
+		if v[j] == '#' && (v[j-1] == ' ' || v[j-1] == '\t') {
+			return strings.TrimSpace(v[:j]), nil
+		}
+	}
+	return v, nil
 }
 
 var appEnvCmd = &cobra.Command{
@@ -255,6 +399,12 @@ A value that is a secret should not go in the command line, where it lands in
 shell history: --from-stdin NAME reads exactly one value from stdin, and
 --env-file reads a whole KEY=VALUE file.
 
+The file takes one KEY=VALUE per line, optionally prefixed by "export ".
+Blank lines and lines starting with # are skipped, and " #" ends an unquoted
+value. A value in single or double quotes is taken literally — there are no
+escape sequences and no multi-line values. Names must be letters, digits and
+underscores, not starting with a digit, and each may appear only once.
+
 Setting a variable redeploys the app.`,
 	Example: `  cloud app env set notifie LOG_LEVEL=debug
   cloud app env set notifie LOG_LEVEL=debug TZ=Africa/Lusaka
@@ -275,14 +425,9 @@ Setting a variable redeploys the app.`,
 		incoming := map[string]string{}
 
 		if envFile != "" {
-			f, err := os.Open(envFile) // #nosec G304 -- the file the user named
+			parsed, err := readEnvFile(envFile)
 			if err != nil {
 				return err
-			}
-			parsed, parseErr := parseEnvFile(f)
-			_ = f.Close()
-			if parseErr != nil {
-				return &UsageError{fmt.Errorf("%s: %w", envFile, parseErr)}
 			}
 			for k, v := range parsed {
 				incoming[k] = v
@@ -315,10 +460,12 @@ Setting a variable redeploys the app.`,
 		if err != nil {
 			return err
 		}
+		set := make([]string, 0, len(incoming))
 		for k, v := range incoming {
 			vars[k] = v
+			set = append(set, k)
 		}
-		return patchEnvVars(cmd, c, org, app, vars, prior)
+		return patchEnvVars(cmd, c, org, app, vars, prior, set, nil)
 	},
 }
 
@@ -329,9 +476,12 @@ var appEnvUnsetCmd = &cobra.Command{
 redeploys the app.
 
 A name that is not set is reported rather than ignored, because a silent
-success is indistinguishable from a typo in the name.`,
+success is indistinguishable from a typo in the name.
+
+A removed value cannot be read back afterwards, so you are asked to type the
+app's name to confirm. Use --yes in scripts.`,
 	Example: `  cloud app env unset notifie OLD_FLAG
-  cloud app env unset notifie OLD_FLAG LEGACY_URL`,
+  cloud app env unset notifie OLD_FLAG LEGACY_URL --yes`,
 	Args: cobra.MinimumNArgs(2),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		org, err := requireOrg()
@@ -358,7 +508,11 @@ success is indistinguishable from a typo in the name.`,
 		if len(missing) > 0 {
 			return &UsageError{fmt.Errorf("%s has no variable named %s", app, strings.Join(missing, ", "))}
 		}
-		return patchEnvVars(cmd, c, org, app, vars, prior)
+		if err := confirmAction(cmd, envUnsetYes,
+			fmt.Sprintf("remove %s from app %q and redeploy it", strings.Join(names, ", "), app), app); err != nil {
+			return err
+		}
+		return patchEnvVars(cmd, c, org, app, vars, prior, nil, names)
 	},
 }
 
@@ -484,6 +638,7 @@ func init() {
 
 	appEnvSetCmd.Flags().StringVar(&envFile, "env-file", "", "read KEY=VALUE lines from a file")
 	appEnvSetCmd.Flags().StringVar(&envFromStdin, "from-stdin", "", "read one variable's value from stdin, named by this flag")
+	appEnvUnsetCmd.Flags().BoolVarP(&envUnsetYes, "yes", "y", false, "skip the confirmation (scripts)")
 
 	appUpdateCmd.Flags().IntVar(&updatePort, "port", 0, "port the container listens on")
 	appUpdateCmd.Flags().StringVar(&updateDesc, "description", "", "short description")
