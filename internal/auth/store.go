@@ -276,6 +276,7 @@ func secureDir(dir string) error {
 		return fmt.Errorf("refusing to use %s: it is owned by another user (uid %d)", dir, uid)
 	}
 	if fi.Mode().Perm()&0o077 != 0 {
+		// #nosec G302 -- a directory needs the x bit to be usable; 0700 is owner-only.
 		if err := os.Chmod(dir, 0o700); err != nil {
 			return fmt.Errorf("%s is accessible to other users and could not be made private: %w", dir, err)
 		}

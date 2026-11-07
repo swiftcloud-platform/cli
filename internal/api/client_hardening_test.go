@@ -118,7 +118,7 @@ func TestNew_CapsTheResponseBody(t *testing.T) {
 // `app logs -f` died after 60 s because http.Client.Timeout covers reading
 // the body. A followed stream must outlive the ordinary request timeout.
 func TestNew_FollowedLogsOutliveTheRequestTimeout(t *testing.T) {
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(200)
 		w.(http.Flusher).Flush()
 		for i := 0; i < 3; i++ {
