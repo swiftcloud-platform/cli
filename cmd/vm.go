@@ -12,6 +12,7 @@ import (
 
 	"cloud/internal/api"
 	"cloud/internal/output"
+	"cloud/internal/termsafe"
 	"cloud/internal/wait"
 )
 
@@ -107,11 +108,17 @@ func waitForVM(cmd *cobra.Command, c *api.ClientWithResponses, org, name string,
 		Timeout:  timeout,
 		OnStatus: func(s string) {
 			if !flagQuiet {
-				fmt.Fprintf(cmd.ErrOrStderr(), "  %s\n", s)
+				fmt.Fprintf(cmd.ErrOrStderr(), "  %s\n", termsafe.String(s))
 			}
 		},
+		CheckCommand: "cloud vm get " + name,
 	})
-	return last, err
+	if err != nil || last == nil {
+		return last, err
+	}
+	// Suspended is terminal but never what a --wait asked for: it is the
+	// platform acting on the account. Exit non-zero, as apps do.
+	return last, suspendedErr(last.Name, last.Status, last.ErrorMessage)
 }
 
 // printVM renders one VM, waiting first when --wait was given.
@@ -126,15 +133,15 @@ func printVM(cmd *cobra.Command, c *api.ClientWithResponses, org string, vm *api
 		}
 	}
 	if !flagQuiet && printer.Format == output.Table {
-		fmt.Fprintf(cmd.ErrOrStderr(), "%s %s — status: %s\n", verb, vm.Name, vm.Status)
+		fmt.Fprintf(cmd.ErrOrStderr(), "%s %s — status: %s\n", verb, termsafe.String(vm.Name), termsafe.String(vm.Status))
 		if vm.PublicIp != "" {
-			fmt.Fprintf(cmd.ErrOrStderr(), "Public IP:  %s\n", vm.PublicIp)
+			fmt.Fprintf(cmd.ErrOrStderr(), "Public IP:  %s\n", termsafe.String(vm.PublicIp))
 		}
 		if vm.PrivateIp != "" {
-			fmt.Fprintf(cmd.ErrOrStderr(), "Private IP: %s\n", vm.PrivateIp)
+			fmt.Fprintf(cmd.ErrOrStderr(), "Private IP: %s\n", termsafe.String(vm.PrivateIp))
 		}
 		if vm.ErrorMessage != "" {
-			fmt.Fprintf(cmd.ErrOrStderr(), "%s\n", vm.ErrorMessage)
+			fmt.Fprintf(cmd.ErrOrStderr(), "%s\n", termsafe.String(vm.ErrorMessage))
 		}
 		return nil
 	}
@@ -291,12 +298,12 @@ var vmGetCmd = &cobra.Command{
 		}
 		out := cmd.OutOrStdout()
 		fmt.Fprintf(out, "Name         %s\nStatus       %s\nImage        %s\nSize         %s\nRegion       %s\nPrivate IP   %s\nPublic IP    %s\n",
-			v.Name, v.Status, v.Image, orDash(v.Size), orDash(v.Region), orDash(v.PrivateIp), orDash(v.PublicIp))
+			termsafe.String(v.Name), termsafe.String(v.Status), termsafe.String(v.Image), termsafe.String(orDash(v.Size)), termsafe.String(orDash(v.Region)), termsafe.String(orDash(v.PrivateIp)), termsafe.String(orDash(v.PublicIp)))
 		if v.ErrorMessage != "" {
-			fmt.Fprintf(out, "Reason       %s\n", v.ErrorMessage)
+			fmt.Fprintf(out, "Reason       %s\n", termsafe.String(v.ErrorMessage))
 		}
 		if v.Description != "" {
-			fmt.Fprintf(out, "Description  %s\n", v.Description)
+			fmt.Fprintf(out, "Description  %s\n", termsafe.String(v.Description))
 		}
 		fmt.Fprintf(out, "Created      %s\n", v.CreatedAt.Local().Format("2006-01-02 15:04"))
 		return nil
@@ -333,7 +340,7 @@ safeguard: deleted names become available again. Use --yes in scripts.`,
 			return err
 		}
 		if !flagQuiet {
-			fmt.Fprintf(cmd.ErrOrStderr(), "Deleted %s\n", args[0])
+			fmt.Fprintf(cmd.ErrOrStderr(), "Deleted %s\n", termsafe.String(args[0]))
 		}
 		return nil
 	},

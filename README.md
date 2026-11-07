@@ -42,6 +42,8 @@ cloud vm list
 
 Every command accepts `--output table|json|yaml` and `--quiet`. In CI, set `CLOUD_TOKEN`, `CLOUD_ORG` and `CLOUD_REGION` instead of a config file; `CLOUD_API_URL` points the CLI at another environment.
 
+`cloud logout` ends the session on the platform and deletes the stored credential for the current API host; `cloud logout --all` deletes every stored credential. A `CLOUD_TOKEN` is never stored, so unset it yourself. Plain `http://` API URLs are accepted only for `localhost`, `127.0.0.0/8` and `::1`, and the CLI never follows a redirect from the API.
+
 ## Commands
 
 | Category | Commands |

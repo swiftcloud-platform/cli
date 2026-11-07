@@ -6,6 +6,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"cloud/internal/output"
+	"cloud/internal/termsafe"
 )
 
 // ── commands ────────────────────────────────────────────────────────────────
@@ -50,8 +51,8 @@ var vmIPGetCmd = &cobra.Command{
 			return printer.Print(ip)
 		}
 		out := cmd.OutOrStdout()
-		fmt.Fprintf(out, "Private IP   %s\n", ip.PrivateIp)
-		fmt.Fprintf(out, "Public IP    %s\n", orDash(ip.PublicIp))
+		fmt.Fprintf(out, "Private IP   %s\n", termsafe.String(ip.PrivateIp))
+		fmt.Fprintf(out, "Public IP    %s\n", termsafe.String(orDash(ip.PublicIp)))
 		return nil
 	},
 }
@@ -81,7 +82,7 @@ address.`,
 			return err
 		}
 		if !flagQuiet && printer.Format == output.Table {
-			fmt.Fprintf(cmd.ErrOrStderr(), "Attaching public IP to %s…\n", args[0])
+			fmt.Fprintf(cmd.ErrOrStderr(), "Attaching public IP to %s…\n", termsafe.String(args[0]))
 			return nil
 		}
 		return printer.Print(struct {
@@ -118,7 +119,7 @@ platform's pool and may be assigned to another resource.`,
 			return err
 		}
 		if !flagQuiet {
-			fmt.Fprintf(cmd.ErrOrStderr(), "Detached public IP from %s\n", args[0])
+			fmt.Fprintf(cmd.ErrOrStderr(), "Detached public IP from %s\n", termsafe.String(args[0]))
 		}
 		return nil
 	},

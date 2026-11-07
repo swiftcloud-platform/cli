@@ -14,6 +14,7 @@ import (
 
 	"cloud/internal/api"
 	"cloud/internal/output"
+	"cloud/internal/termsafe"
 	"cloud/internal/wait"
 )
 
@@ -268,11 +269,17 @@ func waitForDatabase(cmd *cobra.Command, c *api.ClientWithResponses, org, name s
 		Timeout:  timeout,
 		OnStatus: func(s string) {
 			if !flagQuiet {
-				fmt.Fprintf(cmd.ErrOrStderr(), "  %s\n", s)
+				fmt.Fprintf(cmd.ErrOrStderr(), "  %s\n", termsafe.String(s))
 			}
 		},
+		CheckCommand: "cloud db get " + name,
 	})
-	return last, err
+	if err != nil || last == nil {
+		return last, err
+	}
+	// Suspended is terminal but never what a --wait asked for: it is the
+	// platform acting on the account. Exit non-zero, as apps do.
+	return last, suspendedErr(last.Name, last.Status, last.ErrorMessage)
 }
 
 // printDatabase renders one database, waiting first when --wait was given.
@@ -287,12 +294,12 @@ func printDatabase(cmd *cobra.Command, c *api.ClientWithResponses, org string, d
 		}
 	}
 	if !flagQuiet && printer.Format == output.Table {
-		fmt.Fprintf(cmd.ErrOrStderr(), "%s %s — status: %s\n", verb, db.Name, db.Status)
+		fmt.Fprintf(cmd.ErrOrStderr(), "%s %s — status: %s\n", verb, termsafe.String(db.Name), termsafe.String(db.Status))
 		if db.Host != "" {
-			fmt.Fprintf(cmd.ErrOrStderr(), "Host: %s:%d\n", db.Host, db.Port)
+			fmt.Fprintf(cmd.ErrOrStderr(), "Host: %s:%d\n", termsafe.String(db.Host), db.Port)
 		}
 		if db.ErrorMessage != "" {
-			fmt.Fprintf(cmd.ErrOrStderr(), "%s\n", db.ErrorMessage)
+			fmt.Fprintf(cmd.ErrOrStderr(), "%s\n", termsafe.String(db.ErrorMessage))
 		}
 		return nil
 	}
@@ -497,7 +504,7 @@ safeguard: a deleted name becomes available again. Use --yes in scripts.`,
 			return err
 		}
 		if !flagQuiet {
-			fmt.Fprintf(cmd.ErrOrStderr(), "Deleting %s\n", args[0])
+			fmt.Fprintf(cmd.ErrOrStderr(), "Deleting %s\n", termsafe.String(args[0]))
 		}
 		return nil
 	},
@@ -687,7 +694,7 @@ point-in-time restore possible across that window.`,
 			return err
 		}
 		if !flagQuiet && printer.Format == output.Table {
-			fmt.Fprintf(cmd.ErrOrStderr(), "Backups enabled on %s, keeping %s. First base backup runs on the next schedule; `cloud db backup create %s` takes one now.\n", args[0], enabled.Retention, args[0])
+			fmt.Fprintf(cmd.ErrOrStderr(), "Backups enabled on %s, keeping %s. First base backup runs on the next schedule; `cloud db backup create %s` takes one now.\n", termsafe.String(args[0]), termsafe.String(enabled.Retention), termsafe.String(args[0]))
 			return nil
 		}
 		return printer.Print(enabled)
@@ -725,7 +732,7 @@ The backup is requested, not finished, when this returns: watch it move to
 			return err
 		}
 		if !flagQuiet && printer.Format == output.Table {
-			fmt.Fprintf(cmd.ErrOrStderr(), "Backup %s requested — status: %s\n", b.Name, b.Status)
+			fmt.Fprintf(cmd.ErrOrStderr(), "Backup %s requested — status: %s\n", termsafe.String(b.Name), termsafe.String(b.Status))
 			return nil
 		}
 		return printer.Print(backupRows{*b})
@@ -806,7 +813,7 @@ enable".`,
 				if !disabled.BackupsKept {
 					kept = "Backups already taken were not kept."
 				}
-				fmt.Fprintf(cmd.ErrOrStderr(), "Backups disabled on %s. %s\n", args[0], kept)
+				fmt.Fprintf(cmd.ErrOrStderr(), "Backups disabled on %s. %s\n", termsafe.String(args[0]), kept)
 			}
 			return nil
 		}
