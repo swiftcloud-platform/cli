@@ -15,6 +15,7 @@ package config
 import (
 	"errors"
 	"fmt"
+	"net"
 	"net/url"
 	"os"
 	"path/filepath"
@@ -178,10 +179,49 @@ func Resolve(f *File, env Env, o Overrides) (*Resolved, error) {
 	r.Org = pick("org", o.Org, "CLOUD_ORG", ctx.Org, "")
 	r.Region = pick("region", o.Region, "CLOUD_REGION", ctx.Region, "")
 
+	// The organisation becomes a URL path segment in every request.
+	if err := ValidateSegment("organisation", r.Org); r.Org != "" && err != nil {
+		return nil, fmt.Errorf("%w (from %s)", err, r.Source["org"])
+	}
 	if err := ValidateAPIURL(r.APIURL); err != nil {
-		return nil, err
+		// The rest of the resolution is still returned: `cloud logout` needs
+		// only the host to forget a credential, even for a URL the CLI would
+		// otherwise refuse to talk to.
+		return r, &APIURLError{Err: err}
 	}
 	return r, nil
+}
+
+// APIURLError is a resolution that succeeded except for an API URL the CLI
+// refuses to talk to. Resolve returns the Resolved alongside it.
+type APIURLError struct{ Err error }
+
+func (e *APIURLError) Error() string { return e.Err.Error() }
+func (e *APIURLError) Unwrap() error { return e.Err }
+
+// ValidateSegment refuses a value that is about to become one URL path
+// segment and would not stay one: empty, "." or "..", which URL resolution
+// collapses into the segment before (so DELETE …/ssh-keys/.. becomes DELETE
+// on the VM), and anything with a control character.
+func ValidateSegment(what, v string) error {
+	switch v {
+	case "":
+		return fmt.Errorf("%s must not be empty", what)
+	case ".", "..":
+		return fmt.Errorf("%s %q is not a valid name", what, v)
+	}
+	for _, r := range v {
+		if r < 0x20 || r == 0x7f {
+			return fmt.Errorf("%s %q contains a control character", what, v)
+		}
+	}
+	return nil
+}
+
+// NormalizeHost lowercases a hostname and drops a trailing root dot, so
+// "Cloud.co.zm." and "cloud.co.zm" are the same host for every comparison.
+func NormalizeHost(h string) string {
+	return strings.TrimSuffix(strings.ToLower(h), ".")
 }
 
 // ValidateAPIURL rejects URLs the CLI must not talk to.
@@ -190,21 +230,40 @@ func ValidateAPIURL(raw string) error {
 	if err != nil || u.Host == "" {
 		return fmt.Errorf("API URL %q is not a valid URL", raw)
 	}
-	host := strings.ToLower(u.Hostname())
+	if u.Scheme != "http" && u.Scheme != "https" {
+		return fmt.Errorf("API URL %q must use https", raw)
+	}
+	// A user:password@ part would be sent as Basic auth beside the bearer
+	// token, and hides the real host from a reader ("https://cloud.co.zm@evil").
+	if u.User != nil {
+		return fmt.Errorf("API URL %q must not contain a user name or password", raw)
+	}
+	if u.RawQuery != "" || u.ForceQuery || u.Fragment != "" || strings.Contains(raw, "#") {
+		return fmt.Errorf("API URL %q must not contain a query or fragment", raw)
+	}
+	host := NormalizeHost(u.Hostname())
+	if host == "" {
+		return fmt.Errorf("API URL %q is not a valid URL", raw)
+	}
 	if legacyHosts[host] {
 		return fmt.Errorf("API URL %q points at a retired hostname; use %s", raw, DefaultAPIURL)
 	}
 	// Plain HTTP is only for local development. Anything else would send a
 	// bearer token in the clear.
-	if u.Scheme != "https" && !isLoopback(host) {
-		return fmt.Errorf("API URL %q must use https (plain http is allowed only for localhost)", raw)
-	}
-	if u.Scheme != "http" && u.Scheme != "https" {
-		return fmt.Errorf("API URL %q must use https", raw)
+	if u.Scheme != "https" && !IsLoopback(host) {
+		return fmt.Errorf("API URL %q must use https (plain http is allowed only for localhost, 127.0.0.0/8 and ::1)", raw)
 	}
 	return nil
 }
 
-func isLoopback(host string) bool {
-	return host == "localhost" || host == "127.0.0.1" || host == "::1" || strings.HasSuffix(host, ".localhost")
+// IsLoopback reports whether host is literally this machine: "localhost",
+// an address in 127.0.0.0/8, or ::1. Names under .localhost are not
+// included — whether they resolve locally is up to the resolver, not the CLI.
+func IsLoopback(host string) bool {
+	host = NormalizeHost(strings.TrimSuffix(strings.TrimPrefix(host, "["), "]"))
+	if host == "localhost" {
+		return true
+	}
+	ip := net.ParseIP(host)
+	return ip != nil && ip.IsLoopback()
 }
