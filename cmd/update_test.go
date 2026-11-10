@@ -5,6 +5,7 @@ import (
 	"compress/gzip"
 	"crypto/sha256"
 	"encoding/hex"
+	"encoding/json"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -729,5 +730,77 @@ func TestUpdate_RefusesALatestTagThatIsNotAVersion(t *testing.T) {
 	_, err := run(t, "update", "--check")
 	if err == nil || !strings.Contains(err.Error(), "not a release version") {
 		t.Fatalf("want a refusal of the tag, got %v", err)
+	}
+}
+
+// What users see from `cloud update` names cloud.co.zm, never the place the
+// release files happen to be hosted.
+func TestUpdate_OutputPointsAtCloudDownloadPage(t *testing.T) {
+	archive := tarGzWith(t, "cloud", "new binary")
+	srv := fakeGitHub(t, archive, sha256Hex(archive))
+	updateAPIURL = srv.URL + "/releases/latest"
+	t.Cleanup(func() { updateAPIURL = updateAPI })
+	t.Setenv("CLOUD_CONFIG_DIR", t.TempDir())
+
+	_, stderr, err := runWithStderr(t, "update", "--check")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(stderr, "https://cloud.co.zm/docs/cli#install") {
+		t.Errorf("--check should point at the download page:\n%s", stderr)
+	}
+	if strings.Contains(strings.ToLower(stderr), "github") || strings.Contains(stderr, "example.invalid") {
+		t.Errorf("--check names the release host:\n%s", stderr)
+	}
+
+	out, err := run(t, "update", "-o", "json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var got map[string]string
+	if err := json.Unmarshal([]byte(out), &got); err != nil {
+		t.Fatal(err)
+	}
+	if got["url"] != "https://cloud.co.zm/docs/cli#install" {
+		t.Errorf(`json "url" = %q, want the download page`, got["url"])
+	}
+
+	help, err := run(t, "update", "--help")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(strings.ToLower(help), "github") || strings.Contains(strings.ToLower(help), "readme") {
+		t.Errorf("help points somewhere other than cloud.co.zm:\n%s", help)
+	}
+}
+
+func TestUpdate_ErrorsDoNotNameTheReleaseHost(t *testing.T) {
+	t.Setenv("CLOUD_CONFIG_DIR", t.TempDir())
+	t.Cleanup(func() { updateAPIURL = updateAPI })
+
+	// Unreachable: net/http puts the request URL in the error, and the real
+	// one is api.github.com.
+	dead := httptest.NewServer(http.NotFoundHandler())
+	dead.Close()
+	updateAPIURL = dead.URL + "/repos/github-hosted/releases/latest"
+	_, err := run(t, "update", "--check")
+	if err == nil {
+		t.Fatal("an unreachable release server should be an error")
+	}
+	if msg := strings.ToLower(err.Error()); strings.Contains(msg, "github") || strings.Contains(msg, dead.URL) {
+		t.Errorf("error names the release host: %v", err)
+	}
+
+	for _, status := range []int{http.StatusNotFound, http.StatusBadGateway} {
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(status) }))
+		t.Cleanup(srv.Close)
+		updateAPIURL = srv.URL + "/releases/latest"
+		_, err := run(t, "update", "--check")
+		if err == nil {
+			t.Fatalf("HTTP %d should be an error", status)
+		}
+		if msg := strings.ToLower(err.Error()); strings.Contains(msg, "github") || strings.Contains(msg, "swiftcloud-platform") {
+			t.Errorf("HTTP %d: error names the release host: %v", status, err)
+		}
 	}
 }

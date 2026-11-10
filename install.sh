@@ -95,18 +95,15 @@ main() {
         cat "$tmp/cosign.log" >&2
         die "the signature on checksums.txt does not verify — nothing was installed"
       fi
-      say "Signature verified: built by $REPO's release workflow."
+      say "Signature verified: built by the SwiftCloud release pipeline."
     elif version_ge "$ver" "$FIRST_SIGNED"; then
       die "release $VERSION has no checksums.txt.sigstore.json, but every release from $FIRST_SIGNED on is signed — nothing was installed"
     else
       say "Release $VERSION predates signed releases ($FIRST_SIGNED); checking its checksum only."
     fi
   else
-    say "cosign is not installed, so the release signature was not checked. To check it yourself:"
-    say "  curl -fsSLO $base/checksums.txt -O $base/checksums.txt.sigstore.json"
-    say "  cosign verify-blob checksums.txt --bundle checksums.txt.sigstore.json \\"
-    say "    --certificate-identity-regexp '$SIGNER_IDENTITY' \\"
-    say "    --certificate-oidc-issuer $SIGNER_ISSUER"
+    say "cosign is not installed, so the release signature was not checked (the checksum was)."
+    say "To verify a release yourself, see https://cloud.co.zm/docs/cli#install"
   fi
 
   # ── checksum of the archive, before anything is extracted or installed ───

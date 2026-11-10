@@ -12,6 +12,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"os"
 	"path"
 	"path/filepath"
@@ -59,10 +60,14 @@ The rules this follows, and why:
 */
 
 const (
-	// updateRepo is where releases are published.
+	// updateRepo is where release files are hosted. Users never see it:
+	// everything the CLI prints points at downloadPage instead.
 	updateRepo = "swiftcloud-platform/cli"
-	// updateAPI is GitHub's release metadata. Overridden in tests.
+	// updateAPI is the release metadata. Overridden in tests.
 	updateAPI = "https://api.github.com/repos/" + updateRepo + "/releases/latest"
+	// downloadPage is the one address `cloud update` shows people: the
+	// install instructions on cloud.co.zm.
+	downloadPage = "https://cloud.co.zm/docs/cli#install"
 )
 
 var (
@@ -75,7 +80,6 @@ var (
 // release is the part of GitHub's release JSON this needs.
 type release struct {
 	TagName string         `json:"tag_name"`
-	HTMLURL string         `json:"html_url"`
 	Assets  []releaseAsset `json:"assets"`
 }
 
@@ -97,8 +101,8 @@ failed update leaves the working one untouched. Only a newer release is
 installed: this never downgrades, and never replaces a local build.
 
 The checksum guards against a broken or swapped download, not against a
-compromised release; the release's cosign signature is not checked here yet.
-See the README for verifying a release by hand.
+compromised release; the release's signature is not checked here yet. To
+install by hand instead, see ` + downloadPage + `.
 
 If the CLI came from Homebrew, this reports the command to use instead rather
 than overwriting files a package manager owns.`,
@@ -129,11 +133,11 @@ than overwriting files a package manager owns.`,
 			return err
 		}
 		if rel.TagName == "" {
-			return fmt.Errorf("the latest release from %s has no version tag", updateRepo)
+			return errors.New("the latest release has no version tag")
 		}
 		latestV, ok := version.Release(rel.TagName)
 		if !ok {
-			return fmt.Errorf("the latest release from %s is tagged %q, which is not a release version", updateRepo, rel.TagName)
+			return fmt.Errorf("the latest release is tagged %q, which is not a release version", rel.TagName)
 		}
 		latest := strings.TrimPrefix(latestV, "v")
 		currentV, isRelease := version.Release(current)
@@ -142,7 +146,7 @@ than overwriting files a package manager owns.`,
 			return printer.Print(map[string]string{
 				"current":   current,
 				"latest":    latest,
-				"url":       rel.HTMLURL,
+				"url":       downloadPage,
 				"installed": self,
 			})
 		}
@@ -157,9 +161,9 @@ than overwriting files a package manager owns.`,
 				fmt.Fprintf(errOut, "cloud %s is newer than the latest release (%s); nothing to do.\n", current, latest)
 				return nil
 			}
-			fmt.Fprintf(errOut, "cloud %s is available (you have %s)\n%s\n", latest, current, rel.HTMLURL)
+			fmt.Fprintf(errOut, "cloud %s is available (you have %s)\n%s\n", latest, current, downloadPage)
 		} else {
-			fmt.Fprintf(errOut, "The latest release is cloud %s (this is a local build, %q)\n%s\n", latest, current, rel.HTMLURL)
+			fmt.Fprintf(errOut, "The latest release is cloud %s (this is a local build, %q)\n%s\n", latest, current, downloadPage)
 		}
 		if updateCheckOnly {
 			return nil
@@ -241,19 +245,19 @@ func latestRelease(ctx context.Context) (*release, error) {
 	req.Header.Set("user-agent", version.UserAgent())
 	res, err := (&http.Client{Timeout: 30 * time.Second}).Do(req)
 	if err != nil {
-		return nil, fmt.Errorf("could not reach GitHub to look for a release: %w", err)
+		return nil, fmt.Errorf("could not reach the release server to look for a release: %w", hideURL(err))
 	}
 	defer func() { _ = res.Body.Close() }()
 	body, _ := io.ReadAll(io.LimitReader(res.Body, 1<<20))
 	if res.StatusCode == http.StatusNotFound {
-		return nil, fmt.Errorf("%s has published no releases yet", updateRepo)
+		return nil, errors.New("no releases have been published yet")
 	}
 	if res.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("GitHub answered HTTP %d looking for the latest release", res.StatusCode)
+		return nil, fmt.Errorf("the release server answered HTTP %d looking for the latest release", res.StatusCode)
 	}
 	var rel release
 	if err := json.Unmarshal(body, &rel); err != nil {
-		return nil, fmt.Errorf("could not read GitHub's release metadata: %w", err)
+		return nil, fmt.Errorf("could not read the release metadata: %w", err)
 	}
 	return &rel, nil
 }
@@ -286,14 +290,14 @@ func pickAsset(rel *release, goos, goarch string) (asset, sums releaseAsset) {
 }
 
 // checksumFor reads the expected SHA-256 of one asset from checksums.txt.
-func checksumFor(ctx context.Context, url, assetName string) (string, error) {
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+func checksumFor(ctx context.Context, rawURL, assetName string) (string, error) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, rawURL, nil)
 	if err != nil {
 		return "", err
 	}
 	res, err := (&http.Client{Timeout: 60 * time.Second}).Do(req)
 	if err != nil {
-		return "", fmt.Errorf("could not download checksums.txt: %w", err)
+		return "", fmt.Errorf("could not download checksums.txt: %w", hideURL(err))
 	}
 	defer func() { _ = res.Body.Close() }()
 	if res.StatusCode != http.StatusOK {
@@ -322,22 +326,22 @@ const downloadCap = 200 << 20
 // accepted — not by Content-Length, not by the bytes that actually arrive —
 // so a hostile or broken server cannot fill the disk. When the size is not
 // listed (zero), downloadCap applies instead.
-func download(ctx context.Context, url string, size int64) (string, error) {
+func download(ctx context.Context, rawURL string, size int64) (string, error) {
 	limit := size
 	if limit <= 0 || limit > downloadCap {
 		limit = downloadCap
 	}
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, rawURL, nil)
 	if err != nil {
 		return "", err
 	}
 	res, err := (&http.Client{Timeout: 10 * time.Minute}).Do(req)
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("could not download the release: %w", hideURL(err))
 	}
 	defer func() { _ = res.Body.Close() }()
 	if res.StatusCode != http.StatusOK {
-		return "", fmt.Errorf("downloading %s: HTTP %d", url, res.StatusCode)
+		return "", fmt.Errorf("downloading the release: HTTP %d", res.StatusCode)
 	}
 	if res.ContentLength > limit {
 		return "", fmt.Errorf("the download is %d bytes, more than the %d the release lists — nothing was changed", res.ContentLength, limit)
@@ -606,4 +610,15 @@ func extractBinary(archive, dir string) (string, error) {
 	}
 	_ = os.Remove(out.Name())
 	return "", fmt.Errorf("the release archive contains no %s", want)
+}
+
+// hideURL drops the request URL net/http puts into a transport error. That
+// URL is where the release files are hosted, which is not an address users
+// should be sent to; the cause (refused, timed out, DNS) is what they need.
+func hideURL(err error) error {
+	var ue *url.Error
+	if errors.As(err, &ue) {
+		return ue.Err
+	}
+	return err
 }

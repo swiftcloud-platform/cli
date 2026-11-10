@@ -121,7 +121,7 @@ try {
                 --certificate-identity-regexp $SignerIdentity `
                 --certificate-oidc-issuer $SignerIssuer
             if ($LASTEXITCODE -ne 0) { Die 'the signature on checksums.txt does not verify — nothing was installed' }
-            Say "Signature verified: built by $Repo's release workflow."
+            Say "Signature verified: built by the SwiftCloud release pipeline."
         } else {
             $numeric = $null
             if ([version]::TryParse(($ver -replace '[-+].*$', ''), [ref]$numeric) -and $numeric -lt $FirstSigned) {
@@ -131,9 +131,8 @@ try {
             }
         }
     } else {
-        Say 'cosign is not installed, so the release signature was not checked. To check it yourself, download'
-        Say "  $base/checksums.txt and $base/checksums.txt.sigstore.json, then run:"
-        Say "  cosign verify-blob checksums.txt --bundle checksums.txt.sigstore.json --certificate-identity-regexp '$SignerIdentity' --certificate-oidc-issuer $SignerIssuer"
+        Say 'cosign is not installed, so the release signature was not checked (the checksum was).'
+        Say 'To verify a release yourself, see https://cloud.co.zm/docs/cli#install'
     }
 
     # The archive's checksum. The file-name field must equal the archive name
