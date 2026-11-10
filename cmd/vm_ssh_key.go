@@ -7,6 +7,7 @@ import (
 
 	"cloud/internal/api"
 	"cloud/internal/output"
+	"cloud/internal/termsafe"
 )
 
 // ── commands ────────────────────────────────────────────────────────────────
@@ -70,7 +71,9 @@ what it did with the key is printed after it is added.`,
 	Example: `  cloud vm ssh-key add web ~/.ssh/id_ed25519.pub
   cloud vm ssh-key add web ~/.ssh/id_ed25519.pub --label laptop
   cloud vm ssh-key add web "ssh-ed25519 AAAA... me@laptop"`,
-	Args: cobra.ExactArgs(2),
+	// The second argument is a file path or a key, not a resource name.
+	Annotations: map[string]string{annotationArgs: argsFirst},
+	Args:        cobra.ExactArgs(2),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		org, err := requireOrg()
 		if err != nil {
@@ -100,9 +103,9 @@ what it did with the key is printed after it is added.`,
 			return err
 		}
 		if !flagQuiet && printer.Format == output.Table {
-			fmt.Fprintf(cmd.ErrOrStderr(), "Recorded key %s (%s)\n", k.Id, k.Fingerprint)
+			fmt.Fprintf(cmd.ErrOrStderr(), "Recorded key %s (%s)\n", termsafe.String(k.Id), termsafe.String(k.Fingerprint))
 			if k.Notice != nil && *k.Notice != "" {
-				fmt.Fprintln(cmd.ErrOrStderr(), *k.Notice)
+				fmt.Fprintln(cmd.ErrOrStderr(), termsafe.Lines(*k.Notice))
 			}
 			return nil
 		}
@@ -139,7 +142,7 @@ remove it on the machine.`,
 			return err
 		}
 		if !flagQuiet {
-			fmt.Fprintf(cmd.ErrOrStderr(), "Removed key %s from %s\n", args[1], args[0])
+			fmt.Fprintf(cmd.ErrOrStderr(), "Removed key %s from %s\n", termsafe.String(args[1]), termsafe.String(args[0]))
 		}
 		return nil
 	},

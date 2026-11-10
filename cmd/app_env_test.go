@@ -196,7 +196,7 @@ func TestAppEnvSet_RejectsRubbish(t *testing.T) {
 
 func TestAppEnvUnset(t *testing.T) {
 	f := newEnvFake(t, map[string]string{"GONE": "x", "KEEP": "y"})
-	if _, err := run(t, "app", "env", "unset", "notifie", "GONE"); err != nil {
+	if _, err := run(t, "app", "env", "unset", "notifie", "GONE", "--yes"); err != nil {
 		t.Fatal(err)
 	}
 	got := f.patched[0]
@@ -304,11 +304,12 @@ func TestParseEnvFile(t *testing.T) {
 }
 
 func TestMaskValue(t *testing.T) {
+	// One width for every value: the mask reveals neither length nor content.
 	for in, want := range map[string]string{
 		"":          "",
-		"abc":       "•••",
+		"abc":       "••••••••",
 		"12345678":  "••••••••",
-		"123456789": "12•••••89",
+		"123456789": "••••••••",
 	} {
 		if got := maskValue(in); got != want {
 			t.Errorf("maskValue(%q) = %q, want %q", in, got, want)
@@ -639,5 +640,249 @@ func TestAppLogs_SinceReachesTheQuery(t *testing.T) {
 	}
 	if !strings.Contains(gotQuery, "since=600") {
 		t.Errorf("query = %q, want since=600", gotQuery)
+	}
+}
+
+// ── env-file rules, masking, confirmations, machine output ─────────────────
+
+func TestParseEnvFile_Rules(t *testing.T) {
+	in := "\uFEFFFIRST=1\n" +
+		"  SPACED  =   padded value   \n" +
+		"export EXPORTED=yes\n" +
+		"export\tTABBED=yes\n" +
+		"COMMENTED=value # a comment\n" +
+		"HASH=abc#def\n" +
+		"DQ=\"has # inside\"  # and a comment\n" +
+		"SQ='  keeps spaces  '\n" +
+		"RAW=\"no\\nescapes\"\n" +
+		"CRLF=windows\r\n" +
+		"exporter=lowercase-key-starting-with-export\n"
+	got, err := parseEnvFile(strings.NewReader(in))
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := map[string]string{
+		"FIRST":     "1",
+		"SPACED":    "padded value",
+		"EXPORTED":  "yes",
+		"TABBED":    "yes",
+		"COMMENTED": "value",
+		"HASH":      "abc#def",
+		"DQ":        "has # inside",
+		"SQ":        "  keeps spaces  ",
+		"RAW":       `no\nescapes`,
+		"CRLF":      "windows",
+		"exporter":  "lowercase-key-starting-with-export",
+	}
+	for k, v := range want {
+		if got[k] != v {
+			t.Errorf("%s = %q, want %q", k, got[k], v)
+		}
+	}
+	if len(got) != len(want) {
+		t.Errorf("got %d variables, want %d: %v", len(got), len(want), got)
+	}
+}
+
+func TestParseEnvFile_Refuses(t *testing.T) {
+	for name, in := range map[string]string{
+		"bad key":           "1ABC=x\n",
+		"dash in key":       "MY-KEY=x\n",
+		"space in key":      "MY KEY=x\n",
+		"duplicate":         "A=1\nA=2\n",
+		"unterminated":      "A=\"open\n",
+		"text after quote":  "A=\"x\"y\n",
+		"not a pair":        "JUSTAKEY\n",
+		"empty key":         "=value\n",
+		"line over the max": "A=" + strings.Repeat("x", envFileMaxLine+1) + "\n",
+	} {
+		if _, err := parseEnvFile(strings.NewReader(in)); err == nil {
+			t.Errorf("%s: must be refused", name)
+		}
+	}
+	// An error must not echo the line: it may be a secret.
+	_, err := parseEnvFile(strings.NewReader("SECRET=\"sk_live_abcdef\n"))
+	if err == nil || strings.Contains(err.Error(), "sk_live") {
+		t.Errorf("error should name the line, not echo it: %v", err)
+	}
+	_, err = parseEnvFile(strings.NewReader("sk_live_abcdef\n"))
+	if err == nil || strings.Contains(err.Error(), "sk_live") {
+		t.Errorf("error should name the line, not echo it: %v", err)
+	}
+	// Above bufio's 64 KiB default, below the limit: a PEM blob on one line.
+	long := strings.Repeat("y", 200<<10)
+	got, err := parseEnvFile(strings.NewReader("LONG=" + long + "\n"))
+	if err != nil || got["LONG"] != long {
+		t.Errorf("a 200 KiB line should parse: %v", err)
+	}
+}
+
+func TestMaskValue_IsFixedAndRevealsNothing(t *testing.T) {
+	for _, v := range []string{"a", "abc", "12345678", "123456789", "SG.averylongsecretvalue", "ünïcödé-sécret-välue"} {
+		got := maskValue(v)
+		if got != valueMask {
+			t.Errorf("maskValue(%q) = %q, want the fixed mask", v, got)
+		}
+	}
+	if maskValue("") != "" {
+		t.Error("an empty value should stay visibly empty")
+	}
+}
+
+func TestAppEnvUnset_NeedsConfirmation(t *testing.T) {
+	f := newEnvFake(t, map[string]string{"GONE": "x", "KEEP": "y"})
+	_, err := run(t, "app", "env", "unset", "notifie", "GONE")
+	if err == nil || ExitCode(err) != ExitUsage || !strings.Contains(err.Error(), "--yes") {
+		t.Fatalf("a non-interactive unset without --yes must be refused, got %v", err)
+	}
+	if len(f.patched) != 0 {
+		t.Errorf("nothing should be written: %v", f.patched)
+	}
+
+	fakeTerminal(t, "wrong\n")
+	_, stderr, err := runWithStderr(t, "app", "env", "unset", "notifie", "GONE")
+	if err == nil {
+		t.Fatal("a mistyped app name must refuse")
+	}
+	if !strings.Contains(stderr, `remove GONE from app "notifie"`) || !strings.Contains(stderr, `Type "notifie"`) {
+		t.Errorf("prompt wording:\n%s", stderr)
+	}
+	if len(f.patched) != 0 {
+		t.Errorf("nothing should be written: %v", f.patched)
+	}
+
+	fakeTerminal(t, "notifie\n")
+	if _, err := run(t, "app", "env", "unset", "notifie", "GONE"); err != nil {
+		t.Fatal(err)
+	}
+	if _, still := f.patched[0]["GONE"]; still {
+		t.Errorf("GONE was not removed: %v", f.patched[0])
+	}
+}
+
+// -o json from env set/unset used to print {} — the row type had only
+// unexported fields. It now names what changed, and never the values.
+func TestAppEnvSetUnset_JSONNamesTheChangesNotTheValues(t *testing.T) {
+	newEnvFake(t, map[string]string{"KEEP": "kept-secret-value", "GONE": "gone-secret-value"})
+	out, err := run(t, "app", "env", "set", "notifie", "NEW=new-secret-value", "-o", "json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var res struct {
+		App       string `json:"app"`
+		Variables []struct {
+			Name   string `json:"name"`
+			Status string `json:"status"`
+		} `json:"variables"`
+	}
+	if err := json.Unmarshal([]byte(out), &res); err != nil {
+		t.Fatalf("not JSON: %v\n%s", err, out)
+	}
+	got := map[string]string{}
+	for _, v := range res.Variables {
+		got[v.Name] = v.Status
+	}
+	if res.App != "notifie" || got["NEW"] != "set" || got["KEEP"] != "unchanged" || got["GONE"] != "unchanged" {
+		t.Errorf("unexpected result: %+v", res)
+	}
+	if strings.Contains(out, "secret-value") {
+		t.Errorf("values must not be printed:\n%s", out)
+	}
+
+	out, err = run(t, "app", "env", "unset", "notifie", "GONE", "--yes", "-o", "yaml")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(out, "name: GONE") || !strings.Contains(out, "status: removed") || strings.Contains(out, "secret-value") {
+		t.Errorf("yaml result:\n%s", out)
+	}
+}
+
+// appCreateFake records what app create sends and serves domain removal.
+func appCreateFake(t *testing.T) (*map[string]any, *[]string) {
+	t.Helper()
+	var body map[string]any
+	var removed []string
+	mux := http.NewServeMux()
+	mux.HandleFunc("/api/v1/orgs/acme/apps", func(w http.ResponseWriter, r *http.Request) {
+		_ = json.NewDecoder(r.Body).Decode(&body)
+		w.WriteHeader(201)
+		_, _ = w.Write([]byte(appJSON))
+	})
+	mux.HandleFunc("/api/v1/orgs/acme/apps/web/domains/", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodDelete {
+			removed = append(removed, strings.TrimPrefix(r.URL.Path, "/api/v1/orgs/acme/apps/web/domains/"))
+			w.WriteHeader(204)
+			return
+		}
+		w.WriteHeader(405)
+	})
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("content-type", "application/json")
+		mux.ServeHTTP(w, r)
+	}))
+	t.Cleanup(srv.Close)
+	t.Setenv("CLOUD_CONFIG_DIR", t.TempDir())
+	t.Setenv("CLOUD_API_URL", srv.URL+"/api/v1")
+	t.Setenv("CLOUD_ORG", "acme")
+	t.Setenv("CLOUD_REGION", "zm-lsk-1")
+	t.Setenv("CLOUD_TOKEN", "owner-token")
+	return &body, &removed
+}
+
+// Secrets at creation can come from a file instead of argv; --env still
+// works and wins for the same name.
+func TestAppCreate_EnvFile(t *testing.T) {
+	body, _ := appCreateFake(t)
+	path := filepath.Join(t.TempDir(), ".env")
+	if err := os.WriteFile(path, []byte("SECRET='from-file'\nLOG_LEVEL=info\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := run(t, "app", "create", "web", "--image", "nginx", "--env-file", path, "--env", "LOG_LEVEL=debug"); err != nil {
+		t.Fatal(err)
+	}
+	env, _ := (*body)["envVars"].(map[string]any)
+	if env["SECRET"] != "from-file" || env["LOG_LEVEL"] != "debug" || len(env) != 2 {
+		t.Errorf("envVars = %v", env)
+	}
+
+	bad := filepath.Join(t.TempDir(), ".env")
+	if err := os.WriteFile(bad, []byte("A=1\nA=2\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	*body = nil
+	_, err := run(t, "app", "create", "web", "--image", "nginx", "--env-file", bad)
+	if err == nil || ExitCode(err) != ExitUsage {
+		t.Fatalf("a bad env file must be a usage error, got %v", err)
+	}
+	if *body != nil {
+		t.Error("nothing should be created from a bad env file")
+	}
+}
+
+func TestAppDomainRemove_NeedsConfirmation(t *testing.T) {
+	_, removed := appCreateFake(t)
+	_, err := run(t, "app", "domain", "remove", "web", "www.example.com")
+	if err == nil || ExitCode(err) != ExitUsage {
+		t.Fatalf("a non-interactive domain remove without --yes must be refused, got %v", err)
+	}
+	if len(*removed) != 0 {
+		t.Errorf("nothing should be removed: %v", *removed)
+	}
+
+	fakeTerminal(t, "www.example.org\n")
+	_, stderr, err := runWithStderr(t, "app", "domain", "remove", "web", "WWW.example.com")
+	if err == nil {
+		t.Fatal("a mistyped hostname must refuse")
+	}
+	if !strings.Contains(stderr, `Type "www.example.com"`) {
+		t.Errorf("prompt should ask for the hostname:\n%s", stderr)
+	}
+
+	if _, err := run(t, "app", "domain", "remove", "web", "www.example.com", "--yes"); err != nil {
+		t.Fatal(err)
+	}
+	if strings.Join(*removed, ",") != "www.example.com" {
+		t.Errorf("removed = %v", *removed)
 	}
 }

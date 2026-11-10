@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os/exec"
 	"runtime"
@@ -11,6 +12,8 @@ import (
 
 	"cloud/internal/api"
 	"cloud/internal/auth"
+	"cloud/internal/config"
+	"cloud/internal/termsafe"
 	"cloud/internal/version"
 )
 
@@ -70,7 +73,7 @@ does not disturb your production session — and vice versa.`,
 			if err := store.Save(cfg.APIURL, cred); err != nil {
 				return err
 			}
-			fmt.Fprintf(cmd.ErrOrStderr(), "Signed in as %s (%s token) on %s\n", me.User.Email, cred.Kind, cfg.APIURL)
+			fmt.Fprintf(cmd.ErrOrStderr(), "Signed in as %s (%s token) on %s\n", termsafe.String(me.User.Email), cred.Kind, cfg.APIURL)
 			adoptDefaultOrg(cmd, me)
 			return nil
 		}
@@ -79,24 +82,47 @@ does not disturb your production session — and vice versa.`,
 		if err != nil {
 			return &UsageError{err}
 		}
-		flow := &auth.DeviceFlow{AuthBase: authBase}
+		w := cmd.ErrOrStderr()
+		// Say where before anything else: the code about to be shown grants
+		// a session on this host, and an --api-url or CLOUD_API_URL someone
+		// else chose would otherwise be invisible.
+		host, defHost := apiHost(cfg.APIURL), apiHost(config.DefaultAPIURL)
+		fmt.Fprintf(w, "Signing in to %s\n", host)
+		if host != defHost {
+			fmt.Fprintf(w, "warning: this is not the default API (%s); the API URL comes from %s. Approve only if you meant to sign in here.\n",
+				defHost, orDash(cfg.Source["api_url"]))
+		}
+
+		flow := &auth.DeviceFlow{AuthBase: authBase, UserAgent: version.UserAgent()}
 		dc, err := flow.Start(cmd.Context())
 		if err != nil {
 			return err
 		}
+		// The approval URL is opened in a browser and shown as the place to
+		// approve; it must be the platform's own page, not wherever the
+		// response said.
+		approveURL, err := auth.VerificationURL(dc, cfg.APIURL)
+		if err != nil {
+			return err
+		}
 
-		code := dc.UserCode
+		code := termsafe.String(dc.UserCode)
 		if len(code) == 8 {
 			code = code[:4] + "-" + code[4:]
 		}
-		fmt.Fprintf(cmd.ErrOrStderr(), "\nYour code is:  %s\n\nOpen %s\nand approve this device. Waiting… (Ctrl-C to cancel)\n\n", code, dc.VerificationURIComplete)
+		fmt.Fprintf(w, "\nYour code is:  %s\n\nOpen %s\nand approve this device. Waiting… (Ctrl-C to cancel)\n\n", code, approveURL)
 		if !loginNoBrowser {
-			openBrowser(dc.VerificationURIComplete)
+			if err := openBrowser(approveURL); err != nil {
+				fmt.Fprintf(w, "Could not open a browser (%v); open the URL above yourself.\n", err)
+			}
 		}
 
-		ctx, cancel := context.WithTimeout(cmd.Context(), time.Duration(dc.ExpiresIn)*time.Second)
+		ctx, cancel := context.WithTimeout(cmd.Context(), dc.Expiry())
 		defer cancel()
 		tok, err := flow.Poll(ctx, dc)
+		if errors.Is(err, context.DeadlineExceeded) {
+			return auth.ErrExpired
+		}
 		if err != nil {
 			return err
 		}
@@ -111,7 +137,7 @@ does not disturb your production session — and vice versa.`,
 		if err != nil {
 			return err
 		}
-		fmt.Fprintf(cmd.ErrOrStderr(), "Signed in as %s. Session valid until %s.\n", me.User.Email, cred.ExpiresAt.Local().Format("Mon 2 Jan 15:04"))
+		fmt.Fprintf(w, "Signed in as %s. Session valid until %s.\n", termsafe.String(me.User.Email), cred.ExpiresAt.Local().Format("Mon 2 Jan 15:04"))
 		adoptDefaultOrg(cmd, me)
 		return nil
 	},
@@ -140,12 +166,16 @@ func whoAmI(ctx context.Context, apiURL, token string) (*api.Me, error) {
 	return me, nil
 }
 
-// openBrowser is best-effort; the URL is always printed as well.
-func openBrowser(url string) {
+// openBrowser starts the system's URL handler on url and reports whether it
+// could be started. Callers always print the URL as well, so a failure here
+// costs a copy and paste, not the operation. A variable so tests can stub it.
+var openBrowser = func(url string) error {
 	var c *exec.Cmd
-	// #nosec G204 -- the URL is an argument, not a shell string: exec.Command
-	// does not interpret it, so there is nothing to inject into, and it comes
-	// from the platform's own device-code response.
+	// #nosec G204 -- the URL is passed as a single argument, not through a
+	// shell, so it cannot inject a command. Every caller passes a URL it has
+	// validated or built itself: the device-login approval URL is checked by
+	// auth.VerificationURL (https, on the API's host), and the console URL is
+	// derived from the configured API URL with the VM id path-escaped.
 	switch runtime.GOOS {
 	case "darwin":
 		c = exec.Command("open", url)
@@ -154,7 +184,12 @@ func openBrowser(url string) {
 	default:
 		c = exec.Command("xdg-open", url)
 	}
-	_ = c.Start()
+	if err := c.Start(); err != nil {
+		return err
+	}
+	// Reap it in the background; its exit status is not ours to report.
+	go func() { _ = c.Wait() }()
+	return nil
 }
 
 func init() {
@@ -187,16 +222,17 @@ func adoptDefaultOrg(cmd *cobra.Command, me *api.Me) {
 		return
 	}
 	first := me.Organizations[0]
-	name, err := saveDefaultOrg(first.Slug)
+	slug := termsafe.String(first.Slug)
+	name, err := saveDefaultOrg(w, first.Slug)
 	if err != nil {
 		fmt.Fprintf(w, "Organisation: %s. Could not save it as your default (%v) — set it with `cloud org use %s`.\n",
-			first.Slug, err, first.Slug)
+			slug, err, slug)
 		return
 	}
 	if len(me.Organizations) == 1 {
-		fmt.Fprintf(w, "Organisation: %s, saved as the default for context %q.\n", first.Slug, name)
+		fmt.Fprintf(w, "Organisation: %s, saved as the default for context %q.\n", slug, name)
 		return
 	}
 	fmt.Fprintf(w, "Organisation: %s, saved as the default for context %q. You belong to %d — switch with `cloud org use <slug>`, and see them with `cloud org list`.\n",
-		first.Slug, name, len(me.Organizations))
+		slug, name, len(me.Organizations))
 }

@@ -27,7 +27,31 @@ nor an administrator prompt is needed on Windows.
 Set `CLOUD_VERSION` to install a specific tag, or `CLOUD_INSTALL_DIR` to choose
 where it goes. Prebuilt binaries for Linux, macOS and Windows on amd64 and
 arm64 are on the [Releases](https://github.com/swiftcloud-platform/cli/releases)
-page, and `cloud update` upgrades an existing install in place.
+page, and `cloud update` upgrades an existing install in place. It only ever
+moves to a newer release, and leaves local builds alone.
+
+### Verifying a release
+
+The checksum catches a broken or swapped download, but `checksums.txt` comes
+from the same release as the archive, so on its own it cannot catch a
+tampered release. Releases after v0.3.4 are also signed: `checksums.txt` is
+signed keylessly with [cosign](https://docs.sigstore.dev/cosign/) by the
+release workflow, and each archive carries a GitHub build-provenance
+attestation. The install scripts check the signature when `cosign` is on your
+PATH. **`cloud update` does not check it yet** — it verifies the checksum only.
+
+To verify by hand:
+
+```sh
+cosign verify-blob checksums.txt \
+  --bundle checksums.txt.sigstore.json \
+  --certificate-identity-regexp '^https://github\.com/swiftcloud-platform/cli/\.github/workflows/release\.yml@refs/tags/v' \
+  --certificate-oidc-issuer https://token.actions.githubusercontent.com
+sha256sum --ignore-missing -c checksums.txt
+
+# or, with the GitHub CLI, the provenance of one archive:
+gh attestation verify cloud_<version>_linux_amd64.tar.gz --repo swiftcloud-platform/cli
+```
 
 ## Use
 
@@ -41,6 +65,8 @@ cloud vm list
 ```
 
 Every command accepts `--output table|json|yaml` and `--quiet`. In CI, set `CLOUD_TOKEN`, `CLOUD_ORG` and `CLOUD_REGION` instead of a config file; `CLOUD_API_URL` points the CLI at another environment.
+
+`cloud logout` ends the session on the platform and deletes the stored credential for the current API host; `cloud logout --all` deletes every stored credential. A `CLOUD_TOKEN` is never stored, so unset it yourself. Plain `http://` API URLs are accepted only for `localhost`, `127.0.0.0/8` and `::1`, and the CLI never follows a redirect from the API.
 
 ## Commands
 
@@ -80,4 +106,4 @@ make cross      # every release target into ./bin
 make help
 ```
 
-Go 1.25. Releases are cut by goreleaser from a `v*` tag (see `.goreleaser.yaml` and `.github/workflows/release.yml`).
+Go 1.26 (toolchain pinned in `go.mod`). Releases are cut by goreleaser from a `v*` tag (see `.goreleaser.yaml` and `.github/workflows/release.yml`).

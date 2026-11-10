@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net/url"
 	"os"
 	"strings"
 	"time"
@@ -15,6 +16,7 @@ import (
 	"cloud/internal/api"
 	"cloud/internal/auth"
 	"cloud/internal/config"
+	"cloud/internal/termsafe"
 	"cloud/internal/version"
 	"cloud/internal/wait"
 )
@@ -38,7 +40,40 @@ func credentialStore() (*auth.Store, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &auth.Store{Dir: dir, Env: os.Getenv}, nil
+	return &auth.Store{Dir: dir, Env: os.Getenv, Warn: func(m string) {
+		fmt.Fprintln(rootCmd.ErrOrStderr(), termsafe.String(m))
+	}}, nil
+}
+
+// envTokenWarned makes the CLOUD_TOKEN warning once per run; the root
+// pre-run resets it.
+var envTokenWarned bool
+
+// warnEnvTokenHost says so on stderr when CLOUD_TOKEN is about to be sent to
+// an API other than the compiled-in default. CLOUD_TOKEN is the CI path, and
+// a CI job that also takes --api-url, CLOUD_API_URL or a context from
+// somewhere less trusted would otherwise hand its token to that host without
+// a trace in the log. Loopback is exempt: the token does not leave the machine.
+func warnEnvTokenHost(w io.Writer, cred *auth.Credential) {
+	if envTokenWarned || cred == nil || cred.Kind != auth.KindEnv || cfg == nil {
+		return
+	}
+	host, def := apiHost(cfg.APIURL), apiHost(config.DefaultAPIURL)
+	if host == def || config.IsLoopback(host) {
+		return
+	}
+	envTokenWarned = true
+	fmt.Fprintf(w, "warning: sending CLOUD_TOKEN to %s, not the default %s (API URL from %s)\n",
+		host, def, orDash(cfg.Source["api_url"]))
+}
+
+// apiHost is the normalised host of an API URL, or "" if it does not parse.
+func apiHost(raw string) string {
+	u, err := url.Parse(raw)
+	if err != nil {
+		return ""
+	}
+	return config.NormalizeHost(u.Hostname())
 }
 
 // apiClient builds a client for the resolved API URL with the stored credential.
@@ -55,6 +90,7 @@ func apiClient() (*api.ClientWithResponses, *auth.Credential, error) {
 		// "you signed in to a different host".
 		return nil, nil, &AuthError{err}
 	}
+	warnEnvTokenHost(rootCmd.ErrOrStderr(), cred)
 	if cred.Expired(time.Now()) {
 		return nil, nil, &AuthError{fmt.Errorf("your sign-in expired on %s — run `cloud login` again", cred.ExpiresAt.Local().Format("2 Jan 15:04"))}
 	}
@@ -191,15 +227,16 @@ func waitForApp(cmd *cobra.Command, c *api.ClientWithResponses, org, name string
 		Timeout:  timeout,
 		OnStatus: func(s string) {
 			if !flagQuiet {
-				fmt.Fprintf(cmd.ErrOrStderr(), "  %s\n", s)
+				fmt.Fprintf(cmd.ErrOrStderr(), "  %s\n", termsafe.String(s))
 				// While a rollout is in flight the newest revision is not yet
 				// the one serving. Saying which is more use than a spinner.
 				if last != nil && last.LatestRevision != "" && last.ServingRevision != last.LatestRevision {
 					fmt.Fprintf(cmd.ErrOrStderr(), "    rolling out %s (%s still serving)\n",
-						last.LatestRevision, orDash(last.ServingRevision))
+						termsafe.String(last.LatestRevision), termsafe.String(orDash(last.ServingRevision)))
 				}
 			}
 		},
+		CheckCommand: "cloud app get " + name,
 	})
 	if err != nil {
 		return last, err
@@ -217,19 +254,22 @@ func notServing(a *api.App) error {
 	if a == nil {
 		return nil
 	}
-	switch a.Status {
-	case "suspended":
-		msg := "suspended — the platform stopped it; check the organisation's billing status"
-		if a.ErrorMessage != "" {
-			msg = "suspended — " + a.ErrorMessage
-		}
-		return fmt.Errorf("%s is %s", a.Name, msg)
-	case "stopped":
-		// Legitimate: deploying to a stopped app leaves it stopped. Say so
-		// rather than printing a URL that will not answer.
+	// `stopped` is legitimate: deploying to a stopped app leaves it stopped.
+	return suspendedErr(a.Name, a.Status, a.ErrorMessage)
+}
+
+// suspendedErr is the error a --wait returns when the resource it waited on
+// came to rest suspended — for apps, VMs and databases alike. `stopped` is
+// not an error: `vm stop --wait` and `db stop --wait` ask for exactly that.
+func suspendedErr(name, status, reason string) error {
+	if status != "suspended" {
 		return nil
 	}
-	return nil
+	msg := "suspended — the platform stopped it; check the organisation's billing status"
+	if reason != "" {
+		msg = "suspended — " + reason
+	}
+	return fmt.Errorf("%s is %s", termsafe.String(name), termsafe.String(msg))
 }
 
 // deref returns "" for a nil string pointer (generated optional fields).

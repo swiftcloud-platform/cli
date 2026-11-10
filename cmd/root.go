@@ -55,12 +55,17 @@ Every command's own --help lists its arguments, flags and examples.`,
   cloud app domain list demo                     domains attached to "demo"`,
 	SilenceUsage:  true,
 	SilenceErrors: true,
-	PersistentPreRunE: func(cmd *cobra.Command, _ []string) error {
+	PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
 		format, err := output.ParseFormat(flagOutput)
 		if err != nil {
 			return &UsageError{err}
 		}
 		printer = &output.Printer{W: cmd.OutOrStdout(), Format: format, Quiet: flagQuiet}
+		envTokenWarned = false
+
+		if err := validateResourceArgs(cmd, args); err != nil {
+			return err
+		}
 
 		dir, err := config.Dir(os.Getenv)
 		if err != nil {
@@ -73,11 +78,117 @@ Every command's own --help lists its arguments, flags and examples.`,
 		cfg, err = config.Resolve(file, os.Getenv, config.Overrides{
 			Context: flagContext, APIURL: flagAPIURL, Org: flagOrg, Region: flagRegion,
 		})
+		var badURL *config.APIURLError
+		if errors.As(err, &badURL) && cmd.CommandPath() == "cloud logout" && cfg != nil {
+			// logout needs only the host to forget a credential, and a
+			// retired or otherwise refused URL is exactly where someone
+			// would want to clear one. Nothing is sent to it.
+			return nil
+		}
 		if err != nil {
+			cfg = nil
 			return &UsageError{err}
 		}
 		return nil
 	},
+}
+
+/*
+Positional arguments that become URL path segments.
+
+The generated client path-escapes each argument, which leaves "." and ".."
+alone, and then resolves the path against the API URL, which removes them:
+`cloud vm ssh-key remove web ..` became DELETE …/vms/web/, and a redirect of
+that turned it into deleting the VM. So every positional argument is treated
+as a resource name and checked here, once, before any command runs — unless
+the command says otherwise, because some arguments are not names at all:
+local file paths and s3:// URIs in `storage cp` and friends ("." is a fine
+directory), KEY=VALUE pairs, a public-key file.
+
+A command opts out with the annotationArgs annotation; commands defined in
+files this check cannot annotate are listed in argPolicyByPath. The API
+client refuses a collapsed path as well (api.CheckRequestPath), so a gap here
+fails closed.
+*/
+
+// annotationArgs on a command overrides how its positional args are checked.
+const annotationArgs = "cloud/args"
+
+// Policies for annotationArgs.
+const (
+	// argsNone: no positional argument is a resource name.
+	argsNone = "none"
+	// argsFirst: only the first argument is a resource name.
+	argsFirst = "first"
+	// argsS3: arguments are local paths or s3:// URIs; only the bucket of
+	// an s3:// URI is a resource name.
+	argsS3 = "s3"
+)
+
+// argPolicyByPath covers commands whose source does not carry an annotation.
+var argPolicyByPath = map[string]string{
+	"cloud storage ls":       argsS3,
+	"cloud storage stat":     argsS3,
+	"cloud storage cat":      argsS3,
+	"cloud storage cp":       argsS3,
+	"cloud storage sync":     argsS3,
+	"cloud storage mv":       argsS3,
+	"cloud storage rm":       argsS3,
+	"cloud storage presign":  argsS3,
+	"cloud storage versions": argsS3,
+	"cloud storage restore":  argsS3,
+	"cloud app env set":      argsFirst,
+	"cloud app env unset":    argsFirst,
+}
+
+func argPolicy(cmd *cobra.Command) string {
+	if p, ok := cmd.Annotations[annotationArgs]; ok {
+		return p
+	}
+	if p, ok := argPolicyByPath[cmd.CommandPath()]; ok {
+		return p
+	}
+	return ""
+}
+
+// validateResourceArgs refuses an argument that would not stay one path
+// segment. Shell completion and help are exempt: completion passes the word
+// being typed, which is routinely empty.
+func validateResourceArgs(cmd *cobra.Command, args []string) error {
+	switch cmd.Name() {
+	case cobra.ShellCompRequestCmd, cobra.ShellCompNoDescRequestCmd, "help", "completion":
+		return nil
+	}
+	if cmd.HasParent() && cmd.Parent().Name() == "completion" {
+		return nil
+	}
+	check := args
+	switch argPolicy(cmd) {
+	case argsNone:
+		return nil
+	case argsFirst:
+		if len(check) > 1 {
+			check = check[:1]
+		}
+	case argsS3:
+		for _, a := range args {
+			rest, ok := strings.CutPrefix(a, "s3://")
+			if !ok {
+				continue
+			}
+			bucket, _, _ := strings.Cut(rest, "/")
+			if bucket == "." || bucket == ".." {
+				return &UsageError{fmt.Errorf("%q: %q is not a valid bucket name", a, bucket)}
+			}
+		}
+		return nil
+	}
+	for _, a := range check {
+		if err := config.ValidateSegment("name", a); err != nil {
+			return &UsageError{fmt.Errorf("%q is not a valid name: names must not be empty, \".\", \"..\" or contain control characters", a)}
+		}
+	}
+	return nil
 }
 
 // Execute runs the CLI.
@@ -139,19 +250,13 @@ func ExitCode(err error) int {
 	if errors.As(err, &a) {
 		return ExitAuth
 	}
-	// Cobra's own complaints are usage mistakes and must exit 2 like ours.
-	// A missing required flag is reported by ValidateRequiredFlags as a plain
-	// error, so there is nothing to type-assert on; the message is stable and
-	// matching it beats letting `--image` missing exit 1 while `--engine`
-	// wrong exits 2.
-	if strings.HasPrefix(err.Error(), "required flag") ||
-		strings.HasPrefix(err.Error(), "unknown flag") ||
-		strings.HasPrefix(err.Error(), "unknown command") ||
-		strings.HasPrefix(err.Error(), "invalid argument") ||
-		strings.HasPrefix(err.Error(), "accepts ") ||
-		strings.HasPrefix(err.Error(), "unknown shorthand flag") {
+	var pe *api.PathError
+	if errors.As(err, &pe) {
 		return ExitUsage
 	}
+	// The platform's typed problem decides first. Its detail is free text
+	// from the server, and a detail that happened to begin "invalid argument"
+	// must not turn a 403 or 404 into a usage error.
 	var e *api.Error
 	if errors.As(err, &e) {
 		switch e.Type {
@@ -168,6 +273,18 @@ func ExitCode(err error) int {
 			// on MariaDB, a plan limit, an unfunded organisation. Each is a
 			// mistake in the request or the account, not a CLI failure, and
 			// each carries a sentence worth printing verbatim.
+			return ExitUsage
+		}
+		return ExitError
+	}
+	// Cobra's own complaints are usage mistakes and must exit 2 like ours.
+	// A missing required flag is reported by ValidateRequiredFlags as a plain
+	// error, so there is nothing to type-assert on; the message is stable and
+	// matching it beats letting `--image` missing exit 1 while `--engine`
+	// wrong exits 2.
+	msg := err.Error()
+	for _, prefix := range []string{"required flag", "unknown flag", "unknown command", "invalid argument", "accepts ", "unknown shorthand flag"} {
+		if strings.HasPrefix(msg, prefix) {
 			return ExitUsage
 		}
 	}

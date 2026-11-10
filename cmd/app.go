@@ -11,6 +11,7 @@ import (
 
 	"cloud/internal/api"
 	"cloud/internal/output"
+	"cloud/internal/termsafe"
 )
 
 // ── table shapes ────────────────────────────────────────────────────────────
@@ -105,6 +106,8 @@ var (
 	createImage, createRegion, createDesc, createSize string
 	createPort, createMin, createMax                  int
 	createEnv                                         []string
+	createEnvFile                                     string
+	domainRemoveYes                                   bool
 	createRegServer, createRegUser                    string
 	createRegPassStdin                                bool
 	flagWait                                          bool
@@ -118,12 +121,18 @@ var appCreateCmd = &cobra.Command{
 command refers to it; --image is the only required flag.
 
 The app is created immediately but starts as "deploying"; pass --wait to
-block until it is ready (or fails), which is when the https URL works.`,
+block until it is ready (or fails), which is when the https URL works.
+
+Environment variables come from --env KEY=VALUE (repeatable) or --env-file,
+which reads a KEY=VALUE file in the format "cloud app env set --help"
+describes. A secret belongs in the file rather than on the command line, where
+it would land in shell history; --env wins over the file for the same name.`,
 	Example: `  cloud app create demo --image nginx:1.27
   cloud app create api --image ghcr.io/acme/api:1.4 --port 3000 --min 1 --max 5 --wait
 
-  # environment variables: repeat --env
+  # environment variables: repeat --env, or keep secrets out of argv with --env-file
   cloud app create api --image ghcr.io/acme/api:1.4 --env LOG_LEVEL=debug --env TZ=Africa/Lusaka
+  cloud app create api --image ghcr.io/acme/api:1.4 --env-file .env
 
   # a private registry; the password is read from stdin, never from argv
   echo "$REGISTRY_TOKEN" | cloud app create api --image registry.acme.io/api:1.4 \
@@ -141,9 +150,18 @@ block until it is ready (or fails), which is when the https URL works.`,
 		if region == "" {
 			return &UsageError{errors.New("no region given — pass --region, set CLOUD_REGION, or add one to your context (see `cloud region list`)")}
 		}
-		env, err := parseEnv(createEnv)
+		env := map[string]string{}
+		if createEnvFile != "" {
+			if env, err = readEnvFile(createEnvFile); err != nil {
+				return err
+			}
+		}
+		flagEnv, err := parseEnv(createEnv)
 		if err != nil {
 			return err
+		}
+		for k, v := range flagEnv {
+			env[k] = v
 		}
 		body := api.PostOrgsOrgAppsJSONRequestBody{
 			Name: args[0], Image: createImage, Region: region,
@@ -189,7 +207,7 @@ block until it is ready (or fails), which is when the https URL works.`,
 			return err
 		}
 		if !flagQuiet {
-			fmt.Fprintf(cmd.ErrOrStderr(), "Created %s (%s). Status: %s\n", app.Name, app.Id, app.Status)
+			fmt.Fprintf(cmd.ErrOrStderr(), "Created %s (%s). Status: %s\n", app.Name, termsafe.String(app.Id), termsafe.String(app.Status))
 		}
 		if flagWait {
 			app, err = waitForApp(cmd, c, org, app.Name, flagTimeout)
@@ -199,7 +217,7 @@ block until it is ready (or fails), which is when the https URL works.`,
 		}
 		if printer.Format == output.Table && !flagQuiet {
 			if app.Url != "" {
-				fmt.Fprintf(cmd.OutOrStdout(), "%s\n", app.Url)
+				fmt.Fprintf(cmd.OutOrStdout(), "%s\n", termsafe.String(app.Url))
 			}
 			return nil
 		}
@@ -243,23 +261,23 @@ var appGetCmd = &cobra.Command{
 		// A status alone is not actionable. The platform sets errorMessage
 		// when it knows why, so print it directly under the status it explains.
 		if a.ErrorMessage != "" {
-			fmt.Fprintf(out, "Reason       %s\n", a.ErrorMessage)
+			fmt.Fprintf(out, "Reason       %s\n", termsafe.String(a.ErrorMessage))
 		}
 		// The image field is what was asked for; the serving revision is what
 		// answers requests. They diverge while a rollout is in flight, and stay
 		// diverged when the newest revision never became ready — which is the
 		// state that used to be invisible.
 		if a.LatestRevision != "" && a.ServingRevision != a.LatestRevision {
-			fmt.Fprintf(out, "Revision     %s serving, %s is newest\n", orDash(a.ServingRevision), a.LatestRevision)
+			fmt.Fprintf(out, "Revision     %s serving, %s is newest\n", termsafe.String(orDash(a.ServingRevision)), termsafe.String(a.LatestRevision))
 			fmt.Fprintln(out, "             the newest revision is not taking traffic")
 		} else if a.ServingRevision != "" {
-			fmt.Fprintf(out, "Revision     %s\n", a.ServingRevision)
+			fmt.Fprintf(out, "Revision     %s\n", termsafe.String(a.ServingRevision))
 		}
 		if a.Description != "" {
-			fmt.Fprintf(out, "Description  %s\n", a.Description)
+			fmt.Fprintf(out, "Description  %s\n", termsafe.String(a.Description))
 		}
 		if a.RegistryAuth.Server != "" {
-			fmt.Fprintf(out, "Registry     %s as %s\n", a.RegistryAuth.Server, a.RegistryAuth.Username)
+			fmt.Fprintf(out, "Registry     %s as %s\n", termsafe.String(a.RegistryAuth.Server), termsafe.String(a.RegistryAuth.Username))
 		}
 		if len(a.EnvVars) > 0 {
 			fmt.Fprintf(out, "Env          %d variable(s); `--output json` to see them\n", len(a.EnvVars))
@@ -558,9 +576,9 @@ issued after that record resolves, so re-run "domain list" to watch it turn.`,
 			return err
 		}
 		if !flagQuiet && printer.Format == output.Table {
-			fmt.Fprintf(cmd.ErrOrStderr(), "Attached %s — routing: %s, TLS: %s\n", d.Domain, d.Status, d.Tls)
+			fmt.Fprintf(cmd.ErrOrStderr(), "Attached %s — routing: %s, TLS: %s\n", termsafe.String(d.Domain), termsafe.String(fmt.Sprint(d.Status)), termsafe.String(fmt.Sprint(d.Tls)))
 			if d.Message != "" {
-				fmt.Fprintf(cmd.ErrOrStderr(), "%s\n", d.Message)
+				fmt.Fprintf(cmd.ErrOrStderr(), "%s\n", termsafe.String(fmt.Sprint(d.Message)))
 			}
 			return nil
 		}
@@ -572,9 +590,13 @@ var appDomainRemoveCmd = &cobra.Command{
 	Use:   "remove <app> <hostname>",
 	Short: "Detach a custom domain",
 	Long: `Detach a hostname from an app. The app keeps running on its own URL and
-any other domains; only this hostname stops routing.`,
-	Example: `  cloud app domain remove demo www.example.com`,
-	Args:    cobra.ExactArgs(2),
+any other domains; only this hostname stops routing.
+
+You are asked to type the hostname to confirm, since the site at that name
+stops answering at once. Use --yes in scripts.`,
+	Example: `  cloud app domain remove demo www.example.com
+  cloud app domain remove demo www.example.com --yes`,
+	Args: cobra.ExactArgs(2),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		org, err := requireOrg()
 		if err != nil {
@@ -584,7 +606,12 @@ any other domains; only this hostname stops routing.`,
 		if err != nil {
 			return err
 		}
-		res, err := c.DeleteOrgsOrgAppsAppDomainsDomainWithResponse(cmd.Context(), org, args[0], strings.ToLower(args[1]))
+		host := strings.ToLower(args[1])
+		if err := confirmAction(cmd, domainRemoveYes,
+			fmt.Sprintf("detach %s from app %q; it stops routing immediately", host, args[0]), host); err != nil {
+			return err
+		}
+		res, err := c.DeleteOrgsOrgAppsAppDomainsDomainWithResponse(cmd.Context(), org, args[0], host)
 		if err != nil {
 			return reachErr(err)
 		}
@@ -625,6 +652,7 @@ func init() {
 	f.IntVar(&createMin, "min", 0, "minimum replicas (0 = scale to zero)")
 	f.IntVar(&createMax, "max", 3, "maximum replicas")
 	f.StringArrayVar(&createEnv, "env", nil, "environment variable KEY=VALUE (repeatable)")
+	f.StringVar(&createEnvFile, "env-file", "", "read environment variables from a KEY=VALUE file (keeps secrets out of argv)")
 	f.StringVar(&createRegServer, "registry-server", "", "private registry host")
 	f.StringVar(&createRegUser, "registry-username", "", "private registry user")
 	f.BoolVar(&createRegPassStdin, "registry-password-stdin", false, "read the registry password from stdin")
@@ -648,6 +676,7 @@ func init() {
 		c.Flags().DurationVar(&flagTimeout, "timeout", 10*time.Minute, "how long --wait waits")
 	}
 
+	appDomainRemoveCmd.Flags().BoolVarP(&domainRemoveYes, "yes", "y", false, "skip the confirmation (scripts)")
 	appDomainCmd.AddCommand(appDomainListCmd, appDomainAddCmd, appDomainRemoveCmd)
 	appCmd.AddCommand(appListCmd, appCreateCmd, appGetCmd, appDeployCmd, appScaleCmd, appLogsCmd, appDeleteCmd, appDomainCmd)
 	rootCmd.AddCommand(appCmd)
@@ -664,14 +693,14 @@ func printAppURL(cmd *cobra.Command, app *api.App) {
 	// errorMessage, so printing it only for a non-serving app would hide
 	// exactly the case the user needs to hear about.
 	if app.ErrorMessage != "" {
-		fmt.Fprintf(cmd.ErrOrStderr(), "%s\n", app.ErrorMessage)
+		fmt.Fprintf(cmd.ErrOrStderr(), "%s\n", termsafe.String(app.ErrorMessage))
 	}
 	switch app.Status {
 	case "ready", "running":
 		if app.Url != "" {
-			fmt.Fprintln(cmd.OutOrStdout(), app.Url)
+			fmt.Fprintln(cmd.OutOrStdout(), termsafe.String(app.Url))
 		}
 	default:
-		fmt.Fprintf(cmd.ErrOrStderr(), "%s is %s and is not serving; no URL to give you yet.\n", app.Name, app.Status)
+		fmt.Fprintf(cmd.ErrOrStderr(), "%s is %s and is not serving; no URL to give you yet.\n", app.Name, termsafe.String(app.Status))
 	}
 }

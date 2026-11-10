@@ -106,3 +106,31 @@ func TestTable_RefusesNonTabularWithAHint(t *testing.T) {
 		t.Errorf("want an error pointing at --output json, got %v", err)
 	}
 }
+
+// Table cells and --quiet IDs come from the platform, and another org member
+// can set some of them (a VM description, a key label). An escape sequence in
+// one must not reach the terminal, and a tab or newline must not break the
+// columns.
+func TestTableStripsControlCharacters(t *testing.T) {
+	hostile := apps{{"web\x1b]52;c;ZXZpbA==\x07", "run\tning", "https://x\r\nFAKE"}}
+
+	var buf bytes.Buffer
+	if err := (&Printer{W: &buf, Format: Table}).Print(hostile); err != nil {
+		t.Fatal(err)
+	}
+	out := buf.String()
+	if strings.ContainsAny(out, "\x1b\x07\r") {
+		t.Fatalf("control characters reached the table: %q", out)
+	}
+	if lines := strings.Split(strings.TrimRight(out, "\n"), "\n"); len(lines) != 2 {
+		t.Fatalf("a cell broke the row into %d lines: %q", len(lines), out)
+	}
+
+	buf.Reset()
+	if err := (&Printer{W: &buf, Format: Table, Quiet: true}).Print(hostile); err != nil {
+		t.Fatal(err)
+	}
+	if got := buf.String(); strings.ContainsAny(got, "\x1b\x07") || got != "web]52;c;ZXZpbA==\n" {
+		t.Fatalf("quiet output = %q", got)
+	}
+}

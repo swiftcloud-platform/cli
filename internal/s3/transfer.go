@@ -3,9 +3,12 @@ package s3
 import (
 	"context"
 	"crypto/md5" // #nosec G501 -- S3 ETags are MD5; see FileMD5
+	"crypto/rand"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"io"
+	"io/fs"
 	"mime"
 	"os"
 	"path/filepath"
@@ -68,10 +71,21 @@ type Action struct {
 	Key string
 	// LocalPath is the file on this machine, for an upload or a download.
 	LocalPath string
-	Size      int64
+	// Root and Rel, when Root is set, are LocalPath split into the directory
+	// a download was pointed at and the path beneath it. RunDownload then
+	// writes through an os.Root opened on Root, so nothing — not a crafted
+	// key, not a symlink already in the directory — can place the file
+	// outside it.
+	Root string
+	Rel  string
+	Size int64
 	// Reason is the sentence --dry-run prints: why this file is being moved,
 	// or why it is not.
 	Reason string
+	// Unsafe marks a Skip for an object whose key cannot be written under the
+	// target directory (see SafeLocalPath). Callers should warn about it:
+	// unlike an identical file, it is something the user has not got.
+	Unsafe bool
 }
 
 // LocalFile is one file found under a local root.
@@ -87,11 +101,19 @@ type LocalFile struct {
 // WalkDir lists the files under root, depth first, skipping directories
 // themselves and anything unreadable.
 //
-// Symlinks are not followed: a link pointing outside the tree would silently
-// widen an upload, and a link loop would never finish.
+// Symlinks inside the tree are not followed: a link pointing outside it would
+// silently widen an upload, and a link loop would never finish. The root
+// itself is resolved first, though — `sync ./link s3://…` where ./link is a
+// symlink to a directory means that directory, and walking the link itself
+// would find no files and, with --delete, empty the destination.
 func WalkDir(root string) ([]LocalFile, error) {
+	resolved, err := filepath.EvalSymlinks(root)
+	if err != nil {
+		return nil, err
+	}
+	root = resolved
 	var out []LocalFile
-	err := filepath.WalkDir(root, func(path string, d os.DirEntry, err error) error {
+	err = filepath.WalkDir(root, func(path string, d os.DirEntry, err error) error {
 		if err != nil {
 			return err
 		}
@@ -211,26 +233,44 @@ func PlanUpload(files []LocalFile, remote []Object, prefix string, opts SyncOpti
 
 // PlanDownload decides what to fetch for a remote→local sync. Local paths are
 // the destination directory joined with each object's key beneath the prefix.
+//
+// A non-empty prefix is a directory: "site" means "site/", so site.html and
+// site2/… are not part of it (callers list with the same rule; this is the
+// second line of defence). Only keys strictly beneath it are planned.
+//
+// An object whose key would land outside dir (see SafeLocalPath) does not fail
+// the whole plan — one hostile or mistaken key must not stop every other file
+// from downloading — but becomes a Skip with Unsafe set, which the caller
+// reports.
 func PlanDownload(remote []Object, dir, prefix string, opts SyncOptions) ([]Action, error) {
+	prefix = DirPrefix(prefix)
 	var actions []Action
 	for _, o := range remote {
+		if !strings.HasPrefix(o.Key, prefix) {
+			continue
+		}
 		rel := strings.TrimPrefix(o.Key, prefix)
-		rel = strings.TrimPrefix(rel, "/")
 		if rel == "" || strings.HasSuffix(o.Key, "/") {
 			// A prefix placeholder, not a file.
 			continue
 		}
-		path := filepath.Join(dir, filepath.FromSlash(rel))
+		path, err := SafeLocalPath(dir, rel)
+		if err != nil {
+			actions = append(actions, Action{Kind: Skip, Key: o.Key, Size: o.Size, Unsafe: true,
+				Reason: "refused: the key would write outside " + dir})
+			continue
+		}
+		local := filepath.FromSlash(rel)
 		info, err := os.Stat(path)
 		switch {
 		case os.IsNotExist(err):
-			actions = append(actions, Action{Kind: Transfer, Key: o.Key, LocalPath: path, Size: o.Size, Reason: "new"})
+			actions = append(actions, Action{Kind: Transfer, Key: o.Key, LocalPath: path, Root: dir, Rel: local, Size: o.Size, Reason: "new"})
 			continue
 		case err != nil:
 			return nil, err
 		}
 		if info.Size() != o.Size {
-			actions = append(actions, Action{Kind: Transfer, Key: o.Key, LocalPath: path, Size: o.Size,
+			actions = append(actions, Action{Kind: Transfer, Key: o.Key, LocalPath: path, Root: dir, Rel: local, Size: o.Size,
 				Reason: fmt.Sprintf("size differs (%d → %d)", info.Size(), o.Size)})
 			continue
 		}
@@ -244,13 +284,23 @@ func PlanDownload(remote []Object, dir, prefix string, opts SyncOptions) ([]Acti
 			return nil, err
 		}
 		if sum != o.ETag {
-			actions = append(actions, Action{Kind: Transfer, Key: o.Key, LocalPath: path, Size: o.Size, Reason: "contents differ"})
+			actions = append(actions, Action{Kind: Transfer, Key: o.Key, LocalPath: path, Root: dir, Rel: local, Size: o.Size, Reason: "contents differ"})
 			continue
 		}
 		actions = append(actions, Action{Kind: Skip, Key: o.Key, LocalPath: path, Size: o.Size, Reason: "identical"})
 	}
 	sort.SliceStable(actions, func(i, j int) bool { return actions[i].Key < actions[j].Key })
 	return actions, nil
+}
+
+// DirPrefix returns a key prefix as a directory: unchanged when empty or
+// already ending in "/", otherwise with "/" appended. Recursive operations use
+// it so that "site" never matches "site.html" or "site2/…".
+func DirPrefix(prefix string) string {
+	if prefix == "" || strings.HasSuffix(prefix, "/") {
+		return prefix
+	}
+	return prefix + "/"
 }
 
 // joinKey appends a relative path to an object prefix.
@@ -329,8 +379,19 @@ func (c *Client) RunUpload(ctx context.Context, bucket string, actions []Action,
 // Each file is written to a temporary name in the destination directory and
 // renamed on success, so an interrupted download never leaves a half-written
 // file that a later sync would accept on size.
+//
+// An action with Root set is written through an os.Root on that directory,
+// which refuses any path — by "..", an absolute name or a symlink — that
+// resolves outside it. Without Root, LocalPath is a file the user named
+// themselves on the command line.
 func (c *Client) RunDownload(ctx context.Context, bucket string, actions []Action, p Progress) error {
 	var files, bytes int64
+	roots := map[string]*os.Root{}
+	defer func() {
+		for _, r := range roots {
+			_ = r.Close()
+		}
+	}()
 	for _, a := range actions {
 		if err := ctx.Err(); err != nil {
 			return err
@@ -338,27 +399,21 @@ func (c *Client) RunDownload(ctx context.Context, bucket string, actions []Actio
 		if a.Kind != Transfer {
 			continue
 		}
-		// #nosec G301 -- these are the user's own downloaded files; 0755 is what
-		// `mkdir -p` gives them, and 0750 would surprise anyone serving a
-		// synced directory from another account.
-		if err := os.MkdirAll(filepath.Dir(a.LocalPath), 0o755); err != nil {
-			return err
+		var n int64
+		var err error
+		if a.Root != "" {
+			root, ok := roots[a.Root]
+			if !ok {
+				if root, err = openDownloadRoot(a.Root); err != nil {
+					return err
+				}
+				roots[a.Root] = root
+			}
+			n, err = c.downloadInRoot(ctx, bucket, root, a)
+		} else {
+			n, err = c.downloadToPath(ctx, bucket, a)
 		}
-		tmp, err := os.CreateTemp(filepath.Dir(a.LocalPath), ".cloud-*")
 		if err != nil {
-			return err
-		}
-		n, err := c.Get(ctx, URI{Bucket: bucket, Key: a.Key}, tmp)
-		closeErr := tmp.Close()
-		if err == nil {
-			err = closeErr
-		}
-		if err != nil {
-			_ = os.Remove(tmp.Name())
-			return fmt.Errorf("downloading %s: %w", a.Key, err)
-		}
-		if err := os.Rename(tmp.Name(), a.LocalPath); err != nil {
-			_ = os.Remove(tmp.Name())
 			return err
 		}
 		files++
@@ -368,6 +423,92 @@ func (c *Client) RunDownload(ctx context.Context, bucket string, actions []Actio
 		}
 	}
 	return nil
+}
+
+// openDownloadRoot creates the target directory if needed and opens it as a
+// root that no write may leave.
+func openDownloadRoot(dir string) (*os.Root, error) {
+	// #nosec G301 -- these are the user's own downloaded files; 0755 is what
+	// `mkdir -p` gives them, and 0750 would surprise anyone serving a
+	// synced directory from another account.
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		return nil, err
+	}
+	return os.OpenRoot(dir)
+}
+
+// downloadInRoot writes one object to a.Rel beneath root.
+func (c *Client) downloadInRoot(ctx context.Context, bucket string, root *os.Root, a Action) (int64, error) {
+	sub := filepath.Dir(a.Rel)
+	if sub != "." {
+		if err := root.MkdirAll(sub, 0o755); err != nil {
+			return 0, err
+		}
+	}
+	tmpName, tmp, err := createTempIn(root, sub)
+	if err != nil {
+		return 0, err
+	}
+	n, err := c.Get(ctx, URI{Bucket: bucket, Key: a.Key}, tmp)
+	closeErr := tmp.Close()
+	if err == nil {
+		err = closeErr
+	}
+	if err != nil {
+		_ = root.Remove(tmpName)
+		return 0, fmt.Errorf("downloading %s: %w", a.Key, err)
+	}
+	if err := root.Rename(tmpName, a.Rel); err != nil {
+		_ = root.Remove(tmpName)
+		return 0, err
+	}
+	return n, nil
+}
+
+// createTempIn is os.CreateTemp for an os.Root, which has none: a random name
+// opened exclusively, retried on the rare collision.
+func createTempIn(root *os.Root, dir string) (string, *os.File, error) {
+	for range 10 {
+		var b [8]byte
+		if _, err := rand.Read(b[:]); err != nil {
+			return "", nil, err
+		}
+		name := filepath.Join(dir, ".cloud-"+hex.EncodeToString(b[:]))
+		f, err := root.OpenFile(name, os.O_RDWR|os.O_CREATE|os.O_EXCL, 0o600)
+		if err == nil {
+			return name, f, nil
+		}
+		if !errors.Is(err, fs.ErrExist) {
+			return "", nil, err
+		}
+	}
+	return "", nil, errors.New("could not create a temporary file in the download directory")
+}
+
+// downloadToPath writes one object to a path the user named.
+func (c *Client) downloadToPath(ctx context.Context, bucket string, a Action) (int64, error) {
+	// #nosec G301 -- see openDownloadRoot.
+	if err := os.MkdirAll(filepath.Dir(a.LocalPath), 0o755); err != nil {
+		return 0, err
+	}
+	tmp, err := os.CreateTemp(filepath.Dir(a.LocalPath), ".cloud-*")
+	if err != nil {
+		return 0, err
+	}
+	n, err := c.Get(ctx, URI{Bucket: bucket, Key: a.Key}, tmp)
+	closeErr := tmp.Close()
+	if err == nil {
+		err = closeErr
+	}
+	if err != nil {
+		_ = os.Remove(tmp.Name())
+		return 0, fmt.Errorf("downloading %s: %w", a.Key, err)
+	}
+	if err := os.Rename(tmp.Name(), a.LocalPath); err != nil {
+		_ = os.Remove(tmp.Name())
+		return 0, err
+	}
+	return n, nil
 }
 
 // Counts summarises a plan for the line printed before a transfer starts.

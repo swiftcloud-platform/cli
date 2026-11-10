@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/netip"
+	"net/url"
 	"strings"
 	"time"
 
@@ -97,6 +99,9 @@ func New(o Options) (*Client, error) {
 	if o.Endpoint == "" {
 		return nil, errors.New("no S3 endpoint for this region — is the region's storage configured?")
 	}
+	if err := ValidateEndpoint(o.Endpoint); err != nil {
+		return nil, err
+	}
 	if o.AccessKey == "" || o.SecretKey == "" {
 		return nil, errors.New("no bucket credentials")
 	}
@@ -130,6 +135,60 @@ func New(o Options) (*Client, error) {
 		}),
 		endpoint: o.Endpoint,
 	}, nil
+}
+
+// ValidateEndpoint checks the S3 endpoint the platform handed out before the
+// bucket's key pair is sent to it.
+//
+// The endpoint arrives in an API response, and every request signed with the
+// bucket's secret goes there, so it is held to what a real region endpoint
+// looks like: https (plain http only to this machine — localhost,
+// 127.0.0.0/8 or ::1, which is what a local storage layer or a test uses), a
+// host, and nothing else — no user:password@, no query, no fragment and no
+// path beyond "/", any of which would change where requests land or how they
+// are read.
+func ValidateEndpoint(endpoint string) error {
+	bad := func(why string) error {
+		return fmt.Errorf("the platform gave an S3 endpoint this CLI will not use (%s)", why)
+	}
+	u, err := url.Parse(endpoint)
+	if err != nil {
+		return bad("not a URL")
+	}
+	if u.Host == "" || u.Opaque != "" {
+		return bad("no host")
+	}
+	switch strings.ToLower(u.Scheme) {
+	case "https":
+	case "http":
+		if !isLoopback(u.Hostname()) {
+			return bad("plain http is accepted only for localhost")
+		}
+	default:
+		return bad("scheme must be https")
+	}
+	if u.User != nil {
+		return bad("it carries a user name or password")
+	}
+	if u.RawQuery != "" || u.ForceQuery {
+		return bad("it carries a query string")
+	}
+	if u.Fragment != "" || strings.Contains(endpoint, "#") {
+		return bad("it carries a fragment")
+	}
+	if u.Path != "" && u.Path != "/" {
+		return bad("it has a path")
+	}
+	return nil
+}
+
+// isLoopback reports whether a host names this machine.
+func isLoopback(host string) bool {
+	if strings.EqualFold(host, "localhost") {
+		return true
+	}
+	ip, err := netip.ParseAddr(host)
+	return err == nil && ip.IsLoopback()
 }
 
 // Object is one stored object, as `ls` and `stat` report it.
