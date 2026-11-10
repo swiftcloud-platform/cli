@@ -34,8 +34,8 @@ jobs:
         run: sh -n install.sh
       # This action's major version and .golangci.yml's `version:` move
       # together: v6 of the action could only install golangci-lint v1, whose
-      # last release (1.64.8) is built with Go 1.24 and refuses this module's
-      # `go 1.25.0` outright. v7 and later install v2, which the config is
+      # last release (1.64.8) is built with Go 1.24 and refuses any module
+      # newer than that outright. v7 and later install v2, which the config is
       # written for.
       - uses: golangci/golangci-lint-action@ba0d7d2ec06a0ea1cb5fa41b2e4a3ab91d21278a # v9.3.0
         with:

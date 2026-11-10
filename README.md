@@ -106,4 +106,4 @@ make cross      # every release target into ./bin
 make help
 ```
 
-Go 1.25. Releases are cut by goreleaser from a `v*` tag (see `.goreleaser.yaml` and `.github/workflows/release.yml`).
+Go 1.26 (toolchain pinned in `go.mod`). Releases are cut by goreleaser from a `v*` tag (see `.goreleaser.yaml` and `.github/workflows/release.yml`).
